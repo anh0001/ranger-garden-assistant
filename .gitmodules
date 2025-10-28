@@ -1,0 +1,13 @@
+[submodule "src/livox_ros_driver2"]
+	path = src/livox_ros_driver2
+	url = https://github.com/anh0001/livox_ros_driver2.git
+[submodule "src/ugv_sdk"]
+	path = src/ugv_sdk
+	url = https://github.com/agilexrobotics/ugv_sdk.git
+[submodule "src/ranger_ros2"]
+	path = src/ranger_ros2
+	url = https://github.com/agilexrobotics/ranger_ros2.git
+[submodule "src/piper_ros"]
+	path = src/piper_ros
+	url = https://github.com/agilexrobotics/piper_ros.git
+	branch = humble
