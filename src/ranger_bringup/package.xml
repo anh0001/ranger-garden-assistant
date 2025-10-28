@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>ranger_bringup</name>
+  <version>1.0.0</version>
+  <description>Integration package for Ranger Mini 3.0 with Livox Mid-360, RealSense D435, and PiPER arm</description>
+  <maintainer email="your-email@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- Core ROS2 dependencies -->
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+
+  <!-- Hardware drivers -->
+  <exec_depend>ranger_ros2</exec_depend>
+  <exec_depend>livox_ros_driver2</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+
+  <!-- Navigation dependencies -->
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_common</exec_depend>
+  <exec_depend>navigation2</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+
+  <!-- TF and transforms -->
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+
+  <!-- Visualization -->
+  <exec_depend>rviz2</exec_depend>
+
+  <!-- MoveIt dependencies -->
+  <exec_depend>moveit_ros_planning_interface</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+
+  <!-- Control -->
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>ros2_control</exec_depend>
+  <exec_depend>ros2_controllers</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
