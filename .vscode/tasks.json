@@ -1,0 +1,85 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Launch: Livox (MID360) - PointCloud2 Livox",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && mkdir -p /tmp/livox_launch && sed \\\"s/xfer_format   = 1/xfer_format   = 0/\\\" livox_ros_driver2/launch_ROS2/msg_MID360_launch.py > /tmp/livox_launch/msg_MID360_xfer0_launch.py && ros2 launch /tmp/livox_launch/msg_MID360_xfer0_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Runs Livox driver with xfer_format=0 (PointCloud2 PointXYZRTL - Livox extended)",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Livox RViz (MID360)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Runs Livox driver and RViz in xterm on DISPLAY :3; uses the MID360 config.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: RQT Image View",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Runs rqt_image_view directly on DISPLAY :3 to visualize camera/image topics",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: RealSense D435",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch realsense2_camera rs_launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches Intel RealSense D435 camera driver with default configuration",
+      "problemMatcher": [],
+      "isBackground": false
+    }
+  ]
+}
