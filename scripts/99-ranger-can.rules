@@ -1,0 +1,35 @@
+# udev rules for Ranger Garden Assistant CAN bus interfaces
+# This file ensures consistent naming and automatic setup of CAN adapters
+#
+# Installation: sudo cp 99-ranger-can.rules /etc/udev/rules.d/
+# Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Naming convention:
+#   can_base   -> CAN adapter for AgileX Ranger Mini 3.0 base (500 kbps)
+#   can_arm    -> CAN adapter for AgileX PiPER arm (1000 kbps)
+
+# Rule for candleLight/gs_usb CAN adapter - Ranger Base
+# Match by vendor ID (1d50), product ID (606f)
+# Creates symlink: /dev/can_base
+SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
+    ATTRS{serial}=="002300405246571220393733", \
+    NAME="can_base", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}="can-base-setup.service"
+
+# Alternative rule if you have multiple CAN adapters
+# Second CAN adapter for PiPER arm (uncomment and adjust serial number when available)
+# SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
+#     ATTRS{serial}=="YOUR_SECOND_ADAPTER_SERIAL", \
+#     NAME="can_arm", \
+#     TAG+="systemd", \
+#     ENV{SYSTEMD_WANTS}="can-arm-setup.service"
+
+# Generic fallback rule for any gs_usb adapter (if serial matching fails)
+# This will still use can0, can1 naming but ensures proper initialization
+SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
+    KERNEL=="can*", \
+    TAG+="systemd"
+
+# Set group ownership to allow non-root access (add user to 'dialout' group)
+SUBSYSTEM=="net", KERNEL=="can*", GROUP="dialout", MODE="0660"

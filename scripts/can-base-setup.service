@@ -1,0 +1,22 @@
+[Unit]
+Description=Setup CAN interface for Ranger Base
+After=network.target
+BindsTo=sys-subsystem-net-devices-can_base.device
+After=sys-subsystem-net-devices-can_base.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Wait a moment for device to stabilize
+ExecStartPre=/bin/sleep 1
+# Bring interface down (in case it was up)
+ExecStartPre=-/sbin/ip link set can_base down
+# Configure bitrate for Ranger base (500 kbps)
+ExecStart=/sbin/ip link set can_base type can bitrate 500000
+# Bring interface up
+ExecStart=/sbin/ip link set can_base up
+# Cleanup on stop
+ExecStop=/sbin/ip link set can_base down
+
+[Install]
+WantedBy=multi-user.target
