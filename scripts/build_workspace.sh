@@ -51,12 +51,20 @@ fi
 
 # Build the workspace
 echo "Building workspace with colcon..."
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
 
+BUILD_STATUS=$?
 echo ""
-echo "======================================"
-echo "Build complete!"
-echo "======================================"
+if [ $BUILD_STATUS -eq 0 ]; then
+    echo "======================================"
+    echo "Build complete!"
+    echo "======================================"
+else
+    echo "======================================"
+    echo "Build FAILED with exit code $BUILD_STATUS"
+    echo "======================================"
+    exit $BUILD_STATUS
+fi
 echo ""
 echo "To use this workspace, run:"
 echo "  source install/setup.bash"
