@@ -11,3 +11,7 @@
 	path = src/piper_ros
 	url = https://github.com/agilexrobotics/piper_ros.git
 	branch = humble
+[submodule "src/FAST_LIO"]
+	path = src/FAST_LIO
+	url = https://github.com/anh0001/FAST_LIO.git
+	branch = ros2
