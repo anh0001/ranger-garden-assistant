@@ -18,7 +18,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "can_device",
-            default_value="can0",
+            default_value="can_base",
             description="CAN device name (e.g., can0, can1)",
         )
     )
@@ -41,11 +41,11 @@ def generate_launch_description():
             PathJoinSubstitution([
                 FindPackageShare("ranger_bringup"),
                 "launch",
-                "ranger_mini_v2.launch.py"
+                "ranger_mini_v3.launch.py"
             ])
         ),
         launch_arguments={
-            "can_device": can_device,
+            "port_name": can_device,
             "robot_model": robot_model,
         }.items(),
     )
