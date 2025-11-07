@@ -23,11 +23,21 @@ source /opt/ros/humble/setup.bash
 echo "Initializing git submodules..."
 git submodule update --init --recursive
 
+# Initialize FAST_LIO ikd-Tree submodule (critical dependency)
+echo "Initializing FAST_LIO ikd-Tree submodule..."
+if [ -d "src/FAST_LIO" ]; then
+    cd src/FAST_LIO
+    git submodule update --init --recursive
+    cd ../..
+else
+    echo "Warning: FAST_LIO not found, skipping ikd-Tree submodule initialization"
+fi
+
 # Install dependencies
 echo "Installing ROS dependencies..."
 sudo apt-get update
 rosdep update
-rosdep install --from-paths src --ignore-src -r -y
+rosdep install --from-paths src --ignore-src -r -y || echo "Warning: Some rosdep dependencies could not be installed (this may be OK)"
 
 # Build Livox SDK2 (required by livox_ros_driver2)
 echo "Building Livox SDK2..."

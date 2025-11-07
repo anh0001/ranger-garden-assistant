@@ -14,7 +14,8 @@
   <depend>rclpy</depend>
 
   <!-- Hardware drivers -->
-  <exec_depend>ranger_ros2</exec_depend>
+  <depend>ranger_base</depend>
+  <depend>ranger_msgs</depend>
   <exec_depend>livox_ros_driver2</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
 
