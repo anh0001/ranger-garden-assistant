@@ -51,7 +51,8 @@ fi
 
 # Build the workspace
 echo "Building workspace with colcon..."
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+
+# Disable desktop_notification to avoid timeout on SSH/remote sessions
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --event-handlers console_direct+ desktop_notification-
 
 BUILD_STATUS=$?
 echo ""
