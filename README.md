@@ -179,7 +179,7 @@ Launch everything at once:
 
 ```bash
 source install/setup.bash
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 ```
 
 This will start:
@@ -223,10 +223,10 @@ Create a map of your environment:
 
 ```bash
 # Terminal 1: Launch robot
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Terminal 2: Start SLAM
-ros2 launch ranger_bringup slam.launch.py
+ros2 launch robofi_bringup slam.launch.py
 
 # Terminal 3: Teleoperate to build map
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
@@ -247,10 +247,10 @@ Navigate autonomously using the map:
 
 ```bash
 # Terminal 1: Launch robot
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Terminal 2: Launch navigation with your map
-ros2 launch ranger_bringup navigation.launch.py map:=/path/to/my_map.yaml
+ros2 launch robofi_bringup navigation.launch.py map:=/path/to/my_map.yaml
 
 # Terminal 3: Open RViz
 rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_view.rviz
@@ -266,7 +266,7 @@ Launch the PiPER arm:
 
 ```bash
 # Note: Uncomment piper_launch in ranger_complete_bringup.launch.py first
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Or launch arm separately
 ros2 launch piper_ros start_single_piper.launch.py can_port:=can1
@@ -283,7 +283,7 @@ ros2 launch piper_moveit piper_moveit.launch.py
 ```
 ranger-garden-assistant/
 ├── src/
-│   ├── ranger_bringup/          # Main integration package
+│   ├── robofi_bringup/          # Main integration package
 │   │   ├── launch/               # Launch files
 │   │   ├── config/               # Configuration files
 │   │   └── rviz/                 # RViz configurations
@@ -320,7 +320,7 @@ ranger-garden-assistant/
 
 Edit navigation parameters in:
 ```
-src/ranger_bringup/config/nav2_params.yaml
+src/robofi_bringup/config/nav2_params.yaml
 ```
 
 Key parameters to tune:
@@ -476,14 +476,14 @@ rosdep install --from-paths src --ignore-src -r -y
 This workspace can be extended for multi-robot scenarios using namespaces:
 
 ```bash
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py namespace:=robot1
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py namespace:=robot1
 ```
 
 ### Custom Behaviors
 
 Add custom behavior trees for Nav2 in:
 ```
-src/ranger_bringup/config/behavior_trees/
+src/robofi_bringup/config/behavior_trees/
 ```
 
 ### Perception Integration
@@ -507,7 +507,7 @@ Integrate with libraries like:
 ### Adding New Sensors
 
 1. Add sensor URDF to `ranger_description/urdf/`
-2. Create launch file in `ranger_bringup/launch/`
+2. Create launch file in `robofi_bringup/launch/`
 3. Add static transform or update URDF
 4. Update `ranger_complete_bringup.launch.py`
 

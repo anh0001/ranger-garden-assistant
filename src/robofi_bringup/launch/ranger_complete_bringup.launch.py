@@ -88,7 +88,7 @@ def generate_launch_description():
     ranger_base_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("ranger_bringup"),
+                FindPackageShare("robofi_bringup"),
                 "launch",
                 "ranger_base.launch.py"
             ])
@@ -100,7 +100,7 @@ def generate_launch_description():
     livox_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("ranger_bringup"),
+                FindPackageShare("robofi_bringup"),
                 "launch",
                 "livox_lidar.launch.py"
             ])

@@ -360,7 +360,7 @@ map (from AMCL or SLAM)
 ## Configuration Files
 
 ### Key Configuration Locations
-- **Nav2**: `ranger_bringup/config/nav2_params.yaml`
+- **Nav2**: `robofi_bringup/config/nav2_params.yaml`
 - **URDF**: `ranger_description/urdf/ranger_complete.urdf.xacro`
 - **MoveIt**: `piper_ros/piper_moveit/config/`
 - **Sensors**: Launch file parameters

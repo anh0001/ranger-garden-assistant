@@ -28,7 +28,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "params_file",
             default_value=PathJoinSubstitution([
-                FindPackageShare("ranger_bringup"),
+                FindPackageShare("robofi_bringup"),
                 "config",
                 "nav2_params.yaml"
             ]),

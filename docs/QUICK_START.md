@@ -90,7 +90,7 @@ ros2 launch ranger_description display.launch.py
 **Test 2: Base Controller**
 ```bash
 # Terminal 1: Launch base
-ros2 launch ranger_bringup ranger_base.launch.py
+ros2 launch robofi_bringup ranger_base.launch.py
 
 # Terminal 2: Check topics
 ros2 topic list | grep -E "(odom|cmd_vel)"
@@ -105,7 +105,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 **Test 3: LiDAR**
 ```bash
 # Terminal 1: Launch LiDAR
-ros2 launch ranger_bringup livox_lidar.launch.py
+ros2 launch robofi_bringup livox_lidar.launch.py
 
 # Terminal 2: Check point cloud
 ros2 topic hz /livox/lidar
@@ -132,7 +132,7 @@ Once individual components work:
 
 ```bash
 # Launch everything
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # In another terminal, open RViz
 rviz2 -d src/ranger_description/rviz/view_robot.rviz
@@ -149,10 +149,10 @@ Expected result:
 
 ```bash
 # Terminal 1: Launch robot
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Terminal 2: Start SLAM
-ros2 launch ranger_bringup slam.launch.py
+ros2 launch robofi_bringup slam.launch.py
 
 # Terminal 3: Teleoperate
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
@@ -175,10 +175,10 @@ ros2 run nav2_map_server map_saver_cli -f maps/my_first_map
 
 ```bash
 # Terminal 1: Launch robot
-ros2 launch ranger_bringup ranger_complete_bringup.launch.py
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Terminal 2: Launch navigation
-ros2 launch ranger_bringup navigation.launch.py map:=~/maps/my_first_map.yaml
+ros2 launch robofi_bringup navigation.launch.py map:=~/maps/my_first_map.yaml
 
 # Terminal 3: Open Nav2 RViz
 rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_view.rviz
@@ -253,7 +253,7 @@ colcon build
 
 After completing this quick start:
 
-1. **Tune Navigation Parameters**: Edit `src/ranger_bringup/config/nav2_params.yaml`
+1. **Tune Navigation Parameters**: Edit `src/robofi_bringup/config/nav2_params.yaml`
 2. **Calibrate Sensors**: Measure and update sensor positions in URDF
 3. **Test Arm Control**: Uncomment PiPER launch in bringup file
 4. **Create Waypoint Missions**: Use Nav2 waypoint follower
