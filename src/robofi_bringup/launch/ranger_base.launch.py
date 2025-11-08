@@ -19,14 +19,14 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "can_device",
             default_value="can_base",
-            description="CAN device name (e.g., can0, can1)",
+            description="CAN device name (using udev rule, default is can_base)",
         )
     )
 
     declared_arguments.append(
         DeclareLaunchArgument(
             "robot_model",
-            default_value="ranger_mini_v2",
+            default_value="ranger_mini_v3",
             description="Robot model (ranger_mini_v1, ranger_mini_v2). Note: v2 works for v3.0",
         )
     )
