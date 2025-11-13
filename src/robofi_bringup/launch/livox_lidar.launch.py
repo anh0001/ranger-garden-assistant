@@ -17,7 +17,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "xfer_format",
-            default_value="1",
+            default_value="4",
             description="Transfer format: 0=PointCloud2, 1=Livox custom, 4=both (custom+PointCloud2).",
         )
     )

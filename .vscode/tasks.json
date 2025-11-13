@@ -7,7 +7,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py xfer_format:=4"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -17,7 +17,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Runs Livox MID360 driver with xfer_format=0 (PointCloud2 PointXYZRTLT - Livox extended) using robofi_bringup",
+      "detail": "Runs Livox MID360 driver with xfer_format=4 so both /livox/lidar (PointCloud2) and /livox/lidar_custom (Livox CustomMsg) are published via robofi_bringup",
       "problemMatcher": [],
       "isBackground": false
     },
