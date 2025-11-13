@@ -100,6 +100,26 @@
       "detail": "Runs FAST_LIO mapping (requires Livox driver to be running separately) on DISPLAY :3",
       "problemMatcher": [],
       "isBackground": false
+    },
+    {
+      "label": "Display: Robot Model with GUI",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :3 to verify meshes and sensor frames",
+      "problemMatcher": [],
+      "isBackground": false
     }
   ]
 }

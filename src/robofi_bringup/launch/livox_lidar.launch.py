@@ -33,7 +33,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "frame_id",
-            default_value="livox_frame",
+            default_value="livox_link",
             description="Frame ID for LiDAR point cloud",
         )
     )
