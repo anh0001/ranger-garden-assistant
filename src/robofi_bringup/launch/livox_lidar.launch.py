@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 
-"""
-Launch file for Livox Mid-360 LiDAR
-"""
+"""Launch Livox Mid-360 LiDAR driver with configurable network settings."""
 
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -19,8 +17,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "xfer_format",
-            default_value="2",
-            description="Transfer format (0: Livox custom, 1: Livox custom, 2: PointCloud2)",
+            default_value="1",
+            description="Transfer format: 0=PointCloud2, 1=Livox custom, 4=both (custom+PointCloud2).",
         )
     )
 
@@ -40,31 +38,57 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "publish_freq",
+            default_value="10.0",
+            description="Publish frequency used by livox_ros_driver2 (Hz).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "output_data_type",
+            default_value="0",
+            description="0 outputs to ROS topics, 1 outputs only to bag/log files.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "config_file",
+            default_value=PathJoinSubstitution(
+                [
+                    FindPackageShare("robofi_bringup"),
+                    "config",
+                    "livox_mid360_config.json",
+                ]
+            ),
+            description="Path to the Livox MID-360 JSON configuration file.",
+        )
+    )
+
     # Initialize arguments
     xfer_format = LaunchConfiguration("xfer_format")
     multi_topic = LaunchConfiguration("multi_topic")
     frame_id = LaunchConfiguration("frame_id")
+    publish_freq = LaunchConfiguration("publish_freq")
+    output_data_type = LaunchConfiguration("output_data_type")
+    config_file = LaunchConfiguration("config_file")
 
-    # Get config file path
-    config_file = PathJoinSubstitution([
-        FindPackageShare("livox_ros_driver2"),
-        "config",
-        "MID360_config.json"
-    ])
-
-    # Livox driver node
     livox_driver_node = Node(
         package="livox_ros_driver2",
         executable="livox_ros_driver2_node",
         name="livox_lidar",
         output="screen",
         parameters=[{
-            "xfer_format": xfer_format,
-            "multi_topic": multi_topic,
+            "xfer_format": ParameterValue(xfer_format, value_type=int),
+            "multi_topic": ParameterValue(multi_topic, value_type=int),
+            "data_src": 0,  # 0 = LiDAR source
+            "publish_freq": ParameterValue(publish_freq, value_type=float),
+            "output_data_type": ParameterValue(output_data_type, value_type=int),
             "frame_id": frame_id,
             "user_config_path": config_file,
-            "publish_freq": 10.0,
-            "output_data_type": 2,  # PointCloud2
         }],
     )
 

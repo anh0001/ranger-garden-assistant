@@ -115,6 +115,19 @@ rviz2
 - Subscribe to `/livox/lidar`
 - You should see point cloud data
 
+### FAST_LIO Mapping (optional)
+
+Use the FAST_LIO wrapper when you need LiDAR-inertial odometry. It keeps the Livox driver in
+livox custom mode (`/livox/lidar`) and feeds FAST_LIO via the MID360 handler.
+
+```bash
+# Terminal 1: Livox driver (PointCloud2 output)
+ros2 launch robofi_bringup livox_lidar.launch.py
+
+# Terminal 2: FAST_LIO with Ranger defaults
+ros2 launch robofi_bringup fast_lio.launch.py rviz:=true
+```
+
 **Test 4: Camera**
 ```bash
 # Terminal 1: Launch camera

@@ -2,12 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Launch: Livox (MID360) - PointCloud2 Livox",
+      "label": "Launch: Livox (MID360)",
       "type": "shell",
       "command": "bash",
       "args": [
         "-lc",
-        "xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && mkdir -p /tmp/livox_launch && sed \\\"s/xfer_format   = 1/xfer_format   = 0/\\\" livox_ros_driver2/launch_ROS2/msg_MID360_launch.py > /tmp/livox_launch/msg_MID360_xfer0_launch.py && ros2 launch /tmp/livox_launch/msg_MID360_xfer0_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -17,7 +17,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Runs Livox driver with xfer_format=0 (PointCloud2 PointXYZRTL - Livox extended)",
+      "detail": "Runs Livox MID360 driver with xfer_format=0 (PointCloud2 PointXYZRTLT - Livox extended) using robofi_bringup",
       "problemMatcher": [],
       "isBackground": false
     },
@@ -78,6 +78,26 @@
         "clear": false
       },
       "detail": "Launches Intel RealSense D435 camera driver with default configuration",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: FAST_LIO Mapping",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fast_lio.launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Runs FAST_LIO mapping (requires Livox driver to be running separately) on DISPLAY :3",
       "problemMatcher": [],
       "isBackground": false
     }
