@@ -127,7 +127,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -137,7 +137,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches the complete Ranger system: base controller, LiDAR, RealSense camera, robot state publisher, and TF tree",
+      "detail": "Launches the complete Ranger system: base controller, LiDAR, RealSense camera, robot state publisher, and TF tree on DISPLAY :3",
       "problemMatcher": [],
       "isBackground": false
     }

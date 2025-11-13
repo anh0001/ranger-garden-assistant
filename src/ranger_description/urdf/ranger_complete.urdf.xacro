@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <robot name="ranger_mini_complete" xmlns:xacro="http://ros.org/wiki/xacro">
 
+  <!-- Accept mesh directory as argument with default value -->
+  <xacro:arg name="mesh_dir" default="package://ranger_description/meshes"/>
+
   <xacro:property name="M_PI" value="3.14159265359"/>
   <xacro:property name="base_to_footprint_z" value="0.33"/>
   <xacro:property name="lidar_x" value="0.33"/>
@@ -12,6 +15,7 @@
   <xacro:property name="arm_x" value="0.0"/>
   <xacro:property name="arm_y" value="0.0"/>
   <xacro:property name="arm_z" value="0.30"/>
+  <xacro:property name="mesh_dir" value="$(arg mesh_dir)"/>
 
   <link
     name="base_link">
@@ -29,7 +33,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://ranger_description/meshes/ranger_base.dae" scale="1000 1000 1000" />
+          filename="${mesh_dir}/ranger_base.dae" scale="1000 1000 1000" />
       </geometry>
       <material
         name="">
@@ -74,7 +78,7 @@
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
-        <mesh filename="package://ranger_description/meshes/steering_wheel.dae" scale="10 10 10"/>
+        <mesh filename="${mesh_dir}/steering_wheel.dae" scale="10 10 10"/>
       </geometry>
       <material
         name="">
@@ -117,7 +121,7 @@
       <visual>
           <origin xyz="0 0 0" rpy="3.14 0 0" />
           <geometry>
-            <mesh filename="package://ranger_description/meshes/wheel_v3.dae" scale="10 10 10"/>
+            <mesh filename="${mesh_dir}/wheel_v3.dae" scale="10 10 10"/>
           </geometry>
       </visual>
       <collision>
@@ -162,7 +166,7 @@
         xyz="0 0 0"
         rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="package://ranger_description/meshes/steering_wheel.dae" scale="10 10 10"/>
+        <mesh filename="${mesh_dir}/steering_wheel.dae" scale="10 10 10"/>
       </geometry>
       <material
         name="">
@@ -204,7 +208,7 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0" />
                 <geometry>
-                <mesh filename="package://ranger_description/meshes/wheel_v3.dae" scale="10 10 10"/>
+                <mesh filename="${mesh_dir}/wheel_v3.dae" scale="10 10 10"/>
                 </geometry>
             </visual>
             <collision>
@@ -248,7 +252,7 @@
         xyz="0 0 0"
         rpy="0 0 3.14" />
       <geometry>
-        <mesh filename="package://ranger_description/meshes/steering_wheel.dae" scale="10 10 10"/>
+        <mesh filename="${mesh_dir}/steering_wheel.dae" scale="10 10 10"/>
       </geometry>
       <material
         name="">
@@ -290,7 +294,7 @@
             <visual>
                 <origin xyz="0 0 0" rpy="0 0 0" />
                 <geometry>
-                  <mesh filename="package://ranger_description/meshes/wheel_v3.dae" scale="10 10 10"/>
+                  <mesh filename="${mesh_dir}/wheel_v3.dae" scale="10 10 10"/>
                 </geometry>
             </visual>
             <collision>
@@ -324,7 +328,7 @@
             xyz="0 0 0"
             rpy="0 0 0" />
           <geometry>
-            <mesh filename="package://ranger_description/meshes/steering_wheel.dae" scale="10 10 10"/>
+            <mesh filename="${mesh_dir}/steering_wheel.dae" scale="10 10 10"/>
           </geometry>
         </visual>
         <collision>
@@ -351,7 +355,7 @@
             <visual>
                 <origin xyz="0.0 0.0 0.0" rpy="3.14 0 0" />
                 <geometry>
-                    <mesh filename="package://ranger_description/meshes/wheel_v3.dae" scale="10 10 10"/>
+                    <mesh filename="${mesh_dir}/wheel_v3.dae" scale="10 10 10"/>
                 </geometry>
             </visual>
             <collision>

@@ -12,6 +12,7 @@ Complete system bringup for Ranger Mini 3.0 with:
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command, FindExecutable
 from launch_ros.actions import Node
@@ -57,6 +58,22 @@ def generate_launch_description():
 
     declared_arguments.append(
         DeclareLaunchArgument(
+            "publish_joint_states",
+            default_value="true",
+            description="Publish default joint states so wheel transforms exist when the base driver is disabled.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_rviz",
+            default_value="true",
+            description="Launch RViz for visualization.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
             "livox_config_file",
             default_value=PathJoinSubstitution(
                 [
@@ -75,8 +92,10 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     livox_frame_id = LaunchConfiguration("livox_frame_id")
     livox_config_file = LaunchConfiguration("livox_config_file")
+    publish_joint_states = LaunchConfiguration("publish_joint_states")
+    use_rviz = LaunchConfiguration("use_rviz")
 
-    # Get URDF via xacro
+    # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
         [
             PathJoinSubstitution([FindExecutable(name="xacro")]),
@@ -86,6 +105,13 @@ def generate_launch_description():
                     FindPackageShare("ranger_description"),
                     "urdf",
                     "ranger_complete.urdf.xacro",
+                ]
+            ),
+            " mesh_dir:=file://",
+            PathJoinSubstitution(
+                [
+                    FindPackageShare("ranger_description"),
+                    "meshes",
                 ]
             ),
         ]
@@ -98,6 +124,15 @@ def generate_launch_description():
         executable="robot_state_publisher",
         output="both",
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
+    )
+
+    # Optional joint state publisher keeps wheel/steering transforms available when
+    # the hardware base controller is not running.
+    joint_state_publisher_node = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        parameters=[robot_description, {"use_sim_time": use_sim_time}],
+        condition=IfCondition(publish_joint_states),
     )
 
     # Ranger base driver launch (disabled by default; uncomment when chassis is present)
@@ -156,11 +191,27 @@ def generate_launch_description():
     #     launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
     # )
 
+    # RViz visualization (optional)
+    rviz_config_file = PathJoinSubstitution(
+        [FindPackageShare("robofi_bringup"), "rviz", "robot_bringup.rviz"]
+    )
+
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        arguments=["-d", rviz_config_file],
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(use_rviz),
+    )
+
     return LaunchDescription(
         declared_arguments
         + [
             robot_state_publisher_node,
+            joint_state_publisher_node,
             livox_launch,
+            rviz_node,
             # static_tf_lidar,
             # ranger_base_launch,
             # realsense_launch,
