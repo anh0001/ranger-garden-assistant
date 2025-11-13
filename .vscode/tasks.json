@@ -120,6 +120,26 @@
       "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :3 to verify meshes and sensor frames",
       "problemMatcher": [],
       "isBackground": false
+    },
+    {
+      "label": "Launch: Ranger Complete Bringup",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches the complete Ranger system: base controller, LiDAR, RealSense camera, robot state publisher, and TF tree",
+      "problemMatcher": [],
+      "isBackground": false
     }
   ]
 }

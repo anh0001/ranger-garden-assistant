@@ -6,9 +6,9 @@
   <xacro:property name="lidar_x" value="0.33"/>
   <xacro:property name="lidar_y" value="0.0"/>
   <xacro:property name="lidar_z" value="0.0"/>
-  <xacro:property name="camera_x" value="0.20"/>
+  <xacro:property name="camera_x" value="0.28"/>
   <xacro:property name="camera_y" value="0.0"/>
-  <xacro:property name="camera_z" value="0.50"/>
+  <xacro:property name="camera_z" value="0.115"/>
   <xacro:property name="arm_x" value="0.0"/>
   <xacro:property name="arm_y" value="0.0"/>
   <xacro:property name="arm_z" value="0.30"/>
@@ -501,7 +501,7 @@
   <link name="camera_link">
     <visual>
       <geometry>
-        <box size="0.090 0.025 0.025"/>
+        <box size="0.025 0.090 0.025"/>
       </geometry>
       <material name="silver">
         <color rgba="0.8 0.8 0.8 1.0"/>

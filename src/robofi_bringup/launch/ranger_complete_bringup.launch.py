@@ -47,10 +47,34 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "livox_frame_id",
+            default_value="lidar_link",
+            description="Frame ID assigned to Livox point clouds.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "livox_config_file",
+            default_value=PathJoinSubstitution(
+                [
+                    FindPackageShare("robofi_bringup"),
+                    "config",
+                    "livox_mid360_config.json",
+                ]
+            ),
+            description="Path to the Livox Mid-360 JSON configuration file.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    livox_frame_id = LaunchConfiguration("livox_frame_id")
+    livox_config_file = LaunchConfiguration("livox_config_file")
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -76,26 +100,17 @@ def generate_launch_description():
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
-    # Static transforms for sensors (if not in URDF)
-    # These are already in the URDF, but keeping as examples for manual override
-    static_tf_lidar = Node(
-        package="tf2_ros",
-        executable="static_transform_publisher",
-        name="static_tf_lidar",
-        arguments=["0", "0", "0.7", "0", "0", "0", "base_link", "livox_frame"],
-    )
-
-    # Ranger base driver launch
-    ranger_base_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare("robofi_bringup"),
-                "launch",
-                "ranger_base.launch.py"
-            ])
-        ),
-        launch_arguments={"can_device": can_device}.items(),
-    )
+    # Ranger base driver launch (disabled by default; uncomment when chassis is present)
+    # ranger_base_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         PathJoinSubstitution([
+    #             FindPackageShare("robofi_bringup"),
+    #             "launch",
+    #             "ranger_base.launch.py"
+    #         ])
+    #     ),
+    #     launch_arguments={"can_device": can_device}.items(),
+    # )
 
     # Livox LiDAR driver launch
     livox_launch = IncludeLaunchDescription(
@@ -106,24 +121,28 @@ def generate_launch_description():
                 "livox_lidar.launch.py"
             ])
         ),
-    )
-
-    # RealSense camera launch
-    realsense_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare("realsense2_camera"),
-                "launch",
-                "rs_launch.py"
-            ])
-        ),
         launch_arguments={
-            "align_depth.enable": "true",
-            "pointcloud.enable": "true",
-            "enable_color": "true",
-            "enable_depth": "true",
+            "frame_id": livox_frame_id,
+            "config_file": livox_config_file,
         }.items(),
     )
+
+    # # RealSense camera launch
+    # realsense_launch = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(
+    #         PathJoinSubstitution([
+    #             FindPackageShare("realsense2_camera"),
+    #             "launch",
+    #             "rs_launch.py"
+    #         ])
+    #     ),
+    #     launch_arguments={
+    #         "align_depth.enable": "true",
+    #         "pointcloud.enable": "true",
+    #         "enable_color": "true",
+    #         "enable_depth": "true",
+    #     }.items(),
+    # )
 
     # PiPER arm driver (commented out by default, uncomment when ready)
     # piper_launch = IncludeLaunchDescription(
@@ -137,13 +156,14 @@ def generate_launch_description():
     #     launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
     # )
 
-    nodes = [
-        robot_state_publisher_node,
-        # static_tf_lidar,  # Uncomment if needed
-        ranger_base_launch,
-        livox_launch,
-        realsense_launch,
-        # piper_launch,  # Uncomment when PiPER arm is connected
-    ]
-
-    return LaunchDescription(declared_arguments + nodes)
+    return LaunchDescription(
+        declared_arguments
+        + [
+            robot_state_publisher_node,
+            livox_launch,
+            # static_tf_lidar,
+            # ranger_base_launch,
+            # realsense_launch,
+            # piper_launch,
+        ]
+    )
