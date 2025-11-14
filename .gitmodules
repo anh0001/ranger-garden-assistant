@@ -15,3 +15,9 @@
 	path = src/FAST_LIO
 	url = https://github.com/anh0001/FAST_LIO.git
 	branch = ros2
+[submodule "src/FASTLIO2_ROS2"]
+	path = src/FASTLIO2_ROS2
+	url = https://github.com/anh0001/FASTLIO2_ROS2.git
+[submodule "src/octomap_server2"]
+	path = src/octomap_server2
+	url = https://github.com/iKrishneel/octomap_server2
