@@ -2,164 +2,38 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Launch: Livox (MID360)",
+      "label": "FASTLIO2 Mapping Stack",
       "type": "shell",
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py xfer_format:=4"
+        "source install/setup.bash && ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
       },
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Runs Livox MID360 driver with xfer_format=4 so both /livox/lidar (PointCloud2) and /livox/lidar_custom (Livox CustomMsg) are published via robofi_bringup",
-      "problemMatcher": [],
-      "isBackground": false
+        "panel": "new"
+      }
     },
     {
-      "label": "Launch: Livox RViz (MID360)",
+      "label": "FASTLIO2 Navigation Stack",
       "type": "shell",
       "command": "bash",
       "args": [
         "-lc",
-        "DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+        "source install/setup.bash && ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
       },
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Runs Livox driver and RViz in xterm on DISPLAY :3; uses the MID360 config.",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "Launch: RQT Image View",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Runs rqt_image_view directly on DISPLAY :3 to visualize camera/image topics",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "Launch: RealSense D435",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch realsense2_camera rs_launch.py"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Launches Intel RealSense D435 camera driver with default configuration",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "Launch: FAST_LIO Mapping",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fast_lio.launch.py"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Runs FAST_LIO mapping (requires Livox driver to be running separately) on DISPLAY :3",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "Display: Robot Model with GUI",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :3 to verify meshes and sensor frames",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "Launch: Ranger Complete Bringup",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Launches the complete Ranger system: base controller, LiDAR, RealSense camera, robot state publisher, and TF tree on DISPLAY :3",
-      "problemMatcher": [],
-      "isBackground": false
-    },
-    {
-      "label": "FAST_LIO: Save Map",
-      "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 service call /map_save std_srvs/srv/Trigger && echo 'Map saved to fast_lio_map.pcd' && ls -lh ${workspaceFolder}/*.pcd"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "clear": false
-      },
-      "detail": "Saves the current FAST_LIO map to fast_lio_map.pcd file in the workspace root",
-      "problemMatcher": [],
-      "isBackground": false
+        "panel": "new"
+      }
     }
   ]
 }

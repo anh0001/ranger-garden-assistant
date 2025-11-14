@@ -9,7 +9,8 @@ This is a ROS 2 Humble workspace for the **Ranger Garden Assistant** - a mobile 
 - **Livox Mid-360** LiDAR for 3D perception
 - **Intel RealSense D435** RGB-D camera
 - **AgileX PiPER** 6-DOF robotic arm (CAN bus @ 1000 kbps, optional)
-- **FAST_LIO** for LiDAR-Inertial Odometry and real-time mapping
+- **FASTLIO2_ROS2** for LiDAR-Inertial Odometry, loop closure, and localization
+- **Octomap Server 2** for 3D volumetric mapping and 2D occupancy grid generation
 - **Navigation2** for autonomous navigation
 - **MoveIt 2** for motion planning
 
@@ -113,31 +114,89 @@ ros2 launch ranger_description display.launch.py
 rviz2 -d src/ranger_description/rviz/view_robot.rviz
 ```
 
-### SLAM Mapping
+### SLAM and Mapping
 
-#### Option 1: FAST_LIO (LiDAR-Inertial Odometry)
-High-accuracy real-time localization using LiDAR + IMU fusion:
+#### FASTLIO2_ROS2 SLAM Backend (Recommended)
+FASTLIO2_ROS2 provides a complete SLAM pipeline with three specialized nodes:
+
+**Architecture Overview:**
+- **`fastlio2::lio_node`**: LiDAR-Inertial Odometry (publishes `/Odometry`)
+- **`pgo::pgo_node`**: Pose Graph Optimization with loop closure (publishes `map → odom` transform)
+- **`localizer::localizer_node`**: Localization against saved maps for re-use
+
+**Option 1: LIO Mode (Odometry Only)**
+Real-time high-accuracy odometry without loop closure:
 ```bash
 # Terminal 1: Launch robot (base + sensors)
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
-# Terminal 2: Start FAST_LIO mapping
-ros2 launch fast_lio mapping.launch.py
+# Terminal 2: Start FASTLIO2 LIO node
+ros2 launch robofi_bringup fastlio2_navigation.launch.py mode:=lio
+
+# Terminal 3: Teleoperate robot
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+
+# LIO provides odometry on /Odometry topic
+# Best for short-term navigation or when combined with external localization
+```
+
+**Option 2: PGO Mode (Mapping with Loop Closure)**
+Full SLAM with loop closure detection and map optimization:
+```bash
+# Terminal 1: Launch robot (base + sensors)
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
+
+# Terminal 2: Start FASTLIO2 with PGO (mapping mode)
+ros2 launch robofi_bringup fastlio2_navigation.launch.py mode:=pgo
 
 # Terminal 3: Teleoperate to build map
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
-# Map is automatically saved as PCD file in current directory
-# Convert PCD to 2D occupancy grid if needed for Nav2
+# PGO node detects loop closures and optimizes the map
+# Publishes map → odom transform for global consistency
+# Save map when complete (see Map Saving section)
 ```
 
-#### Option 2: SLAM Toolbox (2D Grid-based)
-Traditional 2D SLAM for navigation:
+**Option 3: Localizer Mode (Localization on Saved Map)**
+Localize robot against a previously saved map:
+```bash
+# Terminal 1: Launch robot (base + sensors)
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
+
+# Terminal 2: Start FASTLIO2 localizer with saved map
+ros2 launch robofi_bringup fastlio2_navigation.launch.py mode:=localizer map_path:=/path/to/saved_map.pcd
+
+# Localizer node loads the map and provides localization
+# Publishes map → odom transform based on map matching
+```
+
+#### Octomap Server 2 (3D Volumetric Mapping)
+Maintains a 3D occupancy map (OctoMap) and generates 2D projections for Nav2:
+```bash
+# Launch alongside FASTLIO2 (typically included in fastlio2_navigation.launch.py)
+ros2 run octomap_server2 octomap_server_node \
+  --ros-args \
+  --params-file src/robofi_bringup/config/octomap_server.yaml
+
+# Octomap subscribes to /cloud_registered from FASTLIO2
+# Publishes:
+#   - /octomap_binary or /octomap_full (3D map)
+#   - /projected_map (2D occupancy grid for Nav2)
+```
+
+**Benefits of Octomap + FASTLIO2:**
+- **3D awareness**: Handles multi-level environments, overhangs, and dynamic obstacles
+- **Memory efficient**: Octree compression reduces memory footprint
+- **Nav2 integration**: Projected 2D map works directly with Nav2 costmaps
+- **Real-time updates**: Incrementally updates as robot explores
+
+#### SLAM Toolbox (Alternative 2D SLAM)
+Traditional 2D SLAM for simpler environments:
 ```bash
 # Terminal 1: Launch robot
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
-# Terminal 2: Start SLAM
+# Terminal 2: Start SLAM Toolbox
 ros2 launch robofi_bringup slam.launch.py
 
 # Terminal 3: Teleoperate to build map
@@ -147,16 +206,42 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ros2 run nav2_map_server map_saver_cli -f my_map
 ```
 
-**Choosing between FAST_LIO and SLAM Toolbox:**
-- **FAST_LIO**: Better accuracy, 3D mapping, works in feature-rich environments, requires IMU
-- **SLAM Toolbox**: 2D maps compatible with Nav2, works without IMU, lighter computational load
+**Choosing Your SLAM Approach:**
+- **FASTLIO2 + Octomap** (Recommended): Best accuracy, 3D mapping, loop closure, works in complex environments
+- **SLAM Toolbox**: Simpler 2D approach, lighter computational load, no IMU required
 
 ### Autonomous Navigation
+
+#### Navigation with FASTLIO2 + Octomap (Recommended)
+Complete navigation stack using FASTLIO2 odometry and Octomap costmaps:
+```bash
+# Terminal 1: Launch robot (base + sensors)
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py
+
+# Terminal 2: Launch FASTLIO2 in localizer mode with saved map
+ros2 launch robofi_bringup fastlio2_navigation.launch.py mode:=localizer map_path:=/path/to/map.pcd
+
+# Terminal 3: Launch Nav2 stack
+ros2 launch robofi_bringup navigation.launch.py
+
+# Terminal 4: Open Nav2 RViz for goal setting
+rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_view.rviz
+```
+
+**Navigation Architecture:**
+- **Odometry**: FASTLIO2 LIO node provides high-accuracy `/Odometry` topic
+- **Localization**: PGO or Localizer node provides `map → odom` transform
+- **Global costmap**: Uses static map (from Octomap projection) + obstacle layer
+- **Local costmap**: Uses voxel layer from Mid-360 point cloud + optional D435 depth
+- **Controllers**: Use FASTLIO2 odometry directly for smooth, accurate control
+
+#### Navigation with Static Map (Alternative)
+Traditional navigation with pre-built map:
 ```bash
 # Terminal 1: Launch robot
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
-# Terminal 2: Launch navigation stack
+# Terminal 2: Launch navigation stack with static map
 ros2 launch robofi_bringup navigation.launch.py map:=/path/to/map.yaml
 
 # Terminal 3: Open Nav2 RViz for goal setting
@@ -179,11 +264,21 @@ ros2 launch piper_moveit piper_moveit.launch.py
 ros2 topic list
 ros2 topic echo /odom
 ros2 topic hz /livox/lidar
-ros2 topic hz /livox/imu  # For FAST_LIO
+ros2 topic hz /livox/imu  # For FASTLIO2
 
-# When running FAST_LIO
+# When running FASTLIO2 LIO node
 ros2 topic hz /Odometry
 ros2 topic hz /cloud_registered
+ros2 topic hz /path  # Robot trajectory
+
+# When running FASTLIO2 PGO node
+ros2 topic hz /optimized_path  # Optimized trajectory after loop closure
+ros2 topic echo /loop_closure_info  # Loop closure detections
+
+# When running Octomap Server
+ros2 topic hz /octomap_binary  # 3D volumetric map
+ros2 topic hz /projected_map  # 2D occupancy grid for Nav2
+ros2 topic hz /octomap_point_cloud_centers  # Point cloud visualization of occupied voxels
 ```
 
 ### Verify TF Tree

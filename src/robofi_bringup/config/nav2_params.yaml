@@ -44,7 +44,7 @@ bt_navigator:
     use_sim_time: False
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odom
+    odom_topic: /fastlio2/lio_odom
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -106,6 +106,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: False
+    odom_topic: "/fastlio2/lio_odom"
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -166,15 +167,16 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
+      update_frequency: 10.0
+      publish_frequency: 5.0
       global_frame: odom
       robot_base_frame: base_link
       use_sim_time: False
       rolling_window: true
-      width: 6
-      height: 6
+      width: 8.0
+      height: 8.0
       resolution: 0.05
+      transform_tolerance: 0.3
       robot_radius: 0.40
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
@@ -189,21 +191,35 @@ local_costmap:
         z_resolution: 0.05
         z_voxels: 16
         max_obstacle_height: 2.0
+        min_obstacle_height: -0.25
         mark_threshold: 0
-        observation_sources: pointcloud
-        pointcloud:
+        observation_sources: mid360_cloud d435_depth
+        mid360_cloud:
           topic: /livox/lidar
-          max_obstacle_height: 2.0
+          max_obstacle_height: 2.5
+          min_obstacle_height: -0.3
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          raytrace_max_range: 15.0
+          raytrace_min_range: 0.2
+          obstacle_max_range: 12.0
           obstacle_min_range: 0.0
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+        d435_depth:
+          topic: /camera/depth/color/points
+          max_obstacle_height: 1.5
+          min_obstacle_height: 0.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          raytrace_max_range: 6.0
+          raytrace_min_range: 0.1
+          obstacle_max_range: 4.0
+          obstacle_min_range: 0.1
       always_send_full_costmap: True
 
 global_costmap:
@@ -221,8 +237,8 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: pointcloud
-        pointcloud:
+        observation_sources: mid360_cloud
+        mid360_cloud:
           topic: /livox/lidar
           max_obstacle_height: 2.0
           clearing: True
@@ -235,6 +251,9 @@ global_costmap:
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
+        map_topic: /projected_map
+        subscribe_to_updates: True
+        first_map_only: False
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
@@ -312,7 +331,7 @@ velocity_smoother:
     min_velocity: [-0.5, -0.5, -1.0]
     max_accel: [0.5, 0.5, 1.0]
     max_decel: [-0.5, -0.5, -1.0]
-    odom_topic: "odom"
+    odom_topic: "/fastlio2/lio_odom"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
