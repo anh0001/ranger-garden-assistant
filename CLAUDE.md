@@ -311,7 +311,8 @@ ros2 run rqt_top rqt_top
 - `ranger_description/` - URDF/xacro robot descriptions and meshes
 - `ranger_ros2/` - Base controller driver (submodule)
 - `livox_ros_driver2/` - LiDAR driver (submodule)
-- `FAST_LIO/` - LiDAR-Inertial Odometry for localization and mapping (submodule)
+- `FASTLIO2_ROS2/` - Complete SLAM backend with LIO, PGO, and localization (submodule)
+- `octomap_server2/` - 3D volumetric mapping and 2D projection (submodule)
 - `ugv_sdk/` - AgileX UGV SDK (submodule)
 - `piper_ros/` - Arm driver and MoveIt config (submodule)
 
