@@ -140,6 +140,26 @@
       "detail": "Launches the complete Ranger system: base controller, LiDAR, RealSense camera, robot state publisher, and TF tree on DISPLAY :3",
       "problemMatcher": [],
       "isBackground": false
+    },
+    {
+      "label": "FAST_LIO: Save Map",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 service call /map_save std_srvs/srv/Trigger && echo 'Map saved to fast_lio_map.pcd' && ls -lh ${workspaceFolder}/*.pcd"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Saves the current FAST_LIO map to fast_lio_map.pcd file in the workspace root",
+      "problemMatcher": [],
+      "isBackground": false
     }
   ]
 }
