@@ -113,7 +113,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "rviz_config",
             default_value=PathJoinSubstitution(
-                [FindPackageShare("fastlio2"), "rviz", "fastlio2.rviz"]
+                [FindPackageShare("robofi_bringup"), "rviz", "fastlio2_mapping.rviz"]
             ),
             description="RViz configuration file used when launch_rviz is true.",
         ),
@@ -179,10 +179,13 @@ def generate_launch_description():
         package="octomap_server2",
         executable="octomap_server",
         name="octomap_server",
+        namespace="",
         output="screen",
         parameters=[octomap_config, {"use_sim_time": use_sim_time}],
         remappings=[("cloud_in", octomap_point_topic)],
         condition=IfCondition(launch_octomap),
+        respawn=True,
+        respawn_delay=2.0,
     )
 
     nav2_launch = IncludeLaunchDescription(

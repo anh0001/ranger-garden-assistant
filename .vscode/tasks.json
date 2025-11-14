@@ -147,7 +147,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -157,7 +157,7 @@
         "reveal": "always",
         "panel": "new"
       },
-      "detail": "Launches complete Ranger system + FASTLIO2 LIO + Octomap Server on DISPLAY :3 for mapping"
+      "detail": "Launches complete Ranger system + FASTLIO2 LIO + Octomap Server on DISPLAY :3 for mapping, pinned to robofi_bringup/rviz/fastlio2_mapping.rviz"
     },
     {
       "label": "FASTLIO2 Navigation Stack",

@@ -191,14 +191,14 @@ This starts the robot description, Livox Mid-360 driver, FASTLIO2 LIO (`odom -> 
 
 ### 4. Visualize in RViz
 
-In a new terminal:
+`fastlio2_navigation.launch.py` already launches RViz with the curated mapping layout when `launch_rviz:=true` (default). To bring it up manually (for example, if you start RViz in its own terminal), load the same config shipped in `robofi_bringup`:
 
 ```bash
 source install/setup.bash
-rviz2 -d $(ros2 pkg prefix fastlio2)/share/fastlio2/rviz/fastlio2.rviz
+rviz2 -d $(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz
 ```
 
-Add the `/fastlio2/lio_path`, `/pgo/loop_markers`, `/octomap_server/octomap_binary`, and `/projected_map` displays to monitor odometry, loop closures, 3D maps, and the Nav2 static layer.
+This configuration already enables `/fastlio2/lio_path`, `/fastlio2/lio_odom`, `/pgo/loop_markers`, `/octomap_server/octomap_point_cloud_centers`, and `/projected_map` so you can monitor odometry, loop closures, and both the 3D + projected maps while exploring.
 
 ## Usage
 
@@ -231,7 +231,7 @@ ros2 launch robofi_bringup fastlio2_navigation.launch.py \
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
-Monitor `/fastlio2/lio_odom`, `/pgo/loop_markers`, `/octomap_server/octomap_binary`, and `/projected_map` in RViz while exploring. When finished (with the FASTLIO2 Mapping Stack still running), persist the optimized global map + patches with the helper script from the workspace root:
+Monitor `/fastlio2/lio_odom`, `/pgo/loop_markers`, `/octomap_server/octomap_binary`, and `/projected_map` with the `robofi_bringup/rviz/fastlio2_mapping.rviz` profile while exploring. When finished (with the FASTLIO2 Mapping Stack still running), persist the optimized global map + patches with the helper script from the workspace root:
 
 ```bash
 ./scripts/save_maps.sh
