@@ -476,27 +476,145 @@ Edit parameters in [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bring
 ### Creating Custom Behaviors
 Add behavior tree XML files to `src/robofi_bringup/config/behavior_trees/` and reference in nav2_params.yaml
 
-### Tuning FAST_LIO Parameters
-Edit parameters in [src/FAST_LIO/config/mid360.yaml](src/FAST_LIO/config/mid360.yaml):
-- **Extrinsic calibration**: `extrinsic_T` and `extrinsic_R` define LiDAR-to-IMU transformation
-  - Enable `extrinsic_est_en: true` for online estimation
-  - Or manually calibrate and set `extrinsic_est_en: false`
-- **Noise parameters**: Adjust `acc_cov`, `gyr_cov`, `b_acc_cov`, `b_gyr_cov` based on IMU specs
-- **Filter sizes**: `filter_size_surf` and `filter_size_map` control voxel grid downsampling
-  - Smaller values = more detail but slower processing
-  - Larger values = faster but less accurate
-- **Detection range**: `det_range` sets maximum LiDAR detection distance (default 100m)
-- **Map saving**: Set `pcd_save_en: true` and `interval: -1` to save complete map
+### Map Saving and Management
 
-### Integrating FAST_LIO with Navigation
-To use FAST_LIO odometry for Nav2 navigation:
-1. Launch FAST_LIO separately: `ros2 launch fast_lio mapping.launch.py`
-2. Remap FAST_LIO's `/Odometry` topic to `/odom` for Nav2:
-   ```bash
-   ros2 run topic_tools relay /Odometry /odom
-   ```
-3. Or modify nav2_params.yaml to subscribe to `/Odometry` instead of `/odom`
-4. Ensure TF frames are properly connected (`camera_init` → `odom`, `body` → `base_link`)
+**Saving FASTLIO2 PCD Maps:**
+```bash
+# Maps are automatically saved by PGO node if configured
+# Check config: save_map_enable: true in fastlio2_pgo.yaml
+
+# Manual save via service (if supported)
+ros2 service call /fastlio2_pgo_node/save_map std_srvs/srv/Trigger
+
+# Maps saved to: map_save_path directory (default: ~/FASTLIO2_maps/)
+# Format: PCD files with timestamp
+```
+
+**Saving Octomap:**
+```bash
+# Save full 3D Octomap
+ros2 service call /octomap_server/save_map octomap_msgs/srv/SaveOctomap \
+  "{filename: '~/maps/my_environment.ot'}"
+
+# Save 2D projected map for Nav2
+ros2 run nav2_map_server map_saver_cli -f ~/maps/my_2d_map \
+  --ros-args -p map_subscribe_transient_local:=true
+```
+
+**Converting Between Map Formats:**
+```bash
+# Convert PCD to other formats
+pcl_viewer my_map.pcd  # Visualize
+pcl_convert my_map.pcd my_map.ply  # Convert to PLY
+
+# Load Octomap in Python for processing
+# Use octomap_msgs or octomap Python bindings
+
+# Generate 2D occupancy grid from PCD (custom script needed)
+# Or use Octomap Server's built-in projection
+```
+
+**Map Reuse Workflow:**
+1. **Create map with PGO**: Use PGO mode to build and save optimized PCD map
+2. **Use with Localizer**: Launch localizer mode with saved PCD map for localization
+3. **Load in Octomap**: Optionally load PCD map into Octomap for real-time 2D projection
+4. **Navigate with Nav2**: Use projected 2D map for global costmap in Nav2
+
+**Example Complete Workflow:**
+```bash
+# Step 1: Mapping phase (do this once)
+ros2 launch robofi_bringup fastlio2_navigation.launch.py mode:=pgo
+# Drive around, let PGO detect loops and optimize
+# Map saved automatically to ~/FASTLIO2_maps/map_YYYYMMDD_HHMMSS.pcd
+
+# Step 2: Save Octomap projection (optional, for static map)
+ros2 service call /octomap_server/save_map octomap_msgs/srv/SaveOctomap \
+  "{filename: '~/maps/garden_3d.ot'}"
+ros2 run nav2_map_server map_saver_cli -f ~/maps/garden_2d
+
+# Step 3: Navigation phase (use this for daily operations)
+ros2 launch robofi_bringup fastlio2_navigation.launch.py \
+  mode:=localizer \
+  map_path:=~/FASTLIO2_maps/map_20250114_143022.pcd
+ros2 launch robofi_bringup navigation.launch.py map:=~/maps/garden_2d.yaml
+```
+
+### Tuning FASTLIO2 Parameters
+
+**LIO Node Parameters** ([src/robofi_bringup/config/fastlio2_lio.yaml](src/robofi_bringup/config/fastlio2_lio.yaml)):
+- **Extrinsic calibration**: `extrinsic_T` and `extrinsic_R` define LiDAR-to-IMU transformation
+  - Enable `extrinsic_est_en: true` for automatic online calibration
+  - Or manually calibrate and set `extrinsic_est_en: false` for better performance
+- **IMU noise parameters**: Adjust based on your IMU specifications
+  - `acc_cov`: Accelerometer measurement covariance
+  - `gyr_cov`: Gyroscope measurement covariance
+  - `b_acc_cov`: Accelerometer bias covariance
+  - `b_gyr_cov`: Gyroscope bias covariance
+- **Point cloud processing**:
+  - `filter_size_surf`: Voxel grid size for downsampling (smaller = more detail, slower)
+  - `filter_size_map`: Map voxel grid size (affects memory usage)
+  - `point_filter_num`: Point skip ratio (higher = faster but less accurate)
+- **Detection range**: `det_range` sets maximum LiDAR detection distance (default 100m)
+- **Frame IDs**: Ensure `lidar_frame`, `imu_frame`, and `base_frame` match your URDF
+
+**PGO Node Parameters** ([src/robofi_bringup/config/fastlio2_pgo.yaml](src/robofi_bringup/config/fastlio2_pgo.yaml)):
+- **Loop closure detection**:
+  - `loop_closure_search_radius`: Distance threshold for loop candidate search
+  - `loop_closure_fitness_threshold`: ICP fitness score threshold for valid loop
+  - `loop_closure_frequency`: How often to check for loops (Hz)
+- **Map saving**:
+  - `save_map_enable: true` to enable automatic map saving
+  - `save_map_interval`: Time interval between saves (seconds, -1 for end only)
+  - `map_save_path`: Directory to save PCD maps
+
+**Localizer Node Parameters** ([src/robofi_bringup/config/fastlio2_localizer.yaml](src/robofi_bringup/config/fastlio2_localizer.yaml)):
+- **Initial pose**: Set approximate starting pose if known
+- **Localization fitness**: ICP matching threshold for localization confidence
+- **Map file path**: Path to saved PCD map file
+
+### Tuning Octomap Server
+Edit parameters in [src/robofi_bringup/config/octomap_server.yaml](src/robofi_bringup/config/octomap_server.yaml):
+- **Resolution**: Octree voxel size (default 0.05m, smaller = more detail but more memory)
+- **Sensor max range**: Maximum range for inserting point cloud data
+- **Height filtering**: Min/max height for 2D projection (important for navigation)
+- **Point cloud topics**: Subscribe to `/cloud_registered` from FASTLIO2
+- **Frame ID**: Should match the map frame (usually `map` or `camera_init`)
+- **Publish frequency**: Rate for publishing 2D projected map
+
+### Integrating FASTLIO2 with Navigation
+The integrated system uses FASTLIO2 odometry directly with Nav2:
+
+**Recommended Setup:**
+1. **Odometry**: Nav2 subscribes to `/Odometry` from FASTLIO2 LIO node
+2. **Localization**: PGO or Localizer node publishes `map → odom` transform
+3. **Global costmap**: Uses `/projected_map` from Octomap as static layer
+4. **Local costmap**: Uses `/cloud_registered` from FASTLIO2 for voxel layer
+5. **Controllers**: Configured to use `/Odometry` for velocity commands
+
+**Configuration in nav2_params.yaml:**
+```yaml
+# Use FASTLIO2 odometry
+odom_topic: /Odometry
+
+# Global costmap layers
+global_costmap:
+  plugins:
+    - static_layer  # Subscribe to /projected_map from Octomap
+    - obstacle_layer
+
+# Local costmap layers
+local_costmap:
+  plugins:
+    - voxel_layer  # Subscribe to /cloud_registered from FASTLIO2
+    - rgbd_obstacle_layer  # Optional: from D435 depth camera
+    - inflation_layer
+```
+
+**Benefits of this architecture:**
+- High-accuracy odometry from LiDAR-inertial fusion
+- Global consistency from loop closure (PGO mode)
+- 3D obstacle detection from voxel layer
+- Efficient 2D planning from Octomap projection
 
 ## Important Notes
 
@@ -541,47 +659,162 @@ For Jetson or lower-power computers:
 - **Camera not detected**: Verify USB 3.0 connection, run `rs-enumerate-devices`
 - **TF errors**: Check all required nodes are running with `ros2 node list`
 - **Navigation failures**: Verify sensor data visible in RViz, check costmap topics
-- **FAST_LIO not receiving IMU data**:
+
+**FASTLIO2 Issues:**
+- **LIO not receiving IMU data**:
   - Verify `/livox/imu` topic is publishing: `ros2 topic hz /livox/imu`
   - Check Livox Mid-360 is configured to publish IMU data in MID360_config.json
-- **FAST_LIO drift or poor accuracy**:
-  - Check IMU noise parameters match your sensor specs
+  - Verify frame IDs match in LIO config and URDF
+- **LIO drift or poor accuracy**:
+  - Check IMU noise parameters match your sensor specs in fastlio2_lio.yaml
   - Enable online extrinsic calibration: `extrinsic_est_en: true`
   - Ensure sufficient feature-rich environment (not recommended in featureless areas)
-- **FAST_LIO high CPU usage**: Increase filter sizes in config, reduce point cloud density
+  - Verify LiDAR and IMU extrinsic calibration is correct
+- **PGO not detecting loop closures**:
+  - Increase `loop_closure_search_radius` in fastlio2_pgo.yaml
+  - Lower `loop_closure_fitness_threshold` (but may get false positives)
+  - Ensure robot revisits same locations with similar viewpoints
+- **Localizer poor localization**:
+  - Verify map file path is correct and map loads successfully
+  - Check initial pose estimate is reasonably close to true position
+  - Ensure environment hasn't changed significantly from mapping
+- **High CPU usage**:
+  - Increase `filter_size_surf` and `filter_size_map` in LIO config
+  - Increase `point_filter_num` to skip more points
+  - Reduce PGO `loop_closure_frequency`
+
+**Octomap Issues:**
+- **Octomap not updating**:
+  - Verify `/cloud_registered` topic is publishing: `ros2 topic hz /cloud_registered`
+  - Check octomap_server node is running: `ros2 node list`
+  - Verify frame_id in octomap config matches FASTLIO2 output
+- **Projected map empty or incorrect**:
+  - Adjust height filtering parameters (min_z, max_z) in octomap config
+  - Check resolution is appropriate for your environment
+  - Verify sensor_max_range is not too restrictive
+- **High memory usage**:
+  - Increase octomap resolution (larger voxels)
+  - Enable periodic pruning of free space
+  - Limit sensor max range
 
 ### Diagnostic Commands
-```bash
-# View TF problems
-ros2 run tf2_ros tf2_echo base_link camera_link
 
-# Check for missing transforms
+**TF Debugging:**
+```bash
+# View TF tree
 ros2 run tf2_tools view_frames
 
-# Monitor topic rates
+# Check specific transform
+ros2 run tf2_ros tf2_echo map odom
+ros2 run tf2_ros tf2_echo odom base_link
+ros2 run tf2_ros tf2_echo base_link lidar_link
+```
+
+**Topic Monitoring:**
+```bash
+# Monitor sensor topics
 ros2 topic hz /livox/lidar
 ros2 topic hz /livox/imu
-ros2 topic hz /Odometry  # FAST_LIO odometry
 
-# View FAST_LIO point cloud output
-ros2 topic echo /cloud_registered --no-arr
+# Monitor FASTLIO2 LIO node
+ros2 topic hz /Odometry
+ros2 topic hz /cloud_registered
+ros2 topic hz /path
 
-# Check FAST_LIO odometry quality
+# Monitor FASTLIO2 PGO node (if running)
+ros2 topic hz /optimized_path
+ros2 topic echo /loop_closure_info
+
+# Monitor Octomap Server
+ros2 topic hz /octomap_binary
+ros2 topic hz /projected_map
+ros2 topic hz /octomap_point_cloud_centers
+
+# Monitor Nav2
+ros2 topic hz /local_costmap/costmap
+ros2 topic hz /global_costmap/costmap
+ros2 topic hz /plan
+```
+
+**Data Inspection:**
+```bash
+# Check FASTLIO2 odometry quality
 ros2 topic echo /Odometry
 
+# View point cloud output
+ros2 topic echo /cloud_registered --no-arr
+
+# Check loop closure detections
+ros2 topic echo /loop_closure_info
+
+# Inspect projected map
+ros2 topic echo /projected_map --no-arr
+```
+
+**Node Information:**
+```bash
+# List all active nodes
+ros2 node list
+
+# Check FASTLIO2 nodes
+ros2 node info /fastlio2_lio_node
+ros2 node info /fastlio2_pgo_node
+ros2 node info /fastlio2_localizer_node
+
+# Check Octomap node
+ros2 node info /octomap_server_node
+
+# Check Nav2 nodes
+ros2 node info /controller_server
+ros2 node info /planner_server
+```
+
+**Visualization:**
+```bash
 # View node logs
 ros2 run rqt_console rqt_console
 
-# Visualize FAST_LIO in RViz
-rviz2 -d $(ros2 pkg prefix fast_lio)/share/fast_lio/rviz/fastlio.rviz
+# Visualize FASTLIO2 + Octomap in RViz
+rviz2  # Then add displays for /Odometry, /cloud_registered, /projected_map, etc.
+
+# Monitor system resources
+ros2 run rqt_top rqt_top
+
+# View computation graph
+rqt_graph
+```
+
+**Map Saving and Inspection:**
+```bash
+# Save current Octomap
+ros2 service call /octomap_server/save_map octomap_msgs/srv/SaveOctomap "{filename: '/path/to/map.ot'}"
+
+# Save FASTLIO2 PCD map (check PGO config for auto-save location)
+# Usually saved automatically to map_save_path directory
+
+# Convert PCD to other formats (requires PCL tools)
+pcl_viewer /path/to/map.pcd
 ```
 
 ## Additional Resources
 
+**Project Documentation:**
 - Full documentation: [README.md](README.md)
 - Architecture details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Quick start guide: [docs/QUICK_START.md](docs/QUICK_START.md)
-- FAST_LIO GitHub: https://github.com/hku-mars/FAST_LIO
-- FAST_LIO paper: [src/FAST_LIO/doc/Fast_LIO_2.pdf](src/FAST_LIO/doc/Fast_LIO_2.pdf)
+
+**SLAM and Mapping:**
+- FASTLIO2_ROS2 GitHub: https://github.com/Ericsii/FASTLIO2_ROS2
+- Original FAST-LIO paper: https://github.com/hku-mars/FAST_LIO
+- Octomap Server 2: https://github.com/iKrishneel/octomap_server2
+- OctoMap library: https://octomap.github.io/
+
+**Navigation and Control:**
 - Navigation2 docs: https://navigation.ros.org/
+- Nav2 costmap plugins: https://navigation.ros.org/plugins/index.html
 - MoveIt 2 docs: https://moveit.ros.org/
+
+**Hardware:**
+- AgileX Ranger documentation: https://www.agilex.ai/
+- Livox Mid-360: https://www.livoxtech.com/mid-360
+- RealSense D435: https://www.intelrealsense.com/depth-camera-d435/
