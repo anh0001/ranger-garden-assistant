@@ -471,7 +471,7 @@
     </plugin>
   </gazebo> -->
 
-  <!-- LiDAR Link (Livox Mid-360) -->
+  <!-- LiDAR Link (Livox Mid-360) - Physically mounted at 45° pitch -->
   <link name="lidar_link">
     <visual>
       <geometry>
@@ -499,6 +499,15 @@
     <parent link="base_link"/>
     <child link="lidar_link"/>
     <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 ${pi/4} 0"/>
+  </joint>
+
+  <!-- IMU frame inside LiDAR (for FASTLIO2) - aligned with lidar_link -->
+  <link name="imu_link"/>
+
+  <joint name="lidar_imu_joint" type="fixed">
+    <parent link="lidar_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
   <!-- Camera Link (RealSense D435) -->
