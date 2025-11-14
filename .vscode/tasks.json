@@ -6,8 +6,8 @@
       "type": "shell",
       "command": "bash",
       "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py xfer_format:=4"
+        "-c",
+        "export COLCON_TRACE='' AMENT_TRACE_SETUP_FILES='' && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup livox_lidar.launch.py xfer_format:=4"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -182,8 +182,8 @@
       "type": "shell",
       "command": "bash",
       "args": [
-        "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ./scripts/save_maps.sh"
+        "-c",
+        "export COLCON_TRACE='' AMENT_TRACE_SETUP_FILES='' COLCON_PYTHON_EXECUTABLE=$(command -v python3) && source /opt/ros/humble/setup.bash && source install/setup.bash && ./scripts/save_maps.sh"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

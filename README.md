@@ -237,7 +237,7 @@ Monitor `/fastlio2/lio_odom`, `/pgo/loop_markers`, `/octomap_server/octomap_bina
 ./scripts/save_maps.sh
 ```
 
-The script calls `/pgo/save_maps` for you and writes timestamped FAST-LIO2 point clouds/patches under `maps/fastlio2/`, then exports the latest `/projected_map` occupancy grid for Nav2 under `maps/projected/`.
+The script calls `/pgo/save_maps` for you and writes timestamped FAST-LIO2 map packages under `maps/fastlio2/map_<timestamp>/` (`map.pcd`, `poses.txt`, `patches/`), then exports the latest `/projected_map` occupancy grid for Nav2 under `maps/projected/`.
 
 #### 3. Nav2 with FAST-LIO2 Odom + Localizer
 
@@ -252,7 +252,7 @@ ros2 launch robofi_bringup fastlio2_navigation.launch.py \
 
 # Terminal 2: feed an initial guess and load the saved FAST-LIO2 map
 ros2 service call /localizer/relocalize interface/srv/Relocalize \
-  "{pcd_path: '${MAP_ROOT}/fastlio2/map_<timestamp>.pcd', x: 0.0, y: 0.0, z: 0.0, yaw: 0.0, pitch: 0.0, roll: 0.0}"
+  "{pcd_path: '${MAP_ROOT}/fastlio2/map_<timestamp>/map.pcd', x: 0.0, y: 0.0, z: 0.0, yaw: 0.0, pitch: 0.0, roll: 0.0}"
 ```
 
 Replace `<timestamp>` with the value printed by `scripts/save_maps.sh`. The localizer publishes `/map -> /odom` once the saved PCD aligns with the live LiDAR stream; Nav2 controllers consume `/fastlio2/lio_odom` directly. You no longer need AMCL or slam_toolbox unless you are testing alternative localization methods. RViz already shows Nav2 goals, OctoMap, and the FAST-LIO2 TF tree in the provided configuration.
