@@ -105,6 +105,18 @@ def generate_launch_description():
             default_value="false",
             description="Also start AMCL localization alongside FASTLIO2 stack.",
         ),
+        DeclareLaunchArgument(
+            "launch_rviz",
+            default_value="true",
+            description="Start RViz preloaded with FASTLIO2 visualization config.",
+        ),
+        DeclareLaunchArgument(
+            "rviz_config",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("fastlio2"), "rviz", "fastlio2.rviz"]
+            ),
+            description="RViz configuration file used when launch_rviz is true.",
+        ),
     ]
 
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -122,6 +134,8 @@ def generate_launch_description():
     nav2_map = LaunchConfiguration("map")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
     nav2_use_amcl = LaunchConfiguration("nav2_use_amcl")
+    launch_rviz = LaunchConfiguration("launch_rviz")
+    rviz_config = LaunchConfiguration("rviz_config")
 
     robofi_share = FindPackageShare("robofi_bringup")
 
@@ -186,6 +200,16 @@ def generate_launch_description():
         condition=IfCondition(launch_nav2),
     )
 
+    rviz_node = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="fastlio2_rviz",
+        output="screen",
+        arguments=["-d", rviz_config],
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(launch_rviz),
+    )
+
     return LaunchDescription(
         declared_arguments
         + [
@@ -195,5 +219,6 @@ def generate_launch_description():
             localizer_node,
             octomap_node,
             nav2_launch,
+            rviz_node,
         ]
     )

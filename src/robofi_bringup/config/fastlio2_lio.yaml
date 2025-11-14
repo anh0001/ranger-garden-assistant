@@ -1,5 +1,5 @@
 imu_topic: /livox/imu
-lidar_topic: /livox/lidar
+lidar_topic: /livox/lidar_custom
 body_frame: base_footprint
 world_frame: odom
 print_time_cost: false

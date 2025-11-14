@@ -147,7 +147,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source install/setup.bash && ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -156,7 +156,8 @@
       "presentation": {
         "reveal": "always",
         "panel": "new"
-      }
+      },
+      "detail": "Launches complete Ranger system + FASTLIO2 LIO + Octomap Server on DISPLAY :3 for mapping"
     },
     {
       "label": "FASTLIO2 Navigation Stack",
@@ -164,7 +165,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source install/setup.bash && ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -173,7 +174,27 @@
       "presentation": {
         "reveal": "always",
         "panel": "new"
-      }
+      },
+      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack on DISPLAY :3 for autonomous navigation"
+    },
+    {
+      "label": "Save Maps",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ./scripts/save_maps.sh"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "clear": false
+      },
+      "detail": "Runs scripts/save_maps.sh to call /pgo/save_maps (FASTLIO2 global map) and map_saver_cli on /projected_map, storing outputs under ${workspaceFolder}/maps/. Run after the FASTLIO2 Mapping Stack is producing data."
     }
   ]
 }
