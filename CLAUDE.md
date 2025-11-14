@@ -318,29 +318,45 @@ ros2 run rqt_top rqt_top
 
 ### Key Launch Files
 Located in [src/robofi_bringup/launch/](src/robofi_bringup/launch/):
-- `ranger_complete_bringup.launch.py` - Complete system launch
+- `ranger_complete_bringup.launch.py` - Complete system launch (base + sensors)
 - `ranger_base.launch.py` - Base controller only
 - `livox_lidar.launch.py` - LiDAR driver
+- `fastlio2_navigation.launch.py` - FASTLIO2 SLAM with Octomap (supports mode:=lio/pgo/localizer)
 - `navigation.launch.py` - Nav2 navigation stack
-- `slam.launch.py` - SLAM mapping with slam_toolbox
+- `slam.launch.py` - SLAM Toolbox mapping (alternative 2D SLAM)
 
-Located in [src/FAST_LIO/launch/](src/FAST_LIO/launch/):
-- `mapping.launch.py` - FAST_LIO LiDAR-inertial odometry and mapping
+Located in [src/FASTLIO2_ROS2/launch/](src/FASTLIO2_ROS2/launch/):
+- `fastlio2_lio.launch.py` - LIO node only (odometry)
+- `fastlio2_pgo.launch.py` - LIO + PGO nodes (mapping with loop closure)
+- `fastlio2_localizer.launch.py` - Localizer node (localization on saved maps)
 
 ### Critical Configuration Files
-- [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bringup/config/nav2_params.yaml) - Navigation parameters (costmaps, planners, controllers)
+
+**Robot and Sensors:**
 - [src/ranger_description/urdf/ranger_complete.urdf.xacro](src/ranger_description/urdf/ranger_complete.urdf.xacro) - Robot URDF with sensor positions
 - [src/livox_ros_driver2/config/MID360_config.json](src/livox_ros_driver2/config/MID360_config.json) - LiDAR configuration
-- [src/FAST_LIO/config/mid360.yaml](src/FAST_LIO/config/mid360.yaml) - FAST_LIO parameters for Mid-360 LiDAR
+
+**FASTLIO2 SLAM:**
+- [src/robofi_bringup/config/fastlio2_lio.yaml](src/robofi_bringup/config/fastlio2_lio.yaml) - LIO node parameters (odometry)
+- [src/robofi_bringup/config/fastlio2_pgo.yaml](src/robofi_bringup/config/fastlio2_pgo.yaml) - PGO node parameters (loop closure)
+- [src/robofi_bringup/config/fastlio2_localizer.yaml](src/robofi_bringup/config/fastlio2_localizer.yaml) - Localizer node parameters
+
+**3D Mapping:**
+- [src/robofi_bringup/config/octomap_server.yaml](src/robofi_bringup/config/octomap_server.yaml) - Octomap Server 2 parameters
+
+**Navigation:**
+- [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bringup/config/nav2_params.yaml) - Nav2 parameters (costmaps, planners, controllers)
 
 ### TF Tree Structure
+
+**With FASTLIO2 + PGO/Localizer:**
 ```
-map (from SLAM/AMCL)
-└─ odom (from wheel odometry or FAST_LIO)
+map (from PGO or Localizer node)
+└─ odom (from PGO or Localizer node)
    └─ base_footprint
       └─ base_link
          ├─ lidar_link (Livox Mid-360)
-         │  └─ livox_frame (IMU frame for FAST_LIO)
+         │  └─ livox_frame (IMU frame for FASTLIO2)
          ├─ camera_link (RealSense D435)
          │  ├─ camera_depth_optical_frame
          │  └─ camera_color_optical_frame
@@ -348,35 +364,73 @@ map (from SLAM/AMCL)
             └─ piper_link_1 → ... → piper_tool0
 ```
 
-**Note:** When using FAST_LIO, it publishes the `camera_init` → `body` transform, which should be remapped or integrated into your TF tree as needed.
+**With FASTLIO2 LIO only (no global localization):**
+```
+odom (provided by LIO node)
+└─ base_footprint
+   └─ base_link
+      ├─ lidar_link (Livox Mid-360)
+      │  └─ livox_frame (IMU frame)
+      ├─ camera_link (RealSense D435)
+      │  ├─ camera_depth_optical_frame
+      │  └─ camera_color_optical_frame
+      └─ piper_base_link (arm mount)
+         └─ piper_link_1 → ... → piper_tool0
+```
+
+**TF Publishing Responsibilities:**
+- **FASTLIO2 LIO node**: Publishes `odom → base_link` based on LiDAR-inertial fusion
+- **FASTLIO2 PGO node**: Publishes `map → odom` after loop closure and optimization
+- **FASTLIO2 Localizer node**: Publishes `map → odom` based on localization against saved map
+- **robot_state_publisher**: Publishes all sensor frames relative to `base_link` from URDF
 
 ### Important ROS Topics
+
 **Base Control:**
 - `/cmd_vel` (geometry_msgs/Twist) - Velocity commands to base
-- `/odom` (nav_msgs/Odometry) - Wheel odometry
+- `/odom` (nav_msgs/Odometry) - Wheel odometry (if using wheel encoders)
 
 **Sensors:**
-- `/livox/lidar` (sensor_msgs/PointCloud2) - 3D point cloud
+- `/livox/lidar` (sensor_msgs/PointCloud2) - Raw 3D point cloud from LiDAR
 - `/livox/imu` (sensor_msgs/Imu) - IMU data from Livox Mid-360
-- `/camera/color/image_raw` - RGB camera
-- `/camera/depth/image_rect_raw` - Depth image
-- `/camera/depth/color/points` - Colored point cloud
+- `/camera/color/image_raw` (sensor_msgs/Image) - RGB camera stream
+- `/camera/depth/image_rect_raw` (sensor_msgs/Image) - Depth image
+- `/camera/depth/color/points` (sensor_msgs/PointCloud2) - RGB-D point cloud
 
-**FAST_LIO (when enabled):**
+**FASTLIO2 LIO Node:**
 - `/Odometry` (nav_msgs/Odometry) - High-accuracy LiDAR-inertial odometry
 - `/cloud_registered` (sensor_msgs/PointCloud2) - Registered point cloud in world frame
 - `/cloud_registered_body` (sensor_msgs/PointCloud2) - Point cloud in body frame
 - `/path` (nav_msgs/Path) - Robot trajectory path
-- `/tf` - Publishes `camera_init` (world) → `body` (robot) transform
+- `/tf` - Publishes `odom → base_link` transform
+
+**FASTLIO2 PGO Node (when enabled):**
+- `/optimized_path` (nav_msgs/Path) - Optimized trajectory after loop closure
+- `/loop_closure_info` (custom msg) - Loop closure detection information
+- `/pgo_map_cloud` (sensor_msgs/PointCloud2) - Globally optimized map
+- `/tf` - Publishes `map → odom` transform
+
+**FASTLIO2 Localizer Node (when enabled):**
+- `/localization_pose` (geometry_msgs/PoseStamped) - Current localized pose
+- `/tf` - Publishes `map → odom` transform based on map matching
+
+**Octomap Server 2:**
+- `/octomap_binary` (octomap_msgs/Octomap) - Compressed 3D volumetric map
+- `/octomap_full` (octomap_msgs/Octomap) - Full 3D volumetric map
+- `/projected_map` (nav_msgs/OccupancyGrid) - 2D occupancy grid for Nav2
+- `/octomap_point_cloud_centers` (sensor_msgs/PointCloud2) - Visualization of occupied voxels
+- `/occupied_cells_vis_array` (visualization_msgs/MarkerArray) - Visualization markers
 
 **Navigation:**
-- `/map` - Occupancy grid map
-- `/local_costmap/costmap` - Local costmap for navigation
-- `/global_costmap/costmap` - Global costmap
+- `/map` (nav_msgs/OccupancyGrid) - Static occupancy grid map
+- `/local_costmap/costmap` (nav_msgs/OccupancyGrid) - Local costmap (voxel layer from LiDAR)
+- `/global_costmap/costmap` (nav_msgs/OccupancyGrid) - Global costmap (static + obstacle layer)
+- `/plan` (nav_msgs/Path) - Global path plan
+- `/local_plan` (nav_msgs/Path) - Local trajectory
 
 **Arm (if enabled):**
-- `/joint_states` - Current joint positions
-- `/piper_arm_controller/follow_joint_trajectory` - Trajectory commands
+- `/joint_states` (sensor_msgs/JointState) - Current joint positions
+- `/piper_arm_controller/follow_joint_trajectory` (control_msgs/FollowJointTrajectory) - Trajectory commands
 
 ## Common Workflows
 
@@ -398,11 +452,26 @@ Edit URDF properties in `ranger_description/urdf/ranger_complete.urdf.xacro`:
 
 ### Tuning Navigation
 Edit parameters in [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bringup/config/nav2_params.yaml):
-- **Robot footprint**: Match physical robot dimensions
-- **Costmap resolution**: Balance accuracy vs performance (default 0.05m)
-- **Max velocities**: Adjust `max_vel_x`, `max_vel_theta` for base capabilities
-- **DWB controller weights**: Tune path following behavior
+
+**Robot Configuration:**
+- **Robot footprint**: Match physical robot dimensions (important for omnidirectional base)
+- **Max velocities**: Adjust `max_vel_x`, `max_vel_y`, `max_vel_theta` for holonomic motion
+
+**Global Costmap (for path planning):**
+- **Layers**: `static_layer` (from Octomap projection) + `obstacle_layer` (recent obstacles)
+- **Static map**: Subscribe to `/projected_map` from Octomap Server
+- **Resolution**: Balance accuracy vs performance (default 0.05m)
+
+**Local Costmap (for obstacle avoidance):**
+- **Layers**: `voxel_layer` (primary, from Mid-360) + `rgbd_obstacle_layer` (optional, from D435)
+- **Voxel layer**: Subscribe to `/cloud_registered` from FASTLIO2 for 3D obstacle detection
+- **Update frequency**: Higher frequency for dynamic environments (10-20 Hz)
 - **Inflation radius**: Set safety buffer around obstacles
+
+**Controllers:**
+- **Odometry source**: Use `/Odometry` from FASTLIO2 for smooth, accurate control
+- **DWB controller weights**: Tune path following behavior for omnidirectional motion
+- **Goal tolerance**: Adjust based on application requirements
 
 ### Creating Custom Behaviors
 Add behavior tree XML files to `src/robofi_bringup/config/behavior_trees/` and reference in nav2_params.yaml
