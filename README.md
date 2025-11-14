@@ -620,11 +620,3 @@ Special thanks to the ROS 2 and open robotics community.
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Maintainer**: Your Name <your-email@example.com>
-
-**Status**: Active Development
-
-For questions, issues, or support, please open an issue on GitHub.

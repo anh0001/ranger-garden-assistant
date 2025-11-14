@@ -39,6 +39,26 @@ sudo apt-get update
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y || echo "Warning: Some rosdep dependencies could not be installed (this may be OK)"
 
+# Build Sophus library (required by FASTLIO2_ROS2)
+echo "Checking for Sophus library..."
+if ! pkg-config --exists sophus 2>/dev/null; then
+    echo "Sophus not found, building from source..."
+    cd /tmp
+    if [ ! -d "Sophus" ]; then
+        git clone https://github.com/strasdat/Sophus.git
+    fi
+    cd Sophus
+    git checkout 1.22.10
+    rm -rf build && mkdir build && cd build
+    cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+    make -j$(nproc)
+    sudo make install
+    cd -
+    echo "Sophus installed successfully"
+else
+    echo "Sophus already installed"
+fi
+
 # Build Livox SDK2 (required by livox_ros_driver2)
 echo "Building Livox SDK2..."
 if [ -d "src/livox_ros_driver2/Livox-SDK2" ]; then
