@@ -1,6 +1,6 @@
 octomap_server:
   ros__parameters:
-    frame_id: odom
+    frame_id: map
     base_frame_id: base_footprint
     resolution: 0.1
     height_map: true
