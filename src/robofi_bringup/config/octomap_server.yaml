@@ -19,7 +19,7 @@ octomap_server:
 
     # Use RGB color from point cloud for voxel visualization (requires COLOR_OCTOMAP_SERVER compilation flag)
     # Note: Mutually exclusive with height_map
-    colored_map: true
+    colored_map: false
 
     # Color scaling factor for height map visualization (0.0-1.0, affects color intensity)
     color_factor: 0.8
@@ -64,11 +64,11 @@ octomap_server:
     # Point Cloud Spatial Filtering (applied before ground filtering and insertion)
     # Minimum Z height to accept points from input point cloud (meters)
     # Points below this height are discarded
-    pointcloud_min_z: -1.0
+    pointcloud_min_z: -0.1
 
     # Maximum Z height to accept points from input point cloud (meters)
     # Points above this height are discarded
-    pointcloud_max_z: 3.0
+    pointcloud_max_z: 2.0
 
     # Minimum X coordinate to accept points (meters, in sensor frame before transformation)
     pointcloud_min_x: -100.0
@@ -85,11 +85,11 @@ octomap_server:
     # 2D Occupancy Grid Projection (for Nav2 integration)
     # Minimum Z height of voxels to include in the 2D projected map (meters)
     # Only voxels with centers above this height contribute to the 2D occupancy grid
-    occupancy_min_z: -0.5
+    occupancy_min_z: 0.05
 
     # Maximum Z height of voxels to include in the 2D projected map (meters)
     # Only voxels with centers below this height contribute to the 2D occupancy grid
-    occupancy_max_z: 3.0
+    occupancy_max_z: 1.6
 
     # Minimum X size of the 2D map in meters (map will be padded if smaller)
     # Ensures map has at least this width even if environment is smaller
@@ -115,7 +115,7 @@ octomap_server:
     # Sensor Range Limiting
     # Maximum sensor range for raycasting (meters)
     # Points beyond this range are truncated. -1.0 = unlimited (use all points)
-    sensor_model/max_range: -1.0
+    sensor_model/max_range: 30.0
 
     # Visualization Colors - Occupied Voxels (RGBA, range 0.0-1.0)
     # Red component for occupied voxel markers (when not using height_map or colored_map)
