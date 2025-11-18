@@ -1,6 +1,9 @@
 imu_topic: /livox/imu
 lidar_topic: /livox/lidar_custom
-body_frame: base_footprint
+# FASTLIO2 publishes odom->body_frame. Keep this on the LiDAR/IMU
+# frame (not the robot base) so the 45° physical pitch lives here,
+# and bridge to base_footprint via a static TF in the launch file.
+body_frame: fastlio2_body
 world_frame: odom
 print_time_cost: false
 

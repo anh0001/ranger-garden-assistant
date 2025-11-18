@@ -155,6 +155,20 @@ def generate_launch_description():
         parameters=[{"config_path": lio_config}, {"use_sim_time": use_sim_time}],
     )
 
+    # Bridge FASTLIO2's body frame (mounted at 45° pitch) to the robot base frame
+    # so the URDF stays level in RViz and controllers consume base_footprint/base_link.
+    # Transform derived from ranger_complete.urdf.xacro defaults:
+    # base_footprint -> base_link: (0, 0, 0.33), rpy (0, 0, 0)
+    # base_link -> lidar_link: (0.33, 0, 0), rpy (0, pi/4, 0)
+    # Inverse gives fastlio2_body -> base_footprint: (0, 0, -0.46669), rpy (0, -pi/4, 0).
+    static_tf_fastlio2_to_base = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="fastlio2_body_to_base",
+        output="screen",
+        arguments=["0", "0", "-0.46669", "0", "-0.785398", "0", "fastlio2_body", "base_footprint"],
+    )
+
     pgo_node = Node(
         package="pgo",
         executable="pgo_node",
@@ -220,8 +234,9 @@ def generate_launch_description():
             fastlio2_node,
             pgo_node,
             localizer_node,
-            octomap_node,
-            nav2_launch,
-            rviz_node,
-        ]
+        octomap_node,
+        nav2_launch,
+        rviz_node,
+        static_tf_fastlio2_to_base,
+    ]
     )
