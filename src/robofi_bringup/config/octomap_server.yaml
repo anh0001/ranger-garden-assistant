@@ -15,14 +15,14 @@ octomap_server:
     sensor_model/miss: 0.38
     sensor_model/min: 0.12
     sensor_model/max: 0.97
-    pointcloud_min_z: -2.0
-    pointcloud_max_z: 4.0
+    pointcloud_min_z: -1.0
+    pointcloud_max_z: 3.0
     pointcloud_min_x: -100.0
     pointcloud_max_x: 100.0
     pointcloud_min_y: -100.0
     pointcloud_max_y: 100.0
-    occupancy_min_z: -1.0
-    occupancy_max_z: 4.0
+    occupancy_min_z: -0.5
+    occupancy_max_z: 3.0
     min_x_size: 20.0
     min_y_size: 20.0
     ground_filter/distance: 0.05

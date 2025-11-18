@@ -43,7 +43,7 @@ bt_navigator:
   ros__parameters:
     use_sim_time: False
     global_frame: map
-    robot_base_frame: base_link
+    robot_base_frame: base_footprint
     odom_topic: /fastlio2/lio_odom
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -109,7 +109,7 @@ controller_server:
     odom_topic: "/fastlio2/lio_odom"
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
+    min_y_velocity_threshold: 0.001
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
@@ -117,50 +117,50 @@ controller_server:
     controller_plugins: ["FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
+      required_movement_radius: 0.25
       movement_time_allowance: 10.0
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.15
+      yaw_goal_tolerance: 0.2
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
-      min_vel_x: 0.0
-      min_vel_y: -0.5
+      min_vel_x: 0.05
+      min_vel_y: 0.0
       max_vel_x: 1.0
-      max_vel_y: 0.5
-      max_vel_theta: 1.0
-      min_speed_xy: 0.0
+      max_vel_y: 0.0
+      max_vel_theta: 1.2
+      min_speed_xy: 0.05
       max_speed_xy: 1.0
       min_speed_theta: 0.0
-      acc_lim_x: 0.5
-      acc_lim_y: 0.5
-      acc_lim_theta: 1.0
-      decel_lim_x: -0.5
-      decel_lim_y: -0.5
-      decel_lim_theta: -1.0
-      vx_samples: 20
-      vy_samples: 20
+      acc_lim_x: 0.6
+      acc_lim_y: 0.0
+      acc_lim_theta: 1.5
+      decel_lim_x: -0.6
+      decel_lim_y: 0.0
+      decel_lim_theta: -1.5
+      vx_samples: 16
+      vy_samples: 1
       vtheta_samples: 20
-      sim_time: 1.7
+      sim_time: 2.0
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
       xy_goal_tolerance: 0.15
-      trans_stopped_velocity: 0.25
+      trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
+      PathAlign.scale: 24.0
+      PathAlign.forward_point_distance: 0.2
+      GoalAlign.scale: 18.0
+      GoalAlign.forward_point_distance: 0.2
+      PathDist.scale: 28.0
+      GoalDist.scale: 20.0
+      RotateToGoal.scale: 28.0
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
@@ -170,19 +170,19 @@ local_costmap:
       update_frequency: 10.0
       publish_frequency: 5.0
       global_frame: odom
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: False
       rolling_window: true
       width: 8.0
       height: 8.0
       resolution: 0.05
       transform_tolerance: 0.3
-      robot_radius: 0.40
+      robot_radius: 0.42
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.65
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -193,7 +193,7 @@ local_costmap:
         max_obstacle_height: 2.0
         min_obstacle_height: -0.25
         mark_threshold: 0
-        observation_sources: mid360_cloud d435_depth
+        observation_sources: mid360_cloud
         mid360_cloud:
           topic: /livox/lidar
           max_obstacle_height: 2.5
@@ -203,23 +203,10 @@ local_costmap:
           data_type: "PointCloud2"
           expected_update_rate: 0.0
           observation_persistence: 0.0
-          raytrace_max_range: 15.0
+          raytrace_max_range: 20.0
           raytrace_min_range: 0.2
-          obstacle_max_range: 12.0
+          obstacle_max_range: 15.0
           obstacle_min_range: 0.0
-        d435_depth:
-          topic: /camera/depth/color/points
-          max_obstacle_height: 1.5
-          min_obstacle_height: 0.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
-          expected_update_rate: 0.0
-          observation_persistence: 0.0
-          raytrace_max_range: 6.0
-          raytrace_min_range: 0.1
-          obstacle_max_range: 4.0
-          obstacle_min_range: 0.1
       always_send_full_costmap: True
 
 global_costmap:
@@ -228,10 +215,10 @@ global_costmap:
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
-      robot_base_frame: base_link
+      robot_base_frame: base_footprint
       use_sim_time: False
-      robot_radius: 0.40
-      resolution: 0.05
+      robot_radius: 0.42
+      resolution: 0.1
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
@@ -244,9 +231,9 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
+          raytrace_max_range: 25.0
+          raytrace_min_range: 0.2
+          obstacle_max_range: 20.0
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -257,7 +244,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.75
       always_send_full_costmap: True
 
 planner_server:
@@ -297,14 +284,14 @@ behavior_server:
       plugin: "nav2_behaviors::Wait"
     assisted_teleop:
       plugin: "nav2_behaviors::AssistedTeleop"
-    global_frame: odom
-    robot_base_frame: base_link
-    transform_tolerance: 0.1
+    global_frame: map
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.3
     use_sim_time: False
-    simulate_ahead_time: 2.0
-    max_rotational_vel: 1.0
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 3.2
+    simulate_ahead_time: 2.5
+    max_rotational_vel: 1.2
+    min_rotational_vel: 0.2
+    rotational_acc_lim: 2.5
 
 robot_state_publisher:
   ros__parameters:
@@ -327,11 +314,11 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [1.0, 0.5, 1.0]
-    min_velocity: [-0.5, -0.5, -1.0]
-    max_accel: [0.5, 0.5, 1.0]
-    max_decel: [-0.5, -0.5, -1.0]
+    max_velocity: [0.9, 0.0, 1.0]
+    min_velocity: [-0.5, 0.0, -1.0]
+    max_accel: [0.8, 0.0, 1.5]
+    max_decel: [-0.8, 0.0, -1.5]
     odom_topic: "/fastlio2/lio_odom"
     odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
+    deadband_velocity: [0.02, 0.0, 0.02]
     velocity_timeout: 1.0
