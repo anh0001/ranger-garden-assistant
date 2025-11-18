@@ -294,7 +294,6 @@ ranger-garden-assistant/
 │   ├── ranger_ros2/              # Ranger base driver (submodule)
 │   ├── ugv_sdk/                  # AgileX UGV SDK (submodule)
 │   ├── piper_ros/                # PiPER arm package (submodule)
-│   ├── FAST_LIO/                 # Legacy FAST_LIO port (read-only submodule)
 │   ├── FASTLIO2_ROS2/            # FASTLIO2 LIO + PGO + localizer (submodule)
 │   └── octomap_server2/          # OctoMap server port (submodule)
 │

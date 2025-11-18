@@ -805,7 +805,6 @@ pcl_viewer /path/to/map.pcd
 
 **SLAM and Mapping:**
 - FASTLIO2_ROS2 GitHub: https://github.com/Ericsii/FASTLIO2_ROS2
-- Original FAST-LIO paper: https://github.com/hku-mars/FAST_LIO
 - Octomap Server 2: https://github.com/iKrishneel/octomap_server2
 - OctoMap library: https://octomap.github.io/
 

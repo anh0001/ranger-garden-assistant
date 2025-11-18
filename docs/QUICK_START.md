@@ -114,21 +114,6 @@ rviz2
 - In RViz, add PointCloud2 display
 - Subscribe to `/livox/lidar`
 - You should see point cloud data
-- `/livox/lidar_custom` now carries the Livox `CustomMsg` stream for FAST_LIO while `/livox/lidar` stays as `sensor_msgs/PointCloud2`
-
-### FAST_LIO Mapping (optional)
-
-Use the FAST_LIO wrapper when you need LiDAR-inertial odometry. The Livox task enforces
-`xfer_format=4`, so `/livox/lidar` remains PointCloud2 for Nav2/visualization while
-`/livox/lidar_custom` carries the Livox `CustomMsg` data FAST_LIO consumes.
-
-```bash
-# Terminal 1: Livox driver (PointCloud2 + Livox custom output)
-ros2 launch robofi_bringup livox_lidar.launch.py xfer_format:=4
-
-# Terminal 2: FAST_LIO with Ranger defaults
-ros2 launch robofi_bringup fast_lio.launch.py rviz:=true
-```
 
 **Test 4: Camera**
 ```bash
