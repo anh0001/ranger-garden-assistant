@@ -60,7 +60,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "octomap_point_topic",
-            default_value="/livox/lidar",
+            default_value="/fastlio2/world_cloud",
             description="PointCloud2 topic fed into OctoMap.",
         ),
         DeclareLaunchArgument(
