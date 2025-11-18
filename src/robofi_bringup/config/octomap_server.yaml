@@ -1,39 +1,144 @@
 octomap_server:
   ros__parameters:
+    # Frame IDs
+    # The fixed world frame (map frame) in which the 3D map is built
     frame_id: map
+
+    # The base frame of the robot, used for ground plane filtering (must be set if filter_ground is true)
     base_frame_id: base_footprint
+
+    # Octree Configuration
+    # Resolution of the octree voxels in meters (smaller = more detail but more memory/computation)
+    # Default: 0.05m, increased to 0.1m for better performance
     resolution: 0.1
+
+    # Visualization Options
+    # Use height-based color coding for occupied voxels in visualization (rainbow colors by height)
+    # Note: Cannot be used together with colored_map
     height_map: true
+
+    # Use RGB color from point cloud for voxel visualization (requires COLOR_OCTOMAP_SERVER compilation flag)
+    # Note: Mutually exclusive with height_map
     colored_map: true
+
+    # Color scaling factor for height map visualization (0.0-1.0, affects color intensity)
     color_factor: 0.8
+
+    # Point Cloud Filtering
+    # Enable RANSAC-based ground plane detection and filtering
+    # Ground points are marked as free space only, not as obstacles
     filter_ground: true
+
+    # Filter isolated single voxels (speckles) that have no occupied neighbors
+    # Helps reduce sensor noise in the map
     filter_speckles: true
+
+    # Map Compression and Updates
+    # Enable octree pruning to merge identical child nodes and save memory
     compress_map: true
+
+    # Enable incremental updates to the 2D projected map (only update changed regions)
+    # If false, the entire 2D map is regenerated on each update
     incremental_2D_projection: true
+
+    # Publish free space voxels in addition to occupied voxels (increases bandwidth)
     publish_free_space: false
+
+    # Sensor Model - Probabilistic Occupancy Updates
+    # Probability of a cell being occupied when a hit is detected (range: 0.5-1.0)
+    # Higher values = faster convergence to occupied state
     sensor_model/hit: 0.74
+
+    # Probability of a cell being occupied when a miss is detected (range: 0.0-0.5)
+    # Lower values = faster convergence to free state
     sensor_model/miss: 0.38
+
+    # Minimum occupancy probability threshold for a voxel to be considered occupied (range: 0.0-0.5)
+    # Voxels below this are considered free
     sensor_model/min: 0.12
+
+    # Maximum occupancy probability threshold (range: 0.5-1.0)
+    # Prevents over-confidence in occupancy
     sensor_model/max: 0.97
+
+    # Point Cloud Spatial Filtering (applied before ground filtering and insertion)
+    # Minimum Z height to accept points from input point cloud (meters)
+    # Points below this height are discarded
     pointcloud_min_z: -1.0
+
+    # Maximum Z height to accept points from input point cloud (meters)
+    # Points above this height are discarded
     pointcloud_max_z: 3.0
+
+    # Minimum X coordinate to accept points (meters, in sensor frame before transformation)
     pointcloud_min_x: -100.0
+
+    # Maximum X coordinate to accept points (meters)
     pointcloud_max_x: 100.0
+
+    # Minimum Y coordinate to accept points (meters)
     pointcloud_min_y: -100.0
+
+    # Maximum Y coordinate to accept points (meters)
     pointcloud_max_y: 100.0
+
+    # 2D Occupancy Grid Projection (for Nav2 integration)
+    # Minimum Z height of voxels to include in the 2D projected map (meters)
+    # Only voxels with centers above this height contribute to the 2D occupancy grid
     occupancy_min_z: -0.5
+
+    # Maximum Z height of voxels to include in the 2D projected map (meters)
+    # Only voxels with centers below this height contribute to the 2D occupancy grid
     occupancy_max_z: 3.0
+
+    # Minimum X size of the 2D map in meters (map will be padded if smaller)
+    # Ensures map has at least this width even if environment is smaller
     min_x_size: 20.0
+
+    # Minimum Y size of the 2D map in meters (map will be padded if smaller)
+    # Ensures map has at least this height even if environment is smaller
     min_y_size: 20.0
+
+    # Ground Plane Filtering (RANSAC-based)
+    # Maximum distance of a point from the detected plane to be considered an inlier (meters)
+    # Used in RANSAC plane fitting, smaller = stricter plane detection
     ground_filter/distance: 0.05
+
+    # Maximum angular deviation from vertical (Z-axis) for a plane to be considered ground (radians)
+    # ~0.15 rad = ~8.6 degrees, allows slight tilt in ground plane detection
     ground_filter/angle: 0.15
+
+    # Maximum distance of the detected plane from z=0 to be considered ground plane (meters)
+    # Planes further from z=0 are treated as horizontal obstacles, not ground
     ground_filter/plane_distance: 0.1
+
+    # Sensor Range Limiting
+    # Maximum sensor range for raycasting (meters)
+    # Points beyond this range are truncated. -1.0 = unlimited (use all points)
     sensor_model/max_range: -1.0
+
+    # Visualization Colors - Occupied Voxels (RGBA, range 0.0-1.0)
+    # Red component for occupied voxel markers (when not using height_map or colored_map)
     color/r: 0.2
+
+    # Green component for occupied voxel markers
     color/g: 0.4
+
+    # Blue component for occupied voxel markers
     color/b: 1.0
+
+    # Alpha (transparency) for occupied voxel markers (1.0 = fully opaque)
     color/a: 1.0
+
+    # Visualization Colors - Free Voxels (RGBA, range 0.0-1.0)
+    # Red component for free space voxel markers (only used if publish_free_space is true)
     color_free/r: 0.0
+
+    # Green component for free space voxel markers
     color_free/g: 0.7
+
+    # Blue component for free space voxel markers
     color_free/b: 0.2
+
+    # Alpha (transparency) for free space voxel markers (0.3 = semi-transparent)
     color_free/a: 0.3
