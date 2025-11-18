@@ -1,5 +1,13 @@
 {
   "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "mapPath",
+      "type": "promptString",
+      "description": "Path to FASTLIO2 map.pcd file",
+      "default": "${workspaceFolder}/maps/fastlio2/map_20251118_171609/map.pcd"
+    }
+  ],
   "tasks": [
     {
       "label": "Launch: Livox (MID360)",
@@ -165,7 +173,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false map_path:=${input:mapPath}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -175,7 +183,25 @@
         "reveal": "always",
         "panel": "new"
       },
-      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack on DISPLAY :3 for autonomous navigation"
+      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack on DISPLAY :3 for autonomous navigation with saved map"
+    },
+    {
+      "label": "FASTLIO2 Navigation Stack (Auto-Latest Map)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name 'map.pcd' -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false map_path:=$LATEST_MAP"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack with the most recent saved map (auto-detected from maps/fastlio2/)"
     },
     {
       "label": "Save Maps",
