@@ -1,8 +1,9 @@
 octomap_server:
   ros__parameters:
     # Frame IDs
-    # The fixed world frame (map frame) in which the 3D map is built
-    frame_id: map
+    # The fixed world frame in which the 3D map is built
+    # Changed from 'map' to 'odom' to match FASTLIO2's /fastlio2/world_cloud frame_id
+    frame_id: odom
 
     # The base frame of the robot, used for ground plane filtering (must be set if filter_ground is true)
     base_frame_id: base_footprint
