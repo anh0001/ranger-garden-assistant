@@ -1,12 +1,12 @@
 amcl:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; real hardware uses system time instead of /clock.
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
     alpha4: 0.2
     alpha5: 0.2
-    base_frame_id: "base_footprint"
+    base_frame_id: "base_footprint"  # original: base_link; this matches map→odom→base_footprint→base_link TF used in this repo.
     beam_skip_distance: 0.5
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
@@ -41,19 +41,19 @@ amcl:
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; on real hardware we use wall-clock time, not /clock.
     global_frame: map
     robot_base_frame: base_footprint
-    odom_topic: /fastlio2/lio_odom
+    odom_topic: /fastlio2/lio_odom  # original: /odom; this repo standardizes Nav2 on FASTLIO2 odometry.
     bt_loop_duration: 10
     default_server_timeout: 20
-    wait_for_service_timeout: 1000
-    action_server_result_timeout: 900.0
-    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    wait_for_service_timeout: 1000  # Not set in original; large timeout to tolerate slow bringup of servers.
+    action_server_result_timeout: 900.0  # Not set in original; allow long outdoor missions before timing out.
+    navigators: ["navigate_to_pose", "navigate_through_poses"]  # Explicit navigators; original relies on defaults.
     navigate_to_pose:
-      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"  # Explicit plugin; original uses default bt_navigator setup.
     navigate_through_poses:
-      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"
+      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"  # Explicit plugin for multi-goal navigation.
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
@@ -105,11 +105,11 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    use_sim_time: False
-    odom_topic: "/fastlio2/lio_odom"
+    use_sim_time: False  # original: True; controller runs on real robot time.
+    odom_topic: "/fastlio2/lio_odom"  # original: /odom; align controller with FASTLIO2 odometry per repo conventions.
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001  # original: 0.5; tiny threshold fits non-holonomic (no lateral) motion.
     min_theta_velocity_threshold: 0.001
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
@@ -117,96 +117,96 @@ controller_server:
     controller_plugins: ["FollowPath"]
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.25
+      required_movement_radius: 0.25  # original: 0.5; tighter progress check since FASTLIO2 odom is accurate.
       movement_time_allowance: 10.0
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15
-      yaw_goal_tolerance: 0.2
+      xy_goal_tolerance: 0.15  # original: 0.25; stricter position tolerance for precise docking/row alignment.
+      yaw_goal_tolerance: 0.2  # original: 0.25; slightly tighter heading alignment.
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
-      min_vel_x: 0.05
+      min_vel_x: 0.05  # original: 0.0; avoid very small commands that don't move the base.
       min_vel_y: 0.0
-      max_vel_x: 1.0
+      max_vel_x: 1.0  # original: 0.26; higher max speed for outdoor navigation.
       max_vel_y: 0.0
-      max_vel_theta: 1.2
-      min_speed_xy: 0.05
-      max_speed_xy: 1.0
+      max_vel_theta: 1.2  # original: 1.0; slightly faster rotation acceptable for this platform.
+      min_speed_xy: 0.05  # original: 0.0; consistent with non-zero min_vel_x.
+      max_speed_xy: 1.0  # original: 0.26; match higher linear speed capability.
       min_speed_theta: 0.0
-      acc_lim_x: 0.6
+      acc_lim_x: 0.6  # original: 2.5; gentler acceleration for heavier outdoor robot.
       acc_lim_y: 0.0
-      acc_lim_theta: 1.5
-      decel_lim_x: -0.6
+      acc_lim_theta: 1.5  # original: 3.2; reduce rotational jerk.
+      decel_lim_x: -0.6  # original: -2.5; smoother stopping.
       decel_lim_y: 0.0
-      decel_lim_theta: -1.5
-      vx_samples: 16
-      vy_samples: 1
+      decel_lim_theta: -1.5  # original: -3.2; smoother rotational braking.
+      vx_samples: 16  # original: 20; slightly fewer samples to save CPU.
+      vy_samples: 1  # original: 5; diff-drive robot so no lateral motion sampling.
       vtheta_samples: 20
-      sim_time: 2.0
+      sim_time: 2.0  # original: 1.7; longer lookahead to suit higher speeds.
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.15
-      trans_stopped_velocity: 0.05
+      xy_goal_tolerance: 0.15  # original: 0.25; tight stop tolerance matching goal checker.
+      trans_stopped_velocity: 0.05  # original: 0.25; consider robot stopped at lower speed.
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
-      PathAlign.scale: 24.0
-      PathAlign.forward_point_distance: 0.2
-      GoalAlign.scale: 18.0
-      GoalAlign.forward_point_distance: 0.2
-      PathDist.scale: 28.0
-      GoalDist.scale: 20.0
-      RotateToGoal.scale: 28.0
+      PathAlign.scale: 24.0  # original: 32.0; slightly reduce aggressiveness of path alignment.
+      PathAlign.forward_point_distance: 0.2  # original: 0.1; look a bit further ahead on the path.
+      GoalAlign.scale: 18.0  # original: 24.0; softer goal alignment weighting.
+      GoalAlign.forward_point_distance: 0.2  # original: 0.1; smoother alignment with further lookahead.
+      PathDist.scale: 28.0  # original: 32.0; moderate path distance weight.
+      GoalDist.scale: 20.0  # original: 24.0; slightly softer attraction to goal.
+      RotateToGoal.scale: 28.0  # original: 32.0; slightly less aggressive rotate-in-place behavior.
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 10.0
-      publish_frequency: 5.0
+      update_frequency: 10.0  # original: 5.0; faster updates for more responsive obstacle avoidance.
+      publish_frequency: 5.0  # original: 2.0; publish costmap more often for controllers.
       global_frame: odom
       robot_base_frame: base_footprint
-      use_sim_time: False
+      use_sim_time: False  # original: True; real robot uses system time.
       rolling_window: true
-      width: 8.0
-      height: 8.0
+      width: 8.0  # original: 3; larger local window for outdoor navigation.
+      height: 8.0  # original: 3; larger local window for outdoor navigation.
       resolution: 0.05
-      transform_tolerance: 0.3
-      robot_radius: 0.42
+      transform_tolerance: 0.3  # original: default; explicit TF tolerance for FASTLIO2 TF timing.
+      robot_radius: 0.42  # original: 0.3; matches larger Ranger chassis for safer clearance.
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.65
+        inflation_radius: 0.65  # original: 0.3; more conservative clearance around obstacles.
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
-        publish_voxel_map: True
-        origin_z: 0.0
-        z_resolution: 0.05
+        publish_voxel_map: True  # original: False; enabled for easier debugging of 3D obstacles.
+        origin_z: 0.0  # original: 0.05; start voxel grid lower to catch near-ground obstacles.
+        z_resolution: 0.05  # original: 0.08; finer vertical resolution for Livox 3D points.
         z_voxels: 16
-        max_obstacle_height: 2.0
-        min_obstacle_height: -0.25
+        max_obstacle_height: 2.0  # original: 1.8; allow slightly taller obstacles.
+        min_obstacle_height: -0.25  # original: not set; include slightly below-base height features.
         mark_threshold: 0
-        observation_sources: mid360_cloud
+        observation_sources: mid360_cloud  # original: separate marking/clearing sources; here we use a single Livox source.
         mid360_cloud:
           topic: /livox/lidar
-          max_obstacle_height: 2.5
-          min_obstacle_height: -0.3
-          clearing: True
-          marking: True
+          max_obstacle_height: 2.5  # original: 1.8; capture higher obstacles from Livox cloud.
+          min_obstacle_height: -0.3  # original: 0.0; include points slightly below lidar height.
+          clearing: True  # original: had separate clearing topic; combined marking+clearing here.
+          marking: True  # original: marking-only source; here the same cloud does both.
           data_type: "PointCloud2"
-          expected_update_rate: 0.0
-          observation_persistence: 0.0
-          raytrace_max_range: 20.0
-          raytrace_min_range: 0.2
-          obstacle_max_range: 15.0
-          obstacle_min_range: 0.0
+          expected_update_rate: 0.0  # Not set in original; 0 disables timeout checks.
+          observation_persistence: 0.0  # Not set in original; obstacles are cleared as soon as they disappear.
+          raytrace_max_range: 20.0  # original: 3.0; leverage long-range Livox data for raytracing.
+          raytrace_min_range: 0.2  # original: 0.0; ignore extremely close/noisy returns.
+          obstacle_max_range: 15.0  # original: 2.5; detect obstacles farther away outdoors.
+          obstacle_min_range: 0.0  # Same as original but kept explicit.
       always_send_full_costmap: True
 
 global_costmap:
@@ -216,41 +216,41 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_footprint
-      use_sim_time: False
-      robot_radius: 0.42
-      resolution: 0.1
+      use_sim_time: False  # original: True; global costmap uses real time.
+      robot_radius: 0.42  # original: 0.22; larger footprint for Ranger base.
+      resolution: 0.1  # original: 0.05; coarser but efficient global map for large outdoor areas.
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: mid360_cloud
+        observation_sources: mid360_cloud  # original: scan_marking/scan_clearing; here we use Livox pointcloud.
         mid360_cloud:
           topic: /livox/lidar
           max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 25.0
-          raytrace_min_range: 0.2
-          obstacle_max_range: 20.0
-          obstacle_min_range: 0.0
+          clearing: True  # original: used dedicated clearing LaserScan; combined here.
+          marking: True  # original: marking LaserScan; combined here.
+          data_type: "PointCloud2"  # original: LaserScan; global obstacles come from 3D Livox cloud.
+          raytrace_max_range: 25.0  # original: 3.0; long-range raytracing for outdoor navigation.
+          raytrace_min_range: 0.2  # original: 0.0; ignore very near returns.
+          obstacle_max_range: 20.0  # original: 2.5; see obstacles farther ahead.
+          obstacle_min_range: 0.0  # Same as original but kept explicit.
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
-        map_topic: /projected_map
-        subscribe_to_updates: True
-        first_map_only: False
+        map_topic: /projected_map  # original: /map; use OctoMap_server2 projected map as Nav2 static layer.
+        subscribe_to_updates: True  # original: default false; allow incremental updates from OctoMap.
+        first_map_only: False  # original: default true; continue updating static map as it changes.
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.75
+        inflation_radius: 0.75  # original: 0.55; larger safety buffer for bigger robot outdoors.
       always_send_full_costmap: True
 
 planner_server:
   ros__parameters:
     expected_planner_frequency: 20.0
-    use_sim_time: False
+    use_sim_time: False  # original: True; planner runs on real-time hardware clock.
     planner_plugins: ["GridBased"]
     GridBased:
       plugin: "nav2_navfn_planner/NavfnPlanner"
@@ -260,7 +260,7 @@ planner_server:
 
 smoother_server:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; smoother uses hardware time.
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -275,31 +275,31 @@ behavior_server:
     cycle_frequency: 10.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
-      plugin: "nav2_behaviors::Spin"
+      plugin: "nav2_behaviors::Spin"  # original: nav2_behaviors/Spin; class-name style plugin for Humble.
     backup:
-      plugin: "nav2_behaviors::BackUp"
+      plugin: "nav2_behaviors::BackUp"  # original: nav2_behaviors/BackUp; class-name style plugin.
     drive_on_heading:
-      plugin: "nav2_behaviors::DriveOnHeading"
+      plugin: "nav2_behaviors::DriveOnHeading"  # original: nav2_behaviors/DriveOnHeading; class-name style plugin.
     wait:
-      plugin: "nav2_behaviors::Wait"
+      plugin: "nav2_behaviors::Wait"  # original: nav2_behaviors/Wait; class-name style plugin.
     assisted_teleop:
-      plugin: "nav2_behaviors::AssistedTeleop"
-    global_frame: map
+      plugin: "nav2_behaviors::AssistedTeleop"  # original: nav2_behaviors/AssistedTeleop; class-name style plugin.
+    global_frame: map  # original: odom; behaviors operate in global map frame to match Nav2.
     robot_base_frame: base_footprint
-    transform_tolerance: 0.3
-    use_sim_time: False
-    simulate_ahead_time: 2.5
-    max_rotational_vel: 1.2
-    min_rotational_vel: 0.2
-    rotational_acc_lim: 2.5
+    transform_tolerance: 0.3  # original: 0.1; slightly more tolerant TF timing.
+    use_sim_time: False  # original: true; real robot uses system time.
+    simulate_ahead_time: 2.5  # original: 2.0; simulate behaviors slightly further ahead.
+    max_rotational_vel: 1.2  # original: 1.0; allow somewhat faster spins.
+    min_rotational_vel: 0.2  # original: 0.4; allow slower, more precise rotations.
+    rotational_acc_lim: 2.5  # original: 3.2; gentler rotational acceleration.
 
 robot_state_publisher:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; robot TF on hardware uses wall-clock time.
 
 waypoint_follower:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; follow waypoints in real time on hardware.
     loop_rate: 20
     stop_on_failure: false
     waypoint_task_executor_plugin: "wait_at_waypoint"
@@ -310,15 +310,15 @@ waypoint_follower:
 
 velocity_smoother:
   ros__parameters:
-    use_sim_time: False
+    use_sim_time: False  # original: True; smoothing runs on real-time hardware clock.
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.9, 0.0, 1.0]
-    min_velocity: [-0.5, 0.0, -1.0]
-    max_accel: [0.8, 0.0, 1.5]
-    max_decel: [-0.8, 0.0, -1.5]
-    odom_topic: "/fastlio2/lio_odom"
+    max_velocity: [0.9, 0.0, 1.0]  # original: [0.26, 0.0, 1.0]; higher linear speed for outdoor Ranger.
+    min_velocity: [-0.5, 0.0, -1.0]  # original: [-0.26, 0.0, -1.0]; slightly faster reverse allowed.
+    max_accel: [0.8, 0.0, 1.5]  # original: [2.5, 0.0, 3.2]; gentler acceleration for heavier platform.
+    max_decel: [-0.8, 0.0, -1.5]  # original: [-2.5, 0.0, -3.2]; smoother deceleration and stopping.
+    odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1
-    deadband_velocity: [0.02, 0.0, 0.02]
+    deadband_velocity: [0.02, 0.0, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands that don't move the robot.
     velocity_timeout: 1.0
