@@ -173,8 +173,8 @@ local_costmap:
       robot_base_frame: base_footprint
       use_sim_time: False  # original: True; real robot uses system time.
       rolling_window: true
-      width: 8.0  # original: 3; larger local window for outdoor navigation.
-      height: 8.0  # original: 3; larger local window for outdoor navigation.
+      width: 8  # original: 3; larger local window for outdoor navigation.
+      height: 8  # original: 3; larger local window for outdoor navigation.
       resolution: 0.05
       transform_tolerance: 0.3  # original: default; explicit TF tolerance for FASTLIO2 TF timing.
       robot_radius: 0.42  # original: 0.3; matches larger Ranger chassis for safer clearance.
@@ -275,15 +275,15 @@ behavior_server:
     cycle_frequency: 10.0
     behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
     spin:
-      plugin: "nav2_behaviors::Spin"  # original: nav2_behaviors/Spin; class-name style plugin for Humble.
+      plugin: "nav2_behaviors/Spin"  # original: nav2_behaviors/Spin; pluginlib name with package prefix.
     backup:
-      plugin: "nav2_behaviors::BackUp"  # original: nav2_behaviors/BackUp; class-name style plugin.
+      plugin: "nav2_behaviors/BackUp"  # original: nav2_behaviors/BackUp; pluginlib name with package prefix.
     drive_on_heading:
-      plugin: "nav2_behaviors::DriveOnHeading"  # original: nav2_behaviors/DriveOnHeading; class-name style plugin.
+      plugin: "nav2_behaviors/DriveOnHeading"  # original: nav2_behaviors/DriveOnHeading; pluginlib name with package prefix.
     wait:
-      plugin: "nav2_behaviors::Wait"  # original: nav2_behaviors/Wait; class-name style plugin.
+      plugin: "nav2_behaviors/Wait"  # original: nav2_behaviors/Wait; pluginlib name with package prefix.
     assisted_teleop:
-      plugin: "nav2_behaviors::AssistedTeleop"  # original: nav2_behaviors/AssistedTeleop; class-name style plugin.
+      plugin: "nav2_behaviors/AssistedTeleop"  # original: nav2_behaviors/AssistedTeleop; pluginlib name with package prefix.
     global_frame: map  # original: odom; behaviors operate in global map frame to match Nav2.
     robot_base_frame: base_footprint
     transform_tolerance: 0.3  # original: 0.1; slightly more tolerant TF timing.

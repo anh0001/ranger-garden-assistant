@@ -9,7 +9,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -96,6 +96,41 @@ def generate_launch_description():
             description="Optional map YAML to pass straight to Nav2.",
         ),
         DeclareLaunchArgument(
+            "map_path",
+            default_value="",
+            description="FASTLIO2 .pcd map used to auto-trigger /localizer/relocalize.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_x",
+            default_value="0.0",
+            description="Initial pose X (meters) used when relocalizing against the saved map.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_y",
+            default_value="0.0",
+            description="Initial pose Y (meters) used when relocalizing against the saved map.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_z",
+            default_value="0.0",
+            description="Initial pose Z (meters) used when relocalizing against the saved map.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_roll",
+            default_value="0.0",
+            description="Initial pose roll (radians) for relocalization.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_pitch",
+            default_value="0.0",
+            description="Initial pose pitch (radians) for relocalization.",
+        ),
+        DeclareLaunchArgument(
+            "map_initial_yaw",
+            default_value="0.0",
+            description="Initial pose yaw (radians) for relocalization.",
+        ),
+        DeclareLaunchArgument(
             "nav2_autostart",
             default_value="true",
             description="Autostart Nav2 lifecycle managers.",
@@ -104,6 +139,16 @@ def generate_launch_description():
             "nav2_use_amcl",
             default_value="false",
             description="Also start AMCL localization alongside FASTLIO2 stack.",
+        ),
+        DeclareLaunchArgument(
+            "auto_relocalize",
+            default_value="true",
+            description="Automatically call /localizer/relocalize when map_path is provided.",
+        ),
+        DeclareLaunchArgument(
+            "auto_relocalize_timeout",
+            default_value="30.0",
+            description="Seconds to wait for /localizer/relocalize before giving up.",
         ),
         DeclareLaunchArgument(
             "launch_rviz",
@@ -132,6 +177,15 @@ def generate_launch_description():
     launch_nav2 = LaunchConfiguration("launch_nav2")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_map = LaunchConfiguration("map")
+    map_path = LaunchConfiguration("map_path")
+    map_initial_x = LaunchConfiguration("map_initial_x")
+    map_initial_y = LaunchConfiguration("map_initial_y")
+    map_initial_z = LaunchConfiguration("map_initial_z")
+    map_initial_roll = LaunchConfiguration("map_initial_roll")
+    map_initial_pitch = LaunchConfiguration("map_initial_pitch")
+    map_initial_yaw = LaunchConfiguration("map_initial_yaw")
+    auto_relocalize = LaunchConfiguration("auto_relocalize")
+    auto_relocalize_timeout = LaunchConfiguration("auto_relocalize_timeout")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
     nav2_use_amcl = LaunchConfiguration("nav2_use_amcl")
     launch_rviz = LaunchConfiguration("launch_rviz")
@@ -189,6 +243,40 @@ def generate_launch_description():
         condition=IfCondition(launch_localizer),
     )
 
+    auto_relocalize_condition = IfCondition(
+        PythonExpression(
+            [
+                "'",
+                launch_localizer,
+                "' == 'true' and '",
+                auto_relocalize,
+                "' == 'true' and len('",
+                map_path,
+                "'.strip()) > 0",
+            ]
+        )
+    )
+
+    auto_relocalize_node = Node(
+        package="robofi_bringup",
+        executable="fastlio2_auto_relocalize.py",
+        name="fastlio2_auto_relocalize",
+        output="screen",
+        parameters=[
+            {
+                "map_path": map_path,
+                "initial_x": map_initial_x,
+                "initial_y": map_initial_y,
+                "initial_z": map_initial_z,
+                "initial_roll": map_initial_roll,
+                "initial_pitch": map_initial_pitch,
+                "initial_yaw": map_initial_yaw,
+                "timeout_sec": auto_relocalize_timeout,
+            }
+        ],
+        condition=auto_relocalize_condition,
+    )
+
     octomap_node = Node(
         package="octomap_server2",
         executable="octomap_server",
@@ -234,9 +322,10 @@ def generate_launch_description():
             fastlio2_node,
             pgo_node,
             localizer_node,
-        octomap_node,
-        nav2_launch,
-        rviz_node,
-        static_tf_fastlio2_to_base,
-    ]
+            auto_relocalize_node,
+            octomap_node,
+            nav2_launch,
+            rviz_node,
+            static_tf_fastlio2_to_base,
+        ]
     )
