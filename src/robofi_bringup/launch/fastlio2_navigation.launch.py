@@ -70,7 +70,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "launch_localizer",
-            default_value="true",
+            default_value="false",
             description="Start the relocalizer node (load maps via /localizer/relocalize).",
         ),
         DeclareLaunchArgument(
@@ -203,6 +203,12 @@ def generate_launch_description():
     launch_rviz = LaunchConfiguration("launch_rviz")
     rviz_config = LaunchConfiguration("rviz_config")
 
+    # PGO and the localizer both broadcast map->odom. When localizing with a saved map,
+    # keep PGO off to avoid TF conflicts that make the robot jump in RViz/Nav2.
+    pgo_condition = IfCondition(
+        PythonExpression(["'", launch_pgo, "' == 'true' and '", launch_localizer, "' != 'true'"])
+    )
+
     robofi_share = FindPackageShare("robofi_bringup")
 
     base_launch = IncludeLaunchDescription(
@@ -268,7 +274,7 @@ def generate_launch_description():
         namespace="pgo",
         output="screen",
         parameters=[{"config_path": pgo_config}, {"use_sim_time": use_sim_time}],
-        condition=IfCondition(launch_pgo),
+        condition=pgo_condition,
     )
 
     localizer_node = Node(
