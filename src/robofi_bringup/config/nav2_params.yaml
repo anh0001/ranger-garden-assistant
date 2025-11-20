@@ -129,11 +129,11 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.05  # original: 0.0; avoid very small commands that don't move the base.
       min_vel_y: 0.0
-      max_vel_x: 1.0  # original: 0.26; higher max speed for outdoor navigation.
+      max_vel_x: 0.26  # original: 0.26; higher max speed for outdoor navigation.
       max_vel_y: 0.0
-      max_vel_theta: 1.2  # original: 1.0; slightly faster rotation acceptable for this platform.
+      max_vel_theta: 1.0  # original: 1.0; slightly faster rotation acceptable for this platform.
       min_speed_xy: 0.05  # original: 0.0; consistent with non-zero min_vel_x.
-      max_speed_xy: 1.0  # original: 0.26; match higher linear speed capability.
+      max_speed_xy: 0.26  # original: 0.26; match higher linear speed capability.
       min_speed_theta: 0.0
       acc_lim_x: 0.6  # original: 2.5; gentler acceleration for heavier outdoor robot.
       acc_lim_y: 0.0
@@ -289,7 +289,7 @@ behavior_server:
     transform_tolerance: 0.3  # original: 0.1; slightly more tolerant TF timing.
     use_sim_time: False  # original: true; real robot uses system time.
     simulate_ahead_time: 2.5  # original: 2.0; simulate behaviors slightly further ahead.
-    max_rotational_vel: 1.2  # original: 1.0; allow somewhat faster spins.
+    max_rotational_vel: 1.0  # original: 1.0; allow somewhat faster spins.
     min_rotational_vel: 0.2  # original: 0.4; allow slower, more precise rotations.
     rotational_acc_lim: 2.5  # original: 3.2; gentler rotational acceleration.
 
@@ -314,8 +314,8 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.9, 0.0, 1.0]  # original: [0.26, 0.0, 1.0]; higher linear speed for outdoor Ranger.
-    min_velocity: [-0.5, 0.0, -1.0]  # original: [-0.26, 0.0, -1.0]; slightly faster reverse allowed.
+    max_velocity: [0.26, 0.0, 1.0]  # original: [0.26, 0.0, 1.0]; higher linear speed for outdoor Ranger.
+    min_velocity: [-0.26, 0.0, -1.0]  # original: [-0.26, 0.0, -1.0]; slightly faster reverse allowed.
     max_accel: [0.8, 0.0, 1.5]  # original: [2.5, 0.0, 3.2]; gentler acceleration for heavier platform.
     max_decel: [-0.8, 0.0, -1.5]  # original: [-2.5, 0.0, -3.2]; smoother deceleration and stopping.
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.

@@ -136,16 +136,16 @@ def generate_launch_description():
     )
 
     # Ranger base driver launch (disabled by default; uncomment when chassis is present)
-    # ranger_base_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         PathJoinSubstitution([
-    #             FindPackageShare("robofi_bringup"),
-    #             "launch",
-    #             "ranger_base.launch.py"
-    #         ])
-    #     ),
-    #     launch_arguments={"can_device": can_device}.items(),
-    # )
+    ranger_base_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("robofi_bringup"),
+                "launch",
+                "ranger_base.launch.py"
+            ])
+        ),
+        launch_arguments={"can_device": can_device}.items(),
+    )
 
     # Livox LiDAR driver launch
     livox_launch = IncludeLaunchDescription(
@@ -213,7 +213,7 @@ def generate_launch_description():
             livox_launch,
             rviz_node,
             # static_tf_lidar,
-            # ranger_base_launch,
+            ranger_base_launch,
             # realsense_launch,
             # piper_launch,
         ]
