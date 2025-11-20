@@ -6,7 +6,7 @@ OctoMap server, and Nav2 on top of the standard robot + Livox stack.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -82,6 +82,11 @@ def generate_launch_description():
             "launch_nav2",
             default_value="true",
             description="Launch Nav2 navigation stack.",
+        ),
+        DeclareLaunchArgument(
+            "base_start_delay",
+            default_value="0.0",
+            description="Seconds to wait before starting ranger_complete_bringup to avoid CAN races.",
         ),
         DeclareLaunchArgument(
             "nav2_params_file",
@@ -177,6 +182,7 @@ def generate_launch_description():
     launch_nav2 = LaunchConfiguration("launch_nav2")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_map = LaunchConfiguration("map")
+    base_start_delay = LaunchConfiguration("base_start_delay")
     map_path = LaunchConfiguration("map_path")
     map_initial_x = LaunchConfiguration("map_initial_x")
     map_initial_y = LaunchConfiguration("map_initial_y")
@@ -193,11 +199,16 @@ def generate_launch_description():
 
     robofi_share = FindPackageShare("robofi_bringup")
 
-    base_bringup = IncludeLaunchDescription(
+    base_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([robofi_share, "launch", "ranger_complete_bringup.launch.py"])
         ),
         launch_arguments={"use_sim_time": use_sim_time, "use_rviz": "false"}.items(),
+    )
+
+    base_bringup = TimerAction(
+        period=base_start_delay,
+        actions=[base_launch],
     )
 
     fastlio2_node = Node(
