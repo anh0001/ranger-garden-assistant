@@ -86,6 +86,14 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "publish_odom_tf",
+            default_value="false",
+            description="Publish wheel odometry TF (set to true only if not using FASTLIO2).",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -93,6 +101,7 @@ def generate_launch_description():
     livox_frame_id = LaunchConfiguration("livox_frame_id")
     livox_config_file = LaunchConfiguration("livox_config_file")
     publish_joint_states = LaunchConfiguration("publish_joint_states")
+    publish_odom_tf = LaunchConfiguration("publish_odom_tf")
     use_rviz = LaunchConfiguration("use_rviz")
 
     # Get URDF via xacro with mesh_dir argument
@@ -144,7 +153,10 @@ def generate_launch_description():
                 "ranger_base.launch.py"
             ])
         ),
-        launch_arguments={"can_device": can_device}.items(),
+        launch_arguments={
+            "can_device": can_device,
+            "publish_odom_tf": publish_odom_tf,
+        }.items(),
     )
 
     # Livox LiDAR driver launch

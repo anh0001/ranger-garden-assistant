@@ -31,9 +31,27 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "base_frame",
+            default_value="base_footprint",
+            description="Base frame id published by the driver (connects odom to base_footprint).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "publish_odom_tf",
+            default_value="true",
+            description="Publish the base driver's odom -> base_link TF to satisfy Nav2 costmaps.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     robot_model = LaunchConfiguration("robot_model")
+    base_frame = LaunchConfiguration("base_frame")
+    publish_odom_tf = LaunchConfiguration("publish_odom_tf")
 
     # Include the ranger_ros2 launch file
     ranger_launch = IncludeLaunchDescription(
@@ -47,6 +65,8 @@ def generate_launch_description():
         launch_arguments={
             "port_name": can_device,
             "robot_model": robot_model,
+            "base_frame": base_frame,
+            "publish_odom_tf": publish_odom_tf,
         }.items(),
     )
 

@@ -141,6 +141,11 @@ def generate_launch_description():
             description="Autostart Nav2 lifecycle managers.",
         ),
         DeclareLaunchArgument(
+            "nav2_start_delay",
+            default_value="5.0",
+            description="Seconds to wait before launching Nav2 so map->odom TF is ready.",
+        ),
+        DeclareLaunchArgument(
             "nav2_use_amcl",
             default_value="false",
             description="Also start AMCL localization alongside FASTLIO2 stack.",
@@ -193,6 +198,7 @@ def generate_launch_description():
     auto_relocalize = LaunchConfiguration("auto_relocalize")
     auto_relocalize_timeout = LaunchConfiguration("auto_relocalize_timeout")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
+    nav2_start_delay = LaunchConfiguration("nav2_start_delay")
     nav2_use_amcl = LaunchConfiguration("nav2_use_amcl")
     launch_rviz = LaunchConfiguration("launch_rviz")
     rviz_config = LaunchConfiguration("rviz_config")
@@ -203,7 +209,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([robofi_share, "launch", "ranger_complete_bringup.launch.py"])
         ),
-        launch_arguments={"use_sim_time": use_sim_time, "use_rviz": "false"}.items(),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "use_rviz": "false",
+            "publish_odom_tf": "false",  # Disable wheel odometry TF when using FASTLIO2
+        }.items(),
     )
 
     base_bringup = TimerAction(
@@ -231,7 +241,24 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="fastlio2_body_to_base",
         output="screen",
-        arguments=["0", "0", "-0.46669", "0", "-0.785398", "0", "fastlio2_body", "base_footprint"],
+        arguments=[
+            "--x",
+            "0",
+            "--y",
+            "0",
+            "--z",
+            "-0.46669",
+            "--roll",
+            "0",
+            "--pitch",
+            "-0.785398",
+            "--yaw",
+            "0",
+            "--frame-id",
+            "fastlio2_body",
+            "--child-frame-id",
+            "base_footprint",
+        ],
     )
 
     pgo_node = Node(
@@ -316,6 +343,11 @@ def generate_launch_description():
         condition=IfCondition(launch_nav2),
     )
 
+    nav2_launch_delayed = TimerAction(
+        period=nav2_start_delay,
+        actions=[nav2_launch],
+    )
+
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -335,7 +367,7 @@ def generate_launch_description():
             localizer_node,
             auto_relocalize_node,
             octomap_node,
-            nav2_launch,
+            nav2_launch_delayed,
             rviz_node,
             static_tf_fastlio2_to_base,
         ]
