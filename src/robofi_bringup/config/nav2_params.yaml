@@ -220,6 +220,11 @@ global_costmap:
       robot_radius: 0.42  # original: 0.22; larger footprint for Ranger base.
       resolution: 0.1  # original: 0.05; coarser but efficient global map for large outdoor areas.
       track_unknown_space: true
+      rolling_window: false  # Use static map from Octomap projection
+      width: 100  # Large outdoor area coverage (100m x 100m)
+      height: 100
+      origin_x: -50.0  # Center the costmap around the origin
+      origin_y: -50.0
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"

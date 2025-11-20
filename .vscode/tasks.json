@@ -171,7 +171,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name 'map.pcd' -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false map_path:=$LATEST_MAP"
+        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name \"map.pcd\" -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true nav2_use_amcl:=false map_path:=$LATEST_MAP"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
