@@ -21,13 +21,6 @@ octomap_server:
     # The base frame of the robot, used for ground plane filtering (must be set if filter_ground is true)
     base_frame_id: base_footprint
 
-    # Local decay to clear transient obstacles
-    # When enabled, every incoming cloud clears a box around the robot in the OctoMap
-    local_decay_enable: false  # disable by default; enable if lingering voxels appear
-    local_decay_half_length: 4.0   # Half-length (meters) of square XY clearing region
-    local_decay_floor_depth: 0.5   # Meters below the robot frame to clear
-    local_decay_height: 2.5        # Meters above the robot frame to clear
-
     # Octree Configuration
     # Resolution of the octree voxels in meters (smaller = more detail but more memory/computation)
     # Default: 0.05m, increased to 0.1m for better performance
@@ -60,7 +53,7 @@ octomap_server:
 
     # Enable incremental updates to the 2D projected map (only update changed regions)
     # If false, the entire 2D map is regenerated on each update
-    incremental_2D_projection: false
+    incremental_2D_projection: true
 
     # Publish free space voxels in addition to occupied voxels (increases bandwidth)
     publish_free_space: false
@@ -68,11 +61,11 @@ octomap_server:
     # Sensor Model - Probabilistic Occupancy Updates
     # Probability of a cell being occupied when a hit is detected (range: 0.5-1.0)
     # Higher values = faster convergence to occupied state
-    sensor_model/hit: 0.65
+    sensor_model/hit: 0.55
 
     # Probability of a cell being occupied when a miss is detected (range: 0.0-0.5)
     # Lower values = faster convergence to free state
-    sensor_model/miss: 0.38
+    sensor_model/miss: 0.42
 
     # Minimum occupancy probability threshold for a voxel to be considered occupied (range: 0.0-0.5)
     # Voxels below this are considered free
@@ -92,16 +85,16 @@ octomap_server:
     pointcloud_max_z: 2.5  # Raised to keep ceiling/wall returns in 2.4 m corridors and outdoor canopy.
 
     # Minimum X coordinate to accept points (meters, in sensor frame before transformation)
-    pointcloud_min_x: -100.0
+    pointcloud_min_x: -20.0
 
     # Maximum X coordinate to accept points (meters)
-    pointcloud_max_x: 100.0
+    pointcloud_max_x: 20.0
 
     # Minimum Y coordinate to accept points (meters)
-    pointcloud_min_y: -100.0
+    pointcloud_min_y: -20.0
 
     # Maximum Y coordinate to accept points (meters)
-    pointcloud_max_y: 100.0
+    pointcloud_max_y: 20.0
 
     # 2D Occupancy Grid Projection (for Nav2 integration)
     # Minimum Z height of voxels to include in the 2D projected map (meters)
