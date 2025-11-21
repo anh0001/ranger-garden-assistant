@@ -574,44 +574,6 @@ cd src
 ros2 pkg create --build-type ament_cmake my_custom_package
 ```
 
-## Performance Optimization
-
-### For Jetson/Embedded Platforms
-
-- Reduce sensor rates (LiDAR to 5Hz, camera to 15 FPS)
-- Lower costmap resolution (0.1m instead of 0.05m)
-- Disable unnecessary RViz visualization on robot
-- Use compressed image transport
-
-Example:
-```yaml
-# In nav2_params.yaml
-local_costmap:
-  local_costmap:
-    ros__parameters:
-      update_frequency: 2.0  # Reduce from 5.0
-      resolution: 0.10       # Increase from 0.05
-```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## References
-
-- [ROS 2 Humble Documentation](https://docs.ros.org/en/humble/)
-- [Navigation2 Documentation](https://navigation.ros.org/)
-- [MoveIt 2 Documentation](https://moveit.ros.org/)
-- [AgileX Robotics](https://www.agilex.ai/)
-- [Livox LiDAR](https://www.livoxtech.com/)
-- [Intel RealSense](https://www.intelrealsense.com/)
-
 ## Acknowledgments
 
 This project integrates the following open-source packages:
