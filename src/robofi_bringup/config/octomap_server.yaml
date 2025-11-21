@@ -1,5 +1,18 @@
 octomap_server:
   ros__parameters:
+    # QoS Settings for Point Cloud Input
+    # Must match FASTLIO2's publisher QoS (RELIABLE) to receive data
+    qos_overrides:
+      /cloud_in:
+        subscription:
+          reliability: reliable
+          durability: volatile
+          history: keep_last
+          depth: 5
+    # Directly set the subscription QoS used by octomap_server2 (fallback when overrides are ignored)
+    cloud_in_reliability: reliable
+    cloud_in_history_depth: 5
+
     # Frame IDs
     # The fixed world frame in which the 3D map is built
     # Set to 'map' for Nav2 integration (global costmap expects map frame)
