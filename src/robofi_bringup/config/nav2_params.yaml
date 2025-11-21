@@ -186,7 +186,7 @@ local_costmap:
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
-        publish_voxel_map: True  # original: False; enabled for easier debugging of 3D obstacles.
+        publish_voxel_map: False  # original: False; enabled for easier debugging of 3D obstacles.
         origin_z: 0.0  # original: 0.05; start voxel grid lower to catch near-ground obstacles.
         z_resolution: 0.1  # original: 0.08; coarser but taller grid to cover 2.4 m corridors without extra CPU.
         z_voxels: 24  # original: 16; extends voxel stack to 2.4 m tall spaces.
@@ -218,7 +218,7 @@ global_costmap:
       robot_base_frame: base_footprint
       use_sim_time: False  # original: True; global costmap uses real time.
       robot_radius: 0.42  # original: 0.22; larger footprint for Ranger base.
-      resolution: 0.1  # original: 0.05; coarser but efficient global map for large outdoor areas.
+      resolution: 0.05  # original: 0.05; coarser but efficient global map for large outdoor areas.
       track_unknown_space: true
       rolling_window: false  # Use static map from Octomap projection
       width: 100  # Large outdoor area coverage (100m x 100m)
@@ -249,7 +249,7 @@ global_costmap:
         first_map_only: False  # original: default true; continue updating static map as it changes.
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 1.0
+        cost_scaling_factor: 3.0
         inflation_radius: 0.2  # original: 0.55; balanced for corridor clearance while keeping outdoor buffer.
       always_send_full_costmap: True
 
