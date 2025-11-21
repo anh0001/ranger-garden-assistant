@@ -69,7 +69,7 @@ octomap_server:
 
     # Maximum Z height to accept points from input point cloud (meters)
     # Points above this height are discarded
-    pointcloud_max_z: 2.0
+    pointcloud_max_z: 2.5  # Raised to keep ceiling/wall returns in 2.4 m corridors and outdoor canopy.
 
     # Minimum X coordinate to accept points (meters, in sensor frame before transformation)
     pointcloud_min_x: -100.0
@@ -90,7 +90,7 @@ octomap_server:
 
     # Maximum Z height of voxels to include in the 2D projected map (meters)
     # Only voxels with centers below this height contribute to the 2D occupancy grid
-    occupancy_max_z: 1.6
+    occupancy_max_z: 1.8  # Stop ceiling voxels (2.4 m corridors) from appearing as 2D obstacles; 1.8 m keeps people/branches.
 
     # Minimum X size of the 2D map in meters (map will be padded if smaller)
     # Ensures map has at least this width even if environment is smaller
