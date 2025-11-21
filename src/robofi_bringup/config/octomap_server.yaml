@@ -1,7 +1,12 @@
 octomap_server:
   ros__parameters:
-    # QoS Settings for Point Cloud Input
-    # Must match FASTLIO2's publisher QoS (RELIABLE) to receive data
+    # HIGH‑LEVEL BEHAVIOR
+    # OctoMap clears space only along rays from the sensor to each measured point.
+    # Voxels that are never traversed by a ray (e.g. behind walls/ground or far away)
+    # will not be cleared, which can look like "stuck" obstacles at long range.
+
+    # QoS for point‑cloud input.
+    # Only change if you deliberately relax reliability or history to match the publisher.
     qos_overrides:
       /cloud_in:
         subscription:
@@ -9,150 +14,146 @@ octomap_server:
           durability: volatile
           history: keep_last
           depth: 5
-    # Directly set the subscription QoS used by octomap_server2 (fallback when overrides are ignored)
+    # Fallback QoS used by octomap_server2 if overrides are ignored.
     cloud_in_reliability: reliable
     cloud_in_history_depth: 5
 
-    # Frame IDs
-    # The fixed world frame in which the 3D map is built
-    # Set to 'map' for Nav2 integration (global costmap expects map frame)
+    # World frame in which the 3D map lives.
+    # Keep as 'map' for Nav2; change only if your static layer uses a different global frame.
     frame_id: map
 
-    # The base frame of the robot, used for ground plane filtering (must be set if filter_ground is true)
+    # Robot base frame used for ground‑plane detection when filter_ground is true.
+    # Must match the TF frame directly under odom (usually base_footprint).
     base_frame_id: base_footprint
 
-    # Octree Configuration
-    # Resolution of the octree voxels in meters (smaller = more detail but more memory/computation)
-    # Default: 0.05m, increased to 0.1m for better performance
-    resolution: 0.1
+    # OCTREE RESOLUTION
+    # Size of each voxel in meters.
+    # Lower (e.g. 0.1)  => sharper obstacles, higher CPU/memory.
+    # Higher (e.g. 0.2) => smoother map, faster, but thin obstacles may disappear.
+    resolution: 0.2
 
-    # Visualization Options
-    # Use height-based color coding for occupied voxels in visualization (rainbow colors by height)
-    # Note: Cannot be used together with colored_map
+    # VISUALIZATION
+    # Color occupied voxels by height (purely visual; does not affect Nav2).
+    # Cannot be used together with colored_map.
     height_map: true
 
-    # Use RGB color from point cloud for voxel visualization (requires COLOR_OCTOMAP_SERVER compilation flag)
-    # Note: Mutually exclusive with height_map
+    # Use RGB from the point cloud for voxel colors (requires COLOR_OCTOMAP_SERVER build flag).
+    # Mutually exclusive with height_map.
     colored_map: false
 
-    # Color scaling factor for height map visualization (0.0-1.0, affects color intensity)
+    # Color scaling factor for height‑based visualization (0.0‑1.0).
     color_factor: 0.8
 
-    # Point Cloud Filtering
-    # Enable RANSAC-based ground plane detection and filtering
-    # Ground points are marked as free space only, not as obstacles
+    # GROUND / NOISE FILTERING
+    # Enable RANSAC‑based ground plane detection.
+    # Ground points are used only to clear free space, not to mark obstacles.
+    # Disable if your ground is not approximately flat or TF for base_frame_id is unreliable.
     filter_ground: true
 
-    # Filter isolated single voxels (speckles) that have no occupied neighbors
-    # Helps reduce sensor noise in the map
+    # Remove isolated occupied voxels with no occupied neighbors.
+    # Enable to reduce salt‑and‑pepper noise; disable if you need to keep very small isolated obstacles.
     filter_speckles: true
 
-    # Map Compression and Updates
-    # Enable octree pruning to merge identical child nodes and save memory
+    # MAP COMPRESSION & UPDATE STRATEGY
+    # Merge identical child nodes to save memory (slightly more CPU when updating).
     compress_map: true
 
-    # Enable incremental updates to the 2D projected map (only update changed regions)
-    # If false, the entire 2D map is regenerated on each update
+    # If true, only changed regions of the 2D projected map are updated.
+    # Set to false if you suspect incremental updates leave stale cells, at the cost of more CPU.
     incremental_2D_projection: true
 
-    # Publish free space voxels in addition to occupied voxels (increases bandwidth)
+    # Also publish explicit free‑space voxels for visualization.
+    # Not needed for Nav2 and increases bandwidth.
     publish_free_space: false
 
-    # Sensor Model - Probabilistic Occupancy Updates
-    # Probability of a cell being occupied when a hit is detected (range: 0.5-1.0)
-    # Higher values = faster convergence to occupied state
-    sensor_model/hit: 0.55
+    # SENSOR MODEL (PROBABILISTIC UPDATES)
+    # P(hit): assumed occupancy probability when a measurement hits a voxel (must be > 0.5).
+    # Increase if obstacles look too "thin" or disappear quickly; decrease if dynamic obstacles linger too long.
+    sensor_model/hit: 0.65
 
-    # Probability of a cell being occupied when a miss is detected (range: 0.0-0.5)
-    # Lower values = faster convergence to free state
-    sensor_model/miss: 0.42
+    # P(miss): assumed occupancy after seeing free space (must be < 0.5).
+    # Lower => clears obstacles faster when you see through them; higher => more conservative clearing.
+    sensor_model/miss: 0.1
 
-    # Minimum occupancy probability threshold for a voxel to be considered occupied (range: 0.0-0.5)
-    # Voxels below this are considered free
-    sensor_model/min: 0.12
+    # Lower clamp for voxel occupancy probability.
+    # Closer to 0.0 => voxels can become very confidently free (need more hits to become occupied again).
+    # Closer to 0.5 => free space is less "certain", so obstacles can re‑appear with fewer new hits.
+    sensor_model/min: 0.04
 
-    # Maximum occupancy probability threshold (range: 0.5-1.0)
-    # Prevents over-confidence in occupancy
-    sensor_model/max: 0.97
+    # Upper clamp for voxel occupancy probability.
+    # Closer to 1.0 => obstacles are very "sticky" and take many misses to clear.
+    # Lower this if old obstacles remain in the map for too long.
+    sensor_model/max: 0.5
 
-    # Point Cloud Spatial Filtering (applied before ground filtering and insertion)
-    # Minimum Z height to accept points from input point cloud (meters)
-    # Points below this height are discarded
+    # POINT‑CLOUD CROP (APPLIED BEFORE INSERTION)
+    # Minimum Z of accepted points (meters).
+    # With filter_ground=true this is evaluated in base_frame_id; otherwise in the map frame.
+    # Raise to ignore very low returns (ground clutter, robot chassis); lower if low obstacles disappear.
     pointcloud_min_z: -0.1
 
-    # Maximum Z height to accept points from input point cloud (meters)
-    # Points above this height are discarded
-    pointcloud_max_z: 2.5  # Raised to keep ceiling/wall returns in 2.4 m corridors and outdoor canopy.
+    # Maximum Z of accepted points (meters).
+    # Lower to drop ceiling/trees; raise to keep high walls and overhangs in the 3D map.
+    pointcloud_max_z: 2.5  # Chosen to keep ceiling/wall returns in ~2.4 m corridors and outdoor canopy.
 
-    # Minimum X coordinate to accept points (meters, in sensor frame before transformation)
+    # Horizontal crop in X (meters).
+    # Tighten these limits if you want to ignore very distant points or parts of the scan behind the robot.
     pointcloud_min_x: -20.0
 
-    # Maximum X coordinate to accept points (meters)
     pointcloud_max_x: 20.0
 
-    # Minimum Y coordinate to accept points (meters)
     pointcloud_min_y: -20.0
 
-    # Maximum Y coordinate to accept points (meters)
     pointcloud_max_y: 20.0
 
-    # 2D Occupancy Grid Projection (for Nav2 integration)
-    # Minimum Z height of voxels to include in the 2D projected map (meters)
-    # Only voxels with centers above this height contribute to the 2D occupancy grid
+    # 2D OCCUPANCY PROJECTION (USED BY NAV2 STATIC LAYER)
+    # Voxels outside this Z‑band are ignored when building /projected_map.
+    # Raise occupancy_min_z if floor roughness appears as obstacles; lower if very low obstacles are missing.
     occupancy_min_z: 0.05
 
-    # Maximum Z height of voxels to include in the 2D projected map (meters)
-    # Only voxels with centers below this height contribute to the 2D occupancy grid
-    occupancy_max_z: 2.0  # Stop ceiling voxels (2.4 m corridors) from appearing as 2D obstacles; 1.8 m keeps people/branches.
+    # Lower occupancy_max_z if ceiling or tree canopy shows up as obstacles; raise if tall obstacles are cut off.
+    occupancy_max_z: 2.0  # Keeps people/branches, but drops ceiling voxels (~2.4 m corridors).
 
-    # Minimum X size of the 2D map in meters (map will be padded if smaller)
-    # Ensures map has at least this width even if environment is smaller
+    # MINIMUM 2D MAP SIZE (PADDING AROUND ROBOT)
+    # If the explored map is smaller than this, OctoMap pads the 2D grid to at least this width/height.
+    # Increase if you want Nav2's global costmap to always cover a larger area around the robot.
     min_x_size: 20.0
 
-    # Minimum Y size of the 2D map in meters (map will be padded if smaller)
-    # Ensures map has at least this height even if environment is smaller
     min_y_size: 20.0
 
-    # Ground Plane Filtering (RANSAC-based)
-    # Maximum distance of a point from the detected plane to be considered an inlier (meters)
-    # Used in RANSAC plane fitting, smaller = stricter plane detection
+    # GROUND PLANE (RANSAC) TUNING
+    # Maximum distance from the fitted plane for a point to be treated as ground (meters).
+    # Increase if uneven ground is not detected as ground; decrease if low obstacles are being removed as ground.
     ground_filter/distance: 0.05
 
-    # Maximum angular deviation from vertical (Z-axis) for a plane to be considered ground (radians)
-    # ~0.15 rad = ~8.6 degrees, allows slight tilt in ground plane detection
+    # Maximum tilt from vertical for a plane to count as ground (radians).
+    # Increase if you drive on ramps/slopes; decrease if walls are mis‑detected as ground.
     ground_filter/angle: 0.15
 
-    # Maximum distance of the detected plane from z=0 to be considered ground plane (meters)
-    # Planes further from z=0 are treated as horizontal obstacles, not ground
+    # Maximum distance of the plane from z=0 to still count as "ground" (meters).
+    # Increase if your ground is offset in z (e.g. mis‑aligned base_link); decrease if overhead surfaces are classified as ground.
     ground_filter/plane_distance: 0.1
 
-    # Sensor Range Limiting
-    # Maximum sensor range for raycasting (meters)
-    # Points beyond this range are truncated. -1.0 = unlimited (use all points)
+    # SENSOR RANGE LIMIT
+    # Maximum range for raycasting (meters).
+    # -1.0 = unlimited (use all points). Reduce if you want to ignore very distant returns or reduce map size.
     sensor_model/max_range: 30.0
 
-    # Visualization Colors - Occupied Voxels (RGBA, range 0.0-1.0)
-    # Red component for occupied voxel markers (when not using height_map or colored_map)
+    # VISUALIZATION COLORS (RGBA, 0.0‑1.0) FOR OCCUPIED VOXELS
     color/r: 0.2
 
-    # Green component for occupied voxel markers
     color/g: 0.4
 
-    # Blue component for occupied voxel markers
     color/b: 1.0
 
-    # Alpha (transparency) for occupied voxel markers (1.0 = fully opaque)
+    # Alpha (1.0 = fully opaque).
     color/a: 1.0
 
-    # Visualization Colors - Free Voxels (RGBA, range 0.0-1.0)
-    # Red component for free space voxel markers (only used if publish_free_space is true)
+    # VISUALIZATION COLORS FOR FREE SPACE (only used if publish_free_space is true)
     color_free/r: 0.0
 
-    # Green component for free space voxel markers
     color_free/g: 0.7
 
-    # Blue component for free space voxel markers
     color_free/b: 0.2
 
-    # Alpha (transparency) for free space voxel markers (0.3 = semi-transparent)
+    # Alpha (e.g. 0.3 = semi‑transparent).
     color_free/a: 0.3
