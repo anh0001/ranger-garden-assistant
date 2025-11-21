@@ -58,21 +58,6 @@ This workspace provides a fully integrated mobile manipulation platform suitable
 
 ### 1. Install ROS 2 Humble
 
-If you haven't installed ROS 2 Humble yet:
-
-```bash
-# Add ROS 2 apt repository
-sudo apt update && sudo apt install software-properties-common
-sudo add-apt-repository universe
-sudo apt update && sudo apt install curl -y
-sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
-sudo sh -c 'echo "deb [arch=$(dpkg --print-architecture)] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
-
-# Install ROS 2 Humble Desktop
-sudo apt update
-sudo apt install ros-humble-desktop python3-colcon-common-extensions -y
-```
-
 ### 2. Install Additional Dependencies
 
 ```bash
