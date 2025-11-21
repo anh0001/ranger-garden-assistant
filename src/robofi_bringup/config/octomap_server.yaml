@@ -111,7 +111,7 @@ octomap_server:
     occupancy_min_z: 0.05
 
     # Lower occupancy_max_z if ceiling or tree canopy shows up as obstacles; raise if tall obstacles are cut off.
-    occupancy_max_z: 2.0  # Keeps people/branches, but drops ceiling voxels (~2.4 m corridors).
+    occupancy_max_z: 1.5  # Keeps people/branches, but drops ceiling voxels (~2.4 m corridors).
 
     # MINIMUM 2D MAP SIZE (PADDING AROUND ROBOT)
     # If the explored map is smaller than this, OctoMap pads the 2D grid to at least this width/height.

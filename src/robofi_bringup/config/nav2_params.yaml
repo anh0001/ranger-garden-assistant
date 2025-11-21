@@ -249,8 +249,8 @@ global_costmap:
         first_map_only: False  # original: default true; continue updating static map as it changes.
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.65  # original: 0.55; balanced for corridor clearance while keeping outdoor buffer.
+        cost_scaling_factor: 1.0
+        inflation_radius: 0.2  # original: 0.55; balanced for corridor clearance while keeping outdoor buffer.
       always_send_full_costmap: True
 
 planner_server:
