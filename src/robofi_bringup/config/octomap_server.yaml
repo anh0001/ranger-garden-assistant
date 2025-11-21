@@ -21,6 +21,13 @@ octomap_server:
     # The base frame of the robot, used for ground plane filtering (must be set if filter_ground is true)
     base_frame_id: base_footprint
 
+    # Local decay to clear transient obstacles
+    # When enabled, every incoming cloud clears a box around the robot in the OctoMap
+    local_decay_enable: true
+    local_decay_half_length: 4.0   # Half-length (meters) of square XY clearing region
+    local_decay_floor_depth: 0.5   # Meters below the robot frame to clear
+    local_decay_height: 2.5        # Meters above the robot frame to clear
+
     # Octree Configuration
     # Resolution of the octree voxels in meters (smaller = more detail but more memory/computation)
     # Default: 0.05m, increased to 0.1m for better performance
