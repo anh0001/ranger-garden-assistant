@@ -1,5 +1,7 @@
 # Ranger Garden Assistant
 
+![Overall Robot](docs/overall_robot.png)
+
 A complete ROS 2 Humble stack for the AgileX Ranger Mini 3.0 omnidirectional mobile robot integrated with:
 - **Livox Mid-360 LiDAR** for 360° 3D perception
 - **Intel RealSense D435 Camera** for RGB-D vision
