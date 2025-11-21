@@ -122,8 +122,8 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.15  # original: 0.25; stricter position tolerance for precise docking/row alignment.
-      yaw_goal_tolerance: 0.2  # original: 0.25; slightly tighter heading alignment.
+      xy_goal_tolerance: 0.25  # original: 0.25; stricter position tolerance for precise docking/row alignment.
+      yaw_goal_tolerance: 0.25  # original: 0.25; slightly tighter heading alignment.
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True

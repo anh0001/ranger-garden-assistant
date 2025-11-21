@@ -329,6 +329,7 @@ def generate_launch_description():
         output="screen",
         parameters=[octomap_config, {"use_sim_time": use_sim_time}],
         remappings=[("cloud_in", octomap_point_topic)],
+        arguments=["--ros-args", "--log-level", "warn"],
         condition=IfCondition(launch_octomap),
         respawn=True,
         respawn_delay=2.0,
