@@ -176,18 +176,20 @@ sudo ip link set can1 type can bitrate 1000000
 sudo ip link set can1 up
 ```
 
-### 3. Launch FAST-LIO2 + OctoMap + Nav2
+### 3. Launch FAST-LIO2 Mapping Stack
 
-Launch the new integrated bringup (sensors + FAST-LIO2 odometry + PGO + OctoMap + optional Nav2):
+Launch the integrated bringup for mapping (sensors + FASTLIO2 odometry + PGO + OctoMap, Nav2 off):
 
 ```bash
 source install/setup.bash
 ros2 launch robofi_bringup fastlio2_navigation.launch.py \
   launch_nav2:=false \
-  launch_localizer:=false
+  launch_localizer:=false \
+  launch_octomap:=true \
+  rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz
 ```
 
-This starts the robot description, Livox Mid-360 driver, FASTLIO2 LIO (`odom -> base`), optional pose-graph optimization (`map -> odom`), OctoMap_server2, and prepares Nav2. Pass `launch_nav2:=true` to bring Nav2 online once TF is stable. The legacy `ranger_complete_bringup.launch.py` is still available when you only need the robot description and raw sensors.
+This starts the robot description, Livox Mid-360 driver, FASTLIO2 LIO (`odom -> base`), pose-graph optimization (`map -> odom`), OctoMap_server2, and RViz with a mapping layout. Drive the robot around using your preferred teleoperation method or remote control while this stack is running. After exploring, save maps as described in [FAST-LIO2 Mapping and Loop-Closure](#2-fast-lio2-mapping-and-loop-closure). The legacy `ranger_complete_bringup.launch.py` is still available when you only need the robot description and raw sensors.
 
 ### 4. Visualize in RViz
 
@@ -222,12 +224,14 @@ ros2 run teleop_twist_joy teleop_node
 #### 2. FAST-LIO2 Mapping and Loop-Closure
 
 ```bash
-# Terminal 1: sensors + FAST-LIO2 LIO + PGO + OctoMap
+# Terminal 1: sensors + FASTLIO2 LIO + PGO + OctoMap + RViz mapping layout
 ros2 launch robofi_bringup fastlio2_navigation.launch.py \
   launch_nav2:=false \
-  launch_localizer:=false
+  launch_localizer:=false \
+  launch_octomap:=true \
+  rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz
 
-# Terminal 2: teleoperate
+# Terminal 2: teleoperate / use remote control to move the robot
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
@@ -242,20 +246,20 @@ The script calls `/pgo/save_maps` for you and writes timestamped FAST-LIO2 map p
 #### 3. Nav2 with FAST-LIO2 Odom + Localizer
 
 ```bash
-# Terminal 1: full stack + Nav2 + relocalizer
-MAP_ROOT=$(pwd)/maps
+# Terminal 1: full stack + Nav2 + localizer using the most recent saved FASTLIO2 map
+LATEST_MAP=$(find "$(pwd)/maps/fastlio2" -name "map.pcd" -type f | sort -r | head -n1)
 ros2 launch robofi_bringup fastlio2_navigation.launch.py \
   launch_nav2:=true \
   launch_localizer:=true \
   nav2_use_amcl:=false \
-  map:=${MAP_ROOT}/projected/projected_<timestamp>.yaml
-
-# Terminal 2: feed an initial guess and load the saved FAST-LIO2 map
-ros2 service call /localizer/relocalize interface/srv/Relocalize \
-  "{pcd_path: '${MAP_ROOT}/fastlio2/map_<timestamp>/map.pcd', x: 0.0, y: 0.0, z: 0.0, yaw: 0.0, pitch: 0.0, roll: 0.0}"
+  launch_pgo:=false \
+  map_path:=${LATEST_MAP} \
+  rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_navigation.rviz
 ```
 
-Replace `<timestamp>` with the value printed by `scripts/save_maps.sh`. The localizer publishes `/map -> /odom` once the saved PCD aligns with the live LiDAR stream; Nav2 controllers consume `/fastlio2/lio_odom` directly. You no longer need AMCL or slam_toolbox unless you are testing alternative localization methods. RViz already shows Nav2 goals, OctoMap, and the FAST-LIO2 TF tree in the provided configuration.
+This launches the FASTLIO2 localizer and Nav2 using the most recently saved FASTLIO2 map. The `map_path` argument is passed to an auto-relocalization helper which calls `/localizer/relocalize` for you, so no manual service call is required in the common case. The localizer publishes `/map -> /odom` once the saved PCD aligns with the live LiDAR stream; Nav2 controllers consume `/fastlio2/lio_odom` directly. You no longer need AMCL or slam_toolbox unless you are testing alternative localization methods. RViz already shows Nav2 goals, OctoMap, and the FASTLIO2 TF tree in the provided configuration.
+
+If you prefer manual control over relocalization, start the stack with `launch_localizer:=true` and `launch_pgo:=false` and then call `/localizer/relocalize` yourself using the `.pcd` produced by `scripts/save_maps.sh`.
 
 #### 4. Arm Control (PiPER)
 
@@ -337,6 +341,14 @@ FASTLIO2 overlays live under `src/robofi_bringup/config/`:
 - `fastlio2_localizer.yaml` – Downsampling, ICP thresholds, and update rate for relocalization against stored `.pcd` maps.
 
 Feed these files through `fastlio2_navigation.launch.py` via `lio_config`, `pgo_config`, and `localizer_config` arguments when calibrations change.
+
+At a high level, the mapping and navigation flow is:
+- Livox Mid-360 → **FASTLIO2 LIO**: consumes `/livox/lidar` (and IMU) and publishes `/fastlio2/lio_odom` plus `/fastlio2/world_cloud` in the `fastlio2_body` frame.
+- **Static TF bridge**: a static transform connects `fastlio2_body` to `base_footprint` so Nav2 and URDF remain in the standard `map → odom → base_footprint → base_link` chain.
+- **PGO (Pose Graph Optimization)**: when `launch_pgo:=true` and `launch_localizer:=false`, PGO optimizes keyframes from LIO and publishes `/map -> /odom`, and exposes `/pgo/save_maps` to write global `.pcd` maps and patches under `maps/fastlio2/`.
+- **Localizer**: when `launch_localizer:=true` (typically with `launch_pgo:=false`), the localizer loads a saved `.pcd` map (from `map_path` or a manual `/localizer/relocalize` call) and then publishes `/map -> /odom` during navigation.
+- **OctoMap_server2**: subscribes to `/fastlio2/world_cloud` (via `octomap_point_topic`) and publishes `/octomap_server/octomap_binary` and `/projected_map`, which feeds the Nav2 global costmap static layer.
+- **Nav2**: controllers use `/fastlio2/lio_odom` as the odometry source; the global costmap blends `/projected_map` with Livox obstacle layers, providing plans that stay consistent with the FASTLIO2/PGO/localizer TF chain.
 
 ### OctoMap Server
 
