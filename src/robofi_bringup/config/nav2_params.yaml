@@ -1,60 +1,60 @@
-amcl:
-  ros__parameters:
+amcl:  # original: (none); Adaptive Monte Carlo Localization node configuration root; group of localization parameters to tune.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; real hardware uses system time instead of /clock.
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    alpha5: 0.2
+    alpha1: 0.2  # original: 0.2; Rotational noise from yaw motion; raise if odom rotation is noisy.
+    alpha2: 0.2  # original: 0.2; Translational noise caused by rotation; higher values reduce trust in odom when turning.
+    alpha3: 0.2  # original: 0.2; Translational noise from forward motion; increase when odom translation is uncertain.
+    alpha4: 0.2  # original: 0.2; Rotational noise caused by translation; tune if turns drift when driving straight.
+    alpha5: 0.2  # original: 0.2; Strafing motion noise for omni bases; increase when lateral odom is unreliable.
     base_frame_id: "base_footprint"  # original: base_link; this matches map→odom→base_footprint→base_link TF used in this repo.
-    beam_skip_distance: 0.5
-    beam_skip_error_threshold: 0.9
-    beam_skip_threshold: 0.3
-    do_beamskip: false
-    global_frame_id: "map"
-    lambda_short: 0.1
-    laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
-    laser_model_type: "likelihood_field"
-    max_beams: 60
-    max_particles: 2000
-    min_particles: 500
-    odom_frame_id: "odom"
-    pf_err: 0.05
-    pf_z: 0.99
-    recovery_alpha_fast: 0.0
-    recovery_alpha_slow: 0.0
-    resample_interval: 1
-    robot_model_type: "nav2_amcl::OmniMotionModel"
-    save_pose_rate: 0.5
-    sigma_hit: 0.2
-    tf_broadcast: true
-    transform_tolerance: 1.0
-    update_min_a: 0.2
-    update_min_d: 0.25
-    z_hit: 0.5
-    z_max: 0.05
-    z_rand: 0.5
-    z_short: 0.05
-    scan_topic: scan
+    beam_skip_distance: 0.5  # original: 0.5; Distance (m) before a beam is considered outlier for skipping; raise to be more tolerant.
+    beam_skip_error_threshold: 0.9  # original: 0.9; Probability threshold before enabling beam skipping; lower to skip beams sooner.
+    beam_skip_threshold: 0.3  # original: 0.3; Fraction of beams that must agree; raise to ignore more beams when scan is noisy.
+    do_beamskip: false  # original: false; Turns beam skipping on/off; disable to consider every beam even if noisy.
+    global_frame_id: "map"  # original: "map"; Global frame AMCL publishes to; usually map or localization reference frame.
+    lambda_short: 0.1  # original: 0.1; Rate for short readings in sensor model; adjust to match unexpected obstacle frequency.
+    laser_likelihood_max_dist: 2.0  # original: 2.0; Max distance used for likelihood field; shorten to ignore far obstacles.
+    laser_max_range: 100.0  # original: 100.0; Maximum laser range measurement considered; cap this to drop long-range noise.
+    laser_min_range: -1.0  # original: -1.0; Minimum laser range; raise to ignore near-field reflections.
+    laser_model_type: "likelihood_field"  # original: "likelihood_field"; Chosen AMCL laser model; likelihood field is best for dense occupancy grids.
+    max_beams: 60  # original: 60; Number of beams sampled each update; more beams improve accuracy at extra CPU cost.
+    max_particles: 2000  # original: 2000; Max particle count for AMCL; higher improves robustness but costs CPU.
+    min_particles: 500  # original: 500; Minimum particle count; lower allows faster updates but may lose track.
+    odom_frame_id: "odom"  # original: "odom"; Odometry frame used for motion updates; must match TF tree.
+    pf_err: 0.05  # original: 0.05; Adaptive filter error bound; lower forces more particles for accuracy.
+    pf_z: 0.99  # original: 0.99; Adaptive filter confidence bound; closer to 1.0 keeps more particles.
+    recovery_alpha_fast: 0.0  # original: 0.0; Weight for fast exponential average; increase for quicker recovery after jumps.
+    recovery_alpha_slow: 0.0  # original: 0.0; Weight for slow exponential average; lower makes AMCL respond faster.
+    resample_interval: 1  # original: 1; How often particles are resampled; >1 skips cycles to save CPU.
+    robot_model_type: "nav2_amcl::OmniMotionModel"  # original: "nav2_amcl::OmniMotionModel"; Motion model plugin; pick omni vs diff drive based on platform.
+    save_pose_rate: 0.5  # original: 0.5; Frequency (Hz) of saving last pose; raise to survive crashes with fresher pose.
+    sigma_hit: 0.2  # original: 0.2; Std dev for accurate hit measurements; lower tightens match with map.
+    tf_broadcast: true  # original: true; Whether AMCL publishes map->odom TF; disable if external localization handles TF.
+    transform_tolerance: 1.0  # original: 1.0; Allowed TF extrapolation window; increase if transforms arrive late.
+    update_min_a: 0.2  # original: 0.2; Minimum rotation (rad) before update; lower sees frequent rotational updates.
+    update_min_d: 0.25  # original: 0.25; Minimum translation (m) before update; lower tracks small motions.
+    z_hit: 0.5  # original: 0.5; Weight of accurate readings; raise to trust good scan matches.
+    z_max: 0.05  # original: 0.05; Weight of max range readings; raise when many beams return max range.
+    z_rand: 0.5  # original: 0.5; Weight of random measurements; raise if sensor has random noise.
+    z_short: 0.05  # original: 0.05; Weight for unexpectedly short hits; raise when near obstacles dominate.
+    scan_topic: scan  # original: scan; Laser scan topic feeding AMCL; change to whichever sensor you localize with.
 
-bt_navigator:
-  ros__parameters:
+bt_navigator:  # original: (none); Behavior Tree navigator node; orchestrates Nav2 behaviors.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; on real hardware we use wall-clock time, not /clock.
-    global_frame: map
-    robot_base_frame: base_footprint
+    global_frame: map  # original: map; Global frame used by this component; usually map for Nav2.
+    robot_base_frame: base_footprint  # original: base_footprint; Robot base frame used for TF lookups; typically base_footprint or base_link.
     odom_topic: /fastlio2/lio_odom  # original: /odom; this repo standardizes Nav2 on FASTLIO2 odometry.
-    bt_loop_duration: 10
-    default_server_timeout: 20
-    wait_for_service_timeout: 1000  # Not set in original; large timeout to tolerate slow bringup of servers.
-    action_server_result_timeout: 900.0  # Not set in original; allow long outdoor missions before timing out.
-    navigators: ["navigate_to_pose", "navigate_through_poses"]  # Explicit navigators; original relies on defaults.
-    navigate_to_pose:
-      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"  # Explicit plugin; original uses default bt_navigator setup.
-    navigate_through_poses:
-      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"  # Explicit plugin for multi-goal navigation.
-    plugin_lib_names:
+    bt_loop_duration: 10  # original: 10; How often (Hz) the behavior tree ticks; lower numbers slow reactions.
+    default_server_timeout: 20  # original: 20; Default timeout for BT actions/services; raise for slow servers.
+    wait_for_service_timeout: 1000  # original: 1000; How long to wait for service discovery; increase when nodes start slowly.; Not set in original; large timeout to tolerate slow bringup of servers.
+    action_server_result_timeout: 900.0  # original: 900.0; Time before BT gives up waiting on an action result.; Not set in original; allow long outdoor missions before timing out.
+    navigators: ["navigate_to_pose", "navigate_through_poses"]  # original: ["navigate_to_pose", "navigate_through_poses"]; List of navigator action servers to start; include pose/waypoint flavors you need.; Explicit navigators; original relies on defaults.
+    navigate_to_pose:  # original: (none); Configuration block for the NavigateToPose action server.
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"  # original: "nav2_bt_navigator/NavigateToPoseNavigator"; Fully qualified plugin class implementing this capability.; Explicit plugin; original uses default bt_navigator setup.
+    navigate_through_poses:  # original: (none); Configuration block for NavigateThroughPoses action server.
+      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"  # original: "nav2_bt_navigator/NavigateThroughPosesNavigator"; Fully qualified plugin class implementing this capability.; Explicit plugin for multi-goal navigation.
+    plugin_lib_names:  # original: (none); Behavior Tree plugin libraries to load for BT execution.
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node
       - nav2_smooth_path_action_bt_node
@@ -103,57 +103,57 @@ bt_navigator:
       - nav2_drive_on_heading_cancel_bt_node
       - nav2_is_battery_charging_condition_bt_node
 
-controller_server:
-  ros__parameters:
+controller_server:  # original: (none); Trajectory controller node handling FollowPath commands.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; controller runs on real robot time.
     odom_topic: "/fastlio2/lio_odom"  # original: /odom; align controller with FASTLIO2 odometry per repo conventions.
-    controller_frequency: 20.0
-    min_x_velocity_threshold: 0.001
+    controller_frequency: 20.0  # original: 20.0; Controller loop frequency; raise for quicker response.
+    min_x_velocity_threshold: 0.001  # original: 0.001; Below this linear x velocity commands are forced to zero.
     min_y_velocity_threshold: 0.001  # original: 0.5; tiny threshold fits non-holonomic (no lateral) motion.
-    min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
-    progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["FollowPath"]
-    progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
+    min_theta_velocity_threshold: 0.001  # original: 0.001; Below this angular velocity commands are forced to zero.
+    failure_tolerance: 0.3  # original: 0.3; Allowed duration (s) of controller failure before navigation aborts.
+    progress_checker_plugin: "progress_checker"  # original: "progress_checker"; Plugin name used to detect robot progress toward goal.
+    goal_checker_plugins: ["general_goal_checker"]  # original: ["general_goal_checker"]; List of goal checker plugins available to the controller.
+    controller_plugins: ["FollowPath"]  # original: ["FollowPath"]; List of controller plugins to load; order defines priority.
+    progress_checker:  # original: (none); Namespace for progress checker parameters.
+      plugin: "nav2_controller::SimpleProgressChecker"  # original: "nav2_controller::SimpleProgressChecker"; Fully qualified plugin class implementing this capability.
       required_movement_radius: 0.25  # original: 0.5; tighter progress check since FASTLIO2 odom is accurate.
-      movement_time_allowance: 10.0
-    general_goal_checker:
-      stateful: True
-      plugin: "nav2_controller::SimpleGoalChecker"
+      movement_time_allowance: 10.0  # original: 10.0; How long the robot may be stationary before progress checker trips.
+    general_goal_checker:  # original: (none); Namespace for the default goal checker parameters.
+      stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
+      plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
       xy_goal_tolerance: 0.25  # original: 0.25; stricter position tolerance for precise docking/row alignment.
       yaw_goal_tolerance: 0.25  # original: 0.25; slightly tighter heading alignment.
-    FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: True
+    FollowPath:  # original: (none); Namespace for the DWB FollowPath controller parameters.
+      plugin: "dwb_core::DWBLocalPlanner"  # original: "dwb_core::DWBLocalPlanner"; Fully qualified plugin class implementing this capability.
+      debug_trajectory_details: True  # original: True; Enable verbose logging of sampled trajectories for tuning.
       min_vel_x: 0.05  # original: 0.0; avoid very small commands that don't move the base.
-      min_vel_y: 0.0
+      min_vel_y: 0.0  # original: 0.0; Minimum allowed lateral velocity; keep zero for diff-drive.
       max_vel_x: 0.26  # original: 0.26; higher max speed for outdoor navigation.
-      max_vel_y: 0.0
+      max_vel_y: 0.0  # original: 0.0; Maximum lateral velocity; >0 only for holonomic bases.
       max_vel_theta: 1.0  # original: 1.0; slightly faster rotation acceptable for this platform.
       min_speed_xy: 0.05  # original: 0.0; consistent with non-zero min_vel_x.
       max_speed_xy: 0.26  # original: 0.26; match higher linear speed capability.
-      min_speed_theta: 0.0
+      min_speed_theta: 0.0  # original: 0.0; Minimum angular speed considered motion; lower to detect slow rotation.
       acc_lim_x: 0.6  # original: 2.5; gentler acceleration for heavier outdoor robot.
-      acc_lim_y: 0.0
+      acc_lim_y: 0.0  # original: 0.0; Maximum allowed lateral acceleration.
       acc_lim_theta: 1.5  # original: 3.2; reduce rotational jerk.
       decel_lim_x: -0.6  # original: -2.5; smoother stopping.
-      decel_lim_y: 0.0
+      decel_lim_y: 0.0  # original: 0.0; Maximum allowed lateral deceleration.
       decel_lim_theta: -1.5  # original: -3.2; smoother rotational braking.
       vx_samples: 16  # original: 20; slightly fewer samples to save CPU.
       vy_samples: 1  # original: 5; diff-drive robot so no lateral motion sampling.
-      vtheta_samples: 20
+      vtheta_samples: 20  # original: 20; Number of angular velocity samples DWB evaluates each cycle.
       sim_time: 2.0  # original: 1.7; longer lookahead to suit higher speeds.
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 0.2
+      linear_granularity: 0.05  # original: 0.05; Step distance for simulating trajectories; smaller captures detail.
+      angular_granularity: 0.025  # original: 0.025; Angular step for trajectory simulation; smaller resolves slow turns.
+      transform_tolerance: 0.2  # original: 0.2; Allowed TF extrapolation window; increase if transforms arrive late.
       xy_goal_tolerance: 0.15  # original: 0.25; tight stop tolerance matching goal checker.
       trans_stopped_velocity: 0.05  # original: 0.25; consider robot stopped at lower speed.
-      short_circuit_trajectory_evaluation: True
-      stateful: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
+      short_circuit_trajectory_evaluation: True  # original: True; Stop evaluating once a good trajectory is found to save CPU.
+      stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # original: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]; List of DWB critics that score each trajectory.
+      BaseObstacle.scale: 0.02  # original: 0.02; Weight applied to the base obstacle critic; raise to avoid obstacles more aggressively.
       PathAlign.scale: 24.0  # original: 32.0; slightly reduce aggressiveness of path alignment.
       PathAlign.forward_point_distance: 0.2  # original: 0.1; look a bit further ahead on the path.
       GoalAlign.scale: 18.0  # original: 24.0; softer goal alignment weighting.
@@ -161,77 +161,77 @@ controller_server:
       PathDist.scale: 28.0  # original: 32.0; moderate path distance weight.
       GoalDist.scale: 20.0  # original: 24.0; slightly softer attraction to goal.
       RotateToGoal.scale: 28.0  # original: 32.0; slightly less aggressive rotate-in-place behavior.
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
+      RotateToGoal.slowing_factor: 5.0  # original: 5.0; Factor that slows rotation near goal; raise to reduce overshoot.
+      RotateToGoal.lookahead_time: -1.0  # original: -1.0; Time horizon (s) used to preview heading when rotating to goal.
 
-local_costmap:
-  local_costmap:
-    ros__parameters:
+local_costmap:  # original: (none); Local rolling costmap configuration block.
+  local_costmap:  # original: (none); Local rolling costmap configuration block.
+    ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
       update_frequency: 10.0  # original: 5.0; faster updates for more responsive obstacle avoidance.
       publish_frequency: 5.0  # original: 2.0; publish costmap more often for controllers.
-      global_frame: odom
-      robot_base_frame: base_footprint
+      global_frame: odom  # original: odom; Global frame used by this component; usually map for Nav2.
+      robot_base_frame: base_footprint  # original: base_footprint; Robot base frame used for TF lookups; typically base_footprint or base_link.
       use_sim_time: False  # original: True; real robot uses system time.
-      rolling_window: true
+      rolling_window: true  # original: true; Whether the costmap moves with the robot (true) or stays fixed.
       width: 8  # original: 3; larger local window for outdoor navigation.
       height: 8  # original: 3; larger local window for outdoor navigation.
-      resolution: 0.05
+      resolution: 0.05  # original: 0.05; Costmap resolution (m/cell); lower numbers capture finer detail.
       transform_tolerance: 0.3  # original: default; explicit TF tolerance for FASTLIO2 TF timing.
       robot_radius: 0.42  # original: 0.3; matches larger Ranger chassis for safer clearance.
-      plugins: ["voxel_layer", "inflation_layer"]
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
+      plugins: ["voxel_layer", "inflation_layer"]  # original: ["voxel_layer", "inflation_layer"]; Plugin list for this component; order matters for stacking layers.
+      inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
+        plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
+        cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
         inflation_radius: 0.55  # original: 0.3; trimmed to keep corridor clearance while still buffering outdoors.
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: True
+      voxel_layer:  # original: (none); Voxel layer parameters for 3D obstacle handling.
+        plugin: "nav2_costmap_2d::VoxelLayer"  # original: "nav2_costmap_2d::VoxelLayer"; Fully qualified plugin class implementing this capability.
+        enabled: True  # original: True; Enable/disable this block without removing it.
         publish_voxel_map: False  # original: False; enabled for easier debugging of 3D obstacles.
         origin_z: 0.0  # original: 0.05; start voxel grid lower to catch near-ground obstacles.
         z_resolution: 0.1  # original: 0.08; coarser but taller grid to cover 2.4 m corridors without extra CPU.
         z_voxels: 24  # original: 16; extends voxel stack to 2.4 m tall spaces.
         max_obstacle_height: 2.4  # original: 1.8; match typical indoor ceiling while still capturing outdoor obstacles.
         min_obstacle_height: 0.1  # original: not set; drop ground/near-floor returns that were blocking corridors.
-        mark_threshold: 0
+        mark_threshold: 0  # original: 0; Voxel occupancy threshold before marking a cell as occupied.
         observation_sources: mid360_cloud  # original: separate marking/clearing sources; here we use a single Livox source.
-        mid360_cloud:
-          topic: /livox/lidar
+        mid360_cloud:  # original: (none); Livox Mid-360 pointcloud observation source block.
+          topic: /livox/lidar  # original: /livox/lidar; ROS topic supplying data for this plugin.
           max_obstacle_height: 2.4  # original: 1.8; aligned with corridor ceiling height for consistent filtering.
           min_obstacle_height: 0.1  # original: 0.0; ignore ground returns so the corridor floor stays free.
           clearing: True  # original: had separate clearing topic; combined marking+clearing here.
           marking: True  # original: marking-only source; here the same cloud does both.
-          data_type: "PointCloud2"
-          expected_update_rate: 0.0  # Not set in original; 0 disables timeout checks.
-          observation_persistence: 0.0  # Not set in original; obstacles are cleared as soon as they disappear.
+          data_type: "PointCloud2"  # original: "PointCloud2"; Message type expected (LaserScan vs PointCloud2).
+          expected_update_rate: 0.0  # original: 0.0; Expected sensor publish rate (Hz); set 0 to ignore timeouts.; Not set in original; 0 disables timeout checks.
+          observation_persistence: 0.0  # original: 0.0; How long (s) to keep obstacles after last seen.; Not set in original; obstacles are cleared as soon as they disappear.
           raytrace_max_range: 20.0  # original: 3.0; leverage long-range Livox data for raytracing.
           raytrace_min_range: 0.2  # original: 0.0; ignore extremely close/noisy returns.
           obstacle_max_range: 15.0  # original: 2.5; detect obstacles farther away outdoors.
-          obstacle_min_range: 0.0  # Same as original but kept explicit.
-      always_send_full_costmap: True
+          obstacle_min_range: 0.0  # original: 0.0; Minimum range used for obstacle detection.; Same as original but kept explicit.
+      always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_footprint
+global_costmap:  # original: (none); Global planning costmap configuration block.
+  global_costmap:  # original: (none); Global planning costmap configuration block.
+    ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
+      update_frequency: 1.0  # original: 1.0; Update loop frequency for this costmap.
+      publish_frequency: 1.0  # original: 1.0; Publish frequency for this costmap topic.
+      global_frame: map  # original: map; Global frame used by this component; usually map for Nav2.
+      robot_base_frame: base_footprint  # original: base_footprint; Robot base frame used for TF lookups; typically base_footprint or base_link.
       use_sim_time: False  # original: True; global costmap uses real time.
       robot_radius: 0.42  # original: 0.22; larger footprint for Ranger base.
       resolution: 0.05  # original: 0.05; coarser but efficient global map for large outdoor areas.
-      track_unknown_space: true
-      rolling_window: false  # Use static map from Octomap projection
-      width: 100  # Large outdoor area coverage (100m x 100m)
-      height: 100
-      origin_x: -50.0  # Center the costmap around the origin
-      origin_y: -50.0
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
+      track_unknown_space: true  # original: true; Treat unknown cells as occupied so planner skirts unmapped space.
+      rolling_window: false  # original: false; Whether the costmap moves with the robot (true) or stays fixed.; Use static map from Octomap projection
+      width: 100  # original: 100; Total width (m) of the costmap area.; Large outdoor area coverage (100m x 100m)
+      height: 100  # original: 100; Total height (m) of the costmap area.
+      origin_x: -50.0  # original: -50.0; X origin (m) of the global costmap in its frame.; Center the costmap around the origin
+      origin_y: -50.0  # original: -50.0; Y origin (m) of the global costmap in its frame.
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # original: ["static_layer", "obstacle_layer", "inflation_layer"]; Plugin list for this component; order matters for stacking layers.
+      obstacle_layer:  # original: (none); Obstacle layer parameters for the global map.
+        plugin: "nav2_costmap_2d::ObstacleLayer"  # original: "nav2_costmap_2d::ObstacleLayer"; Fully qualified plugin class implementing this capability.
+        enabled: True  # original: True; Enable/disable this block without removing it.
         observation_sources: mid360_cloud  # original: scan_marking/scan_clearing; here we use Livox pointcloud.
-        mid360_cloud:
-          topic: /livox/lidar
+        mid360_cloud:  # original: (none); Livox Mid-360 pointcloud observation source block.
+          topic: /livox/lidar  # original: /livox/lidar; ROS topic supplying data for this plugin.
           max_obstacle_height: 2.4  # original: 2.0; follow 2.4 m indoor ceiling so walls don’t get clipped.
           min_obstacle_height: 0.1  # original: 0.0; filter ground hits to avoid clogging narrow corridors.
           clearing: True  # original: used dedicated clearing LaserScan; combined here.
@@ -240,58 +240,58 @@ global_costmap:
           raytrace_max_range: 25.0  # original: 3.0; long-range raytracing for outdoor navigation.
           raytrace_min_range: 0.2  # original: 0.0; ignore very near returns.
           obstacle_max_range: 20.0  # original: 2.5; see obstacles farther ahead.
-          obstacle_min_range: 0.0  # Same as original but kept explicit.
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
+          obstacle_min_range: 0.0  # original: 0.0; Minimum range used for obstacle detection.; Same as original but kept explicit.
+      static_layer:  # original: (none); Static layer parameters combining map data.
+        plugin: "nav2_costmap_2d::StaticLayer"  # original: "nav2_costmap_2d::StaticLayer"; Fully qualified plugin class implementing this capability.
+        map_subscribe_transient_local: True  # original: True; Use latched QoS to catch latched map updates even when late.
         map_topic: /projected_map  # original: /map; use OctoMap_server2 projected map as Nav2 static layer.
         subscribe_to_updates: True  # original: default false; allow incremental updates from OctoMap.
         first_map_only: False  # original: default true; continue updating static map as it changes.
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
+      inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
+        plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
+        cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
         inflation_radius: 0.2  # original: 0.55; balanced for corridor clearance while keeping outdoor buffer.
-      always_send_full_costmap: True
+      always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
-planner_server:
-  ros__parameters:
-    expected_planner_frequency: 20.0
+planner_server:  # original: (none); Global planner server configuration block.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
+    expected_planner_frequency: 20.0  # original: 20.0; Desired global planner run frequency.
     use_sim_time: False  # original: True; planner runs on real-time hardware clock.
-    planner_plugins: ["GridBased"]
-    GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
-      allow_unknown: true
+    planner_plugins: ["GridBased"]  # original: ["GridBased"]; List of planner plugins to load.
+    GridBased:  # original: (none); Grid-based NavFn planner parameters.
+      plugin: "nav2_navfn_planner/NavfnPlanner"  # original: "nav2_navfn_planner/NavfnPlanner"; Fully qualified plugin class implementing this capability.
+      tolerance: 0.5  # original: 0.5; Planner goal tolerance (m); increase for easier goal acceptance.
+      use_astar: false  # original: false; Toggle between NavFn Dijkstra (false) and A* (true).
+      allow_unknown: true  # original: true; Allow planner to traverse unknown cells if true.
 
-smoother_server:
-  ros__parameters:
+smoother_server:  # original: (none); Path smoother server configuration block.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; smoother uses hardware time.
-    smoother_plugins: ["simple_smoother"]
-    simple_smoother:
-      plugin: "nav2_smoother::SimpleSmoother"
-      tolerance: 1.0e-10
-      max_its: 1000
-      do_refinement: True
+    smoother_plugins: ["simple_smoother"]  # original: ["simple_smoother"]; List of smoother plugins to load.
+    simple_smoother:  # original: (none); Simple smoother parameters.
+      plugin: "nav2_smoother::SimpleSmoother"  # original: "nav2_smoother::SimpleSmoother"; Fully qualified plugin class implementing this capability.
+      tolerance: 1.0e-10  # original: 1.0e-10; Planner goal tolerance (m); increase for easier goal acceptance.
+      max_its: 1000  # original: 1000; Maximum iterations smoothing algorithm can run.
+      do_refinement: True  # original: True; Run additional refinement pass when true.
 
-behavior_server:
-  ros__parameters:
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
-    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
-    spin:
-      plugin: "nav2_behaviors/Spin"
-    backup:
-      plugin: "nav2_behaviors/BackUp"
-    drive_on_heading:
-      plugin: "nav2_behaviors/DriveOnHeading"
-    wait:
-      plugin: "nav2_behaviors/Wait"
-    assisted_teleop:
-      plugin: "nav2_behaviors/AssistedTeleop"
+behavior_server:  # original: (none); Recoveries/behaviors server configuration block.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
+    costmap_topic: local_costmap/costmap_raw  # original: local_costmap/costmap_raw; Topic name supplying local costmap data to behaviors.
+    footprint_topic: local_costmap/published_footprint  # original: local_costmap/published_footprint; Topic name for robot footprint published to behaviors.
+    cycle_frequency: 10.0  # original: 10.0; Frequency for running recovery behaviors.
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]  # original: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]; List of behavior plugins available.
+    spin:  # original: (none); Spin behavior configuration block.
+      plugin: "nav2_behaviors/Spin"  # original: "nav2_behaviors/Spin"; Fully qualified plugin class implementing this capability.
+    backup:  # original: (none); Backup behavior configuration block.
+      plugin: "nav2_behaviors/BackUp"  # original: "nav2_behaviors/BackUp"; Fully qualified plugin class implementing this capability.
+    drive_on_heading:  # original: (none); Drive-on-heading behavior configuration block.
+      plugin: "nav2_behaviors/DriveOnHeading"  # original: "nav2_behaviors/DriveOnHeading"; Fully qualified plugin class implementing this capability.
+    wait:  # original: (none); Wait behavior configuration block.
+      plugin: "nav2_behaviors/Wait"  # original: "nav2_behaviors/Wait"; Fully qualified plugin class implementing this capability.
+    assisted_teleop:  # original: (none); Assisted teleoperation behavior configuration block.
+      plugin: "nav2_behaviors/AssistedTeleop"  # original: "nav2_behaviors/AssistedTeleop"; Fully qualified plugin class implementing this capability.
     global_frame: map  # original: odom; behaviors operate in global map frame to match Nav2.
-    robot_base_frame: base_footprint
+    robot_base_frame: base_footprint  # original: base_footprint; Robot base frame used for TF lookups; typically base_footprint or base_link.
     transform_tolerance: 0.3  # original: 0.1; slightly more tolerant TF timing.
     use_sim_time: False  # original: true; real robot uses system time.
     simulate_ahead_time: 2.5  # original: 2.0; simulate behaviors slightly further ahead.
@@ -299,32 +299,32 @@ behavior_server:
     min_rotational_vel: 0.2  # original: 0.4; allow slower, more precise rotations.
     rotational_acc_lim: 2.5  # original: 3.2; gentler rotational acceleration.
 
-robot_state_publisher:
-  ros__parameters:
+robot_state_publisher:  # original: (none); Robot State Publisher node configuration.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; robot TF on hardware uses wall-clock time.
 
-waypoint_follower:
-  ros__parameters:
+waypoint_follower:  # original: (none); Waypoint follower node configuration block.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; follow waypoints in real time on hardware.
-    loop_rate: 20
-    stop_on_failure: false
-    waypoint_task_executor_plugin: "wait_at_waypoint"
-    wait_at_waypoint:
-      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
-      enabled: True
-      waypoint_pause_duration: 200
+    loop_rate: 20  # original: 20; Loop frequency for executing waypoint tasks.
+    stop_on_failure: false  # original: false; Stop the mission when any waypoint task fails.
+    waypoint_task_executor_plugin: "wait_at_waypoint"  # original: "wait_at_waypoint"; Plugin invoked at each waypoint for extra behavior.
+    wait_at_waypoint:  # original: (none); Parameters for wait-at-waypoint executor.
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"  # original: "nav2_waypoint_follower::WaitAtWaypoint"; Fully qualified plugin class implementing this capability.
+      enabled: True  # original: True; Enable/disable this block without removing it.
+      waypoint_pause_duration: 200  # original: 200; Time (s) to pause at each waypoint when using wait executor.
 
-velocity_smoother:
-  ros__parameters:
+velocity_smoother:  # original: (none); Velocity smoother node configuration block.
+  ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; smoothing runs on real-time hardware clock.
-    smoothing_frequency: 20.0
-    scale_velocities: False
-    feedback: "OPEN_LOOP"
+    smoothing_frequency: 20.0  # original: 20.0; How fast the smoother filters incoming cmd_vel.
+    scale_velocities: False  # original: False; Scale commands proportionally when smoothing rather than clipping.
+    feedback: "OPEN_LOOP"  # original: "OPEN_LOOP"; Feedback mode; OPEN_LOOP ignores odom while CLOSED_LOOP tracks it.
     max_velocity: [0.26, 0.0, 1.0]  # original: [0.26, 0.0, 1.0]; higher linear speed for outdoor Ranger.
     min_velocity: [-0.26, 0.0, -1.0]  # original: [-0.26, 0.0, -1.0]; slightly faster reverse allowed.
     max_accel: [0.8, 0.0, 1.5]  # original: [2.5, 0.0, 3.2]; gentler acceleration for heavier platform.
     max_decel: [-0.8, 0.0, -1.5]  # original: [-2.5, 0.0, -3.2]; smoother deceleration and stopping.
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
-    odom_duration: 0.1
+    odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
     deadband_velocity: [0.02, 0.0, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands that don't move the robot.
-    velocity_timeout: 1.0
+    velocity_timeout: 1.0  # original: 1.0; Timeout (s) after which commands decay to zero if none received.
