@@ -1,6 +1,6 @@
 # Ranger Garden Assistant
 
-![Overall Robot](docs/overall_robot.png)
+<img src="docs/overall_robot.png" alt="Overall Robot" width="600">
 
 A complete ROS 2 Humble stack for the AgileX Ranger Mini 3.0 omnidirectional mobile robot integrated with:
 - **Livox Mid-360 LiDAR** for 360° 3D perception
