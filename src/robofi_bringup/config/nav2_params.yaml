@@ -109,7 +109,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
     odom_topic: "/fastlio2/lio_odom"  # original: /odom; align controller with FASTLIO2 odometry per repo conventions.
     controller_frequency: 20.0  # original: 20.0; Controller loop frequency; raise for quicker response.
     min_x_velocity_threshold: 0.001  # original: 0.001; Below this linear x velocity commands are forced to zero.
-    min_y_velocity_threshold: 0.001  # original: 0.5; tiny threshold fits non-holonomic (no lateral) motion.
+    min_y_velocity_threshold: 0.5  # original: 0.5; tiny threshold fits non-holonomic (no lateral) motion.
     min_theta_velocity_threshold: 0.001  # original: 0.001; Below this angular velocity commands are forced to zero.
     failure_tolerance: 0.3  # original: 0.3; Allowed duration (s) of controller failure before navigation aborts.
     progress_checker_plugin: "progress_checker"  # original: "progress_checker"; Plugin name used to detect robot progress toward goal.
@@ -127,7 +127,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
     FollowPath:  # original: (none); Namespace for the DWB FollowPath controller parameters.
       plugin: "dwb_core::DWBLocalPlanner"  # original: "dwb_core::DWBLocalPlanner"; Fully qualified plugin class implementing this capability.
       debug_trajectory_details: True  # original: True; Enable verbose logging of sampled trajectories for tuning.
-      min_vel_x: 0.05  # original: 0.0; avoid very small commands that don't move the base.
+      min_vel_x: 0.0  # original: 0.0; avoid very small commands that don't move the base.
       min_vel_y: 0.0  # original: 0.0; Minimum allowed lateral velocity; keep zero for diff-drive.
       max_vel_x: 0.26  # original: 0.26; higher max speed for outdoor navigation.
       max_vel_y: 0.0  # original: 0.0; Maximum lateral velocity; >0 only for holonomic bases.
@@ -141,26 +141,26 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       decel_lim_x: -0.6  # original: -2.5; smoother stopping.
       decel_lim_y: 0.0  # original: 0.0; Maximum allowed lateral deceleration.
       decel_lim_theta: -1.5  # original: -3.2; smoother rotational braking.
-      vx_samples: 16  # original: 20; slightly fewer samples to save CPU.
-      vy_samples: 1  # original: 5; diff-drive robot so no lateral motion sampling.
+      vx_samples: 20  # original: 20; slightly fewer samples to save CPU.
+      vy_samples: 5  # original: 5; diff-drive robot so no lateral motion sampling.
       vtheta_samples: 20  # original: 20; Number of angular velocity samples DWB evaluates each cycle.
-      sim_time: 2.0  # original: 1.7; longer lookahead to suit higher speeds.
+      sim_time: 1.7  # original: 1.7; longer lookahead to suit higher speeds.
       linear_granularity: 0.05  # original: 0.05; Step distance for simulating trajectories; smaller captures detail.
       angular_granularity: 0.025  # original: 0.025; Angular step for trajectory simulation; smaller resolves slow turns.
       transform_tolerance: 0.2  # original: 0.2; Allowed TF extrapolation window; increase if transforms arrive late.
-      xy_goal_tolerance: 0.15  # original: 0.25; tight stop tolerance matching goal checker.
-      trans_stopped_velocity: 0.05  # original: 0.25; consider robot stopped at lower speed.
+      xy_goal_tolerance: 0.25  # original: 0.25; tight stop tolerance matching goal checker.
+      trans_stopped_velocity: 0.25  # original: 0.25; consider robot stopped at lower speed.
       short_circuit_trajectory_evaluation: True  # original: True; Stop evaluating once a good trajectory is found to save CPU.
       stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # original: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]; List of DWB critics that score each trajectory.
       BaseObstacle.scale: 0.02  # original: 0.02; Weight applied to the base obstacle critic; raise to avoid obstacles more aggressively.
-      PathAlign.scale: 24.0  # original: 32.0; slightly reduce aggressiveness of path alignment.
-      PathAlign.forward_point_distance: 0.2  # original: 0.1; look a bit further ahead on the path.
-      GoalAlign.scale: 18.0  # original: 24.0; softer goal alignment weighting.
-      GoalAlign.forward_point_distance: 0.2  # original: 0.1; smoother alignment with further lookahead.
-      PathDist.scale: 28.0  # original: 32.0; moderate path distance weight.
-      GoalDist.scale: 20.0  # original: 24.0; slightly softer attraction to goal.
-      RotateToGoal.scale: 28.0  # original: 32.0; slightly less aggressive rotate-in-place behavior.
+      PathAlign.scale: 32.0  # original: 32.0; slightly reduce aggressiveness of path alignment.
+      PathAlign.forward_point_distance: 0.1  # original: 0.1; look a bit further ahead on the path.
+      GoalAlign.scale: 24.0  # original: 24.0; softer goal alignment weighting.
+      GoalAlign.forward_point_distance: 0.1  # original: 0.1; smoother alignment with further lookahead.
+      PathDist.scale: 32.0  # original: 32.0; moderate path distance weight.
+      GoalDist.scale: 24.0  # original: 24.0; slightly softer attraction to goal.
+      RotateToGoal.scale: 32.0  # original: 32.0; slightly less aggressive rotate-in-place behavior.
       RotateToGoal.slowing_factor: 5.0  # original: 5.0; Factor that slows rotation near goal; raise to reduce overshoot.
       RotateToGoal.lookahead_time: -1.0  # original: -1.0; Time horizon (s) used to preview heading when rotating to goal.
 
