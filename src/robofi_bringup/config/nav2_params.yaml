@@ -123,7 +123,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
       plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
       xy_goal_tolerance: 0.25  # original: 0.25; stricter position tolerance for precise docking/row alignment.
-      yaw_goal_tolerance: 0.25  # original: 0.25; slightly tighter heading alignment.
+      yaw_goal_tolerance: 0.4  # original: 0.25; slightly tighter heading alignment.
     FollowPath:  # original: (none); Namespace for the DWB FollowPath controller parameters.
       plugin: "dwb_core::DWBLocalPlanner"  # original: "dwb_core::DWBLocalPlanner"; Fully qualified plugin class implementing this capability.
       debug_trajectory_details: True  # original: True; Enable verbose logging of sampled trajectories for tuning.
