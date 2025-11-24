@@ -30,7 +30,7 @@ octomap_server:
     # Size of each voxel in meters.
     # Lower (e.g. 0.1)  => sharper obstacles, higher CPU/memory.
     # Higher (e.g. 0.2) => smoother map, faster, but thin obstacles may disappear.
-    resolution: 0.2
+    resolution: 0.1
 
     # VISUALIZATION
     # Color occupied voxels by height (purely visual; does not affect Nav2).
