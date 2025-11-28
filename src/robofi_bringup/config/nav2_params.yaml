@@ -232,17 +232,17 @@ global_costmap:  # original: (none); Global planning costmap configuration block
       height: 100  # original: 100; Total height (m) of the costmap area.
       origin_x: -50.0  # original: -50.0; X origin (m) of the global costmap in its frame.; Center the costmap around the origin
       origin_y: -50.0  # original: -50.0; Y origin (m) of the global costmap in its frame.
-      plugins: ["static_layer", "inflation_layer"]  # Use static map only for global planning.
-      static_layer:  # original: (none); Static layer parameters combining map data.
-        plugin: "nav2_costmap_2d::StaticLayer"  # original: "nav2_costmap_2d::StaticLayer"; Fully qualified plugin class implementing this capability.
-        map_subscribe_transient_local: True  # original: True; Use latched QoS to catch latched map updates even when late.
-        map_topic: /projected_map  # original: /map; use OctoMap_server2 projected map as Nav2 static layer.
-        subscribe_to_updates: True  # original: default false; allow incremental updates from OctoMap.
-        first_map_only: False  # original: default true; continue updating static map as it changes.
-      inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
-        plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
-        cost_scaling_factor: 3.0  # original: 3.0; INCREASED for smoother potential field across map (Nav2 tuning guide).
-        inflation_radius: 0.2  # original: 0.2; INCREASED to create gentle gradient for better planning.
+      plugins: ["static_layer", "inflation_layer"]  # Global costmap uses only static map + inflation (no real-time sensors).
+      static_layer:  # Static map layer: provides pre-built environment map for long-range path planning.
+        plugin: "nav2_costmap_2d::StaticLayer"  # Standard static map plugin for Nav2.
+        map_subscribe_transient_local: True  # Use transient_local QoS to receive latched map even after startup.
+        map_topic: /projected_map  # Subscribe to Octomap Server's 2D projection (not /map); continuously updated 3D → 2D map.
+        subscribe_to_updates: True  # Allow incremental map updates from Octomap Server during navigation.
+        first_map_only: False  # Accept map updates continuously (not just first map); allows map refinement during operation.
+      inflation_layer:  # Inflation layer: creates safety buffer around obstacles for path planning.
+        plugin: "nav2_costmap_2d::InflationLayer"  # Standard inflation plugin for Nav2.
+        cost_scaling_factor: 3.0  # Cost decay rate (higher = smoother gradient); creates gentle potential field for planning.
+        inflation_radius: 0.2  # Inflation radius (20cm); conservative for global planning, allows tight corridors.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 planner_server:  # original: (none); Global planner server configuration block.
