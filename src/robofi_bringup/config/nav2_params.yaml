@@ -109,7 +109,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
     odom_topic: "/fastlio2/lio_odom"  # original: /odom; align controller with FASTLIO2 odometry per repo conventions.
     controller_frequency: 20.0  # original: 20.0; Controller loop frequency; raise for quicker response.
     min_x_velocity_threshold: 0.001  # original: 0.001; Below this linear x velocity commands are forced to zero.
-    min_y_velocity_threshold: 0.5  # original: 0.5; tiny threshold fits non-holonomic (no lateral) motion.
+    min_y_velocity_threshold: 0.001  # original: 0.5; threshold for omnidirectional lateral motion detection.
     min_theta_velocity_threshold: 0.001  # original: 0.001; Below this angular velocity commands are forced to zero.
     failure_tolerance: 0.3  # original: 0.3; Allowed duration (s) of controller failure before navigation aborts.
     progress_checker_plugin: "progress_checker"  # original: "progress_checker"; Plugin name used to detect robot progress toward goal.
@@ -128,21 +128,21 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       plugin: "dwb_core::DWBLocalPlanner"  # original: "dwb_core::DWBLocalPlanner"; Fully qualified plugin class implementing this capability.
       debug_trajectory_details: True  # original: True; Enable verbose logging of sampled trajectories for tuning.
       min_vel_x: 0.0  # original: 0.0; avoid very small commands that don't move the base.
-      min_vel_y: 0.0  # original: 0.0; Minimum allowed lateral velocity; keep zero for diff-drive.
+      min_vel_y: 0.0  # original: 0.0; Minimum allowed lateral velocity for omnidirectional motion.
       max_vel_x: 0.26  # original: 0.26; higher max speed for outdoor navigation.
-      max_vel_y: 0.0  # original: 0.0; Maximum lateral velocity; >0 only for holonomic bases.
+      max_vel_y: 0.26  # original: 0.0; ENABLED omnidirectional lateral velocity.
       max_vel_theta: 1.0  # original: 1.0; slightly faster rotation acceptable for this platform.
       min_speed_xy: 0.05  # original: 0.0; consistent with non-zero min_vel_x.
       max_speed_xy: 0.26  # original: 0.26; match higher linear speed capability.
       min_speed_theta: 0.0  # original: 0.0; Minimum angular speed considered motion; lower to detect slow rotation.
       acc_lim_x: 0.6  # original: 2.5; gentler acceleration for heavier outdoor robot.
-      acc_lim_y: 0.0  # original: 0.0; Maximum allowed lateral acceleration.
+      acc_lim_y: 0.6  # original: 0.0; ENABLED omnidirectional lateral acceleration.
       acc_lim_theta: 1.5  # original: 3.2; reduce rotational jerk.
       decel_lim_x: -0.6  # original: -2.5; smoother stopping.
-      decel_lim_y: 0.0  # original: 0.0; Maximum allowed lateral deceleration.
+      decel_lim_y: -0.6  # original: 0.0; ENABLED omnidirectional lateral deceleration.
       decel_lim_theta: -1.5  # original: -3.2; smoother rotational braking.
       vx_samples: 20  # original: 20; slightly fewer samples to save CPU.
-      vy_samples: 5  # original: 5; diff-drive robot so no lateral motion sampling.
+      vy_samples: 20  # original: 5; INCREASED for omnidirectional lateral motion sampling.
       vtheta_samples: 20  # original: 20; Number of angular velocity samples DWB evaluates each cycle.
       sim_time: 1.7  # original: 1.7; longer lookahead to suit higher speeds.
       linear_granularity: 0.05  # original: 0.05; Step distance for simulating trajectories; smaller captures detail.
@@ -178,35 +178,42 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
       resolution: 0.05  # original: 0.05; Costmap resolution (m/cell); lower numbers capture finer detail.
       transform_tolerance: 0.3  # original: default; explicit TF tolerance for FASTLIO2 TF timing.
       robot_radius: 0.42  # original: 0.3; matches larger Ranger chassis for safer clearance.
-      plugins: ["voxel_layer", "inflation_layer"]  # original: ["voxel_layer", "inflation_layer"]; Plugin list for this component; order matters for stacking layers.
+      plugins: ["stvl_layer", "inflation_layer"]  # CHANGED to SpatioTemporalVoxelLayer for 3D LiDAR support.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
         plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
         cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
-        inflation_radius: 0.55  # original: 0.3; trimmed to keep corridor clearance while still buffering outdoors.
-      voxel_layer:  # original: (none); Voxel layer parameters for 3D obstacle handling.
-        plugin: "nav2_costmap_2d::VoxelLayer"  # original: "nav2_costmap_2d::VoxelLayer"; Fully qualified plugin class implementing this capability.
+        inflation_radius: 0.7  # original: 0.55; Increased for better safety buffer in dynamic environments.
+      stvl_layer:  # CHANGED from voxel_layer; SpatioTemporalVoxelLayer for Livox Mid-360 3D LiDAR.
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Nav2 tuning guide recommendation for 3D LiDARs.
         enabled: True  # original: True; Enable/disable this block without removing it.
-        publish_voxel_map: False  # original: False; enabled for easier debugging of 3D obstacles.
-        origin_z: 0.0  # original: 0.05; start voxel grid lower to catch near-ground obstacles.
-        z_resolution: 0.1  # original: 0.08; coarser but taller grid to cover 2.4 m corridors without extra CPU.
-        z_voxels: 24  # original: 16; extends voxel stack to 2.4 m tall spaces.
-        max_obstacle_height: 2.4  # original: 1.8; match typical indoor ceiling while still capturing outdoor obstacles.
-        min_obstacle_height: 0.1  # original: not set; drop ground/near-floor returns that were blocking corridors.
-        mark_threshold: 0  # original: 0; Voxel occupancy threshold before marking a cell as occupied.
-        observation_sources: mid360_cloud  # original: separate marking/clearing sources; here we use a single Livox source.
-        mid360_cloud:  # original: (none); Livox Mid-360 pointcloud observation source block.
-          topic: /livox/lidar  # original: /livox/lidar; ROS topic supplying data for this plugin.
-          max_obstacle_height: 2.4  # original: 1.8; aligned with corridor ceiling height for consistent filtering.
-          min_obstacle_height: 0.1  # original: 0.0; ignore ground returns so the corridor floor stays free.
-          clearing: True  # original: had separate clearing topic; combined marking+clearing here.
-          marking: True  # original: marking-only source; here the same cloud does both.
-          data_type: "PointCloud2"  # original: "PointCloud2"; Message type expected (LaserScan vs PointCloud2).
-          expected_update_rate: 0.0  # original: 0.0; Expected sensor publish rate (Hz); set 0 to ignore timeouts.; Not set in original; 0 disables timeout checks.
-          observation_persistence: 0.0  # original: 0.0; How long (s) to keep obstacles after last seen.; Not set in original; obstacles are cleared as soon as they disappear.
-          raytrace_max_range: 20.0  # original: 3.0; leverage long-range Livox data for raytracing.
-          raytrace_min_range: 0.2  # original: 0.0; ignore extremely close/noisy returns.
-          obstacle_max_range: 15.0  # original: 2.5; detect obstacles farther away outdoors.
-          obstacle_min_range: 0.0  # original: 0.0; Minimum range used for obstacle detection.; Same as original but kept explicit.
+        voxel_decay: 2.0  # Seconds before voxel decays (temporal decay for dynamic obstacles like branches).
+        decay_model: 0  # 0=linear decay, 1=exponential, 2=persistent (linear best for gardens).
+        voxel_size: 0.05  # Match costmap resolution for consistency.
+        track_unknown_space: true  # Track unknown space in the voxel grid.
+        observation_persistence: 0.0  # Don't persist observations; use temporal decay instead.
+        max_obstacle_height: 2.4  # original: 2.4; match typical obstacles in garden.
+        min_obstacle_height: 0.1  # original: 0.1; filter ground returns.
+        obstacle_range: 15.0  # original: 15.0; detect obstacles farther away outdoors.
+        origin_z: 0.0  # original: 0.0; start voxel grid at ground level.
+        publish_voxel_map: true  # Enable for visualization and debugging.
+        transform_tolerance: 0.3  # TF tolerance for FASTLIO2 timing.
+        mapping_mode: false  # False for navigation (true only for mapping).
+        map_save_duration: 60.0  # Duration to save map in mapping mode.
+        observation_sources: fastlio2_cloud  # Use FASTLIO2 registered cloud.
+        fastlio2_cloud:  # FASTLIO2 registered point cloud configuration.
+          data_type: PointCloud2  # 3D point cloud from Livox Mid-360.
+          topic: /cloud_registered  # FASTLIO2 registered cloud (world frame).
+          marking: true  # Mark obstacles in costmap.
+          clearing: true  # Clear space with raycasting.
+          obstacle_range: 15.0  # Max range for obstacle detection.
+          min_obstacle_height: 0.1  # Ignore ground returns.
+          max_obstacle_height: 2.4  # Capture obstacles up to 2.4m height.
+          expected_update_rate: 0.0  # 0 disables timeout checks.
+          observation_persistence: 0.0  # Use temporal decay instead of persistence.
+          inf_is_valid: false  # Infinite range readings are invalid.
+          clear_after_reading: true  # Clear observation buffer after reading.
+          voxel_filter: true  # Enable voxel filtering for sparse 3D LiDAR data.
+          enabled: true  # Enable this observation source.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 global_costmap:  # original: (none); Global planning costmap configuration block.
@@ -225,22 +232,38 @@ global_costmap:  # original: (none); Global planning costmap configuration block
       height: 100  # original: 100; Total height (m) of the costmap area.
       origin_x: -50.0  # original: -50.0; X origin (m) of the global costmap in its frame.; Center the costmap around the origin
       origin_y: -50.0  # original: -50.0; Y origin (m) of the global costmap in its frame.
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # original: ["static_layer", "obstacle_layer", "inflation_layer"]; Plugin list for this component; order matters for stacking layers.
-      obstacle_layer:  # original: (none); Obstacle layer parameters for the global map.
-        plugin: "nav2_costmap_2d::ObstacleLayer"  # original: "nav2_costmap_2d::ObstacleLayer"; Fully qualified plugin class implementing this capability.
+      plugins: ["static_layer", "stvl_layer", "inflation_layer"]  # CHANGED to use STVL for dynamic obstacles.
+      stvl_layer:  # CHANGED from obstacle_layer; SpatioTemporalVoxelLayer for global dynamic obstacles.
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Consistent with local costmap.
         enabled: True  # original: True; Enable/disable this block without removing it.
-        observation_sources: mid360_cloud  # original: scan_marking/scan_clearing; here we use Livox pointcloud.
-        mid360_cloud:  # original: (none); Livox Mid-360 pointcloud observation source block.
-          topic: /livox/lidar  # original: /livox/lidar; ROS topic supplying data for this plugin.
-          max_obstacle_height: 2.4  # original: 2.0; follow 2.4 m indoor ceiling so walls don’t get clipped.
-          min_obstacle_height: 0.1  # original: 0.0; filter ground hits to avoid clogging narrow corridors.
-          clearing: True  # original: used dedicated clearing LaserScan; combined here.
-          marking: True  # original: marking LaserScan; combined here.
-          data_type: "PointCloud2"  # original: LaserScan; global obstacles come from 3D Livox cloud.
-          raytrace_max_range: 25.0  # original: 3.0; long-range raytracing for outdoor navigation.
-          raytrace_min_range: 0.2  # original: 0.0; ignore very near returns.
-          obstacle_max_range: 20.0  # original: 2.5; see obstacles farther ahead.
-          obstacle_min_range: 0.0  # original: 0.0; Minimum range used for obstacle detection.; Same as original but kept explicit.
+        voxel_decay: 5.0  # Longer decay for global costmap (5s vs 2s for local).
+        decay_model: 0  # 0=linear decay, 1=exponential, 2=persistent.
+        voxel_size: 0.05  # Match costmap resolution.
+        track_unknown_space: true  # Track unknown space in the voxel grid.
+        observation_persistence: 0.0  # Use temporal decay instead.
+        max_obstacle_height: 2.4  # original: 2.4; match obstacles in garden.
+        min_obstacle_height: 0.1  # original: 0.1; filter ground returns.
+        obstacle_range: 20.0  # original: 20.0; detect obstacles farther ahead.
+        origin_z: 0.0  # Start voxel grid at ground level.
+        publish_voxel_map: false  # Disable for global (less frequent updates).
+        transform_tolerance: 0.3  # TF tolerance for FASTLIO2.
+        mapping_mode: false  # False for navigation.
+        map_save_duration: 60.0  # Duration to save map.
+        observation_sources: fastlio2_cloud  # Use FASTLIO2 registered cloud.
+        fastlio2_cloud:  # FASTLIO2 registered point cloud configuration.
+          data_type: PointCloud2  # 3D point cloud from Livox Mid-360.
+          topic: /cloud_registered  # FASTLIO2 registered cloud (world frame).
+          marking: true  # Mark obstacles in costmap.
+          clearing: true  # Clear space with raycasting.
+          obstacle_range: 20.0  # Max range for obstacle detection.
+          min_obstacle_height: 0.1  # Ignore ground returns.
+          max_obstacle_height: 2.4  # Capture obstacles up to 2.4m height.
+          expected_update_rate: 0.0  # 0 disables timeout checks.
+          observation_persistence: 0.0  # Use temporal decay instead.
+          inf_is_valid: false  # Infinite range readings are invalid.
+          clear_after_reading: true  # Clear observation buffer after reading.
+          voxel_filter: true  # Enable voxel filtering for sparse 3D LiDAR.
+          enabled: true  # Enable this observation source.
       static_layer:  # original: (none); Static layer parameters combining map data.
         plugin: "nav2_costmap_2d::StaticLayer"  # original: "nav2_costmap_2d::StaticLayer"; Fully qualified plugin class implementing this capability.
         map_subscribe_transient_local: True  # original: True; Use latched QoS to catch latched map updates even when late.
@@ -249,8 +272,8 @@ global_costmap:  # original: (none); Global planning costmap configuration block
         first_map_only: False  # original: default true; continue updating static map as it changes.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
         plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
-        cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
-        inflation_radius: 0.2  # original: 0.55; balanced for corridor clearance while keeping outdoor buffer.
+        cost_scaling_factor: 5.0  # original: 3.0; INCREASED for smoother potential field across map (Nav2 tuning guide).
+        inflation_radius: 1.0  # original: 0.2; INCREASED to create gentle gradient for better planning.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 planner_server:  # original: (none); Global planner server configuration block.
@@ -258,11 +281,28 @@ planner_server:  # original: (none); Global planner server configuration block.
     expected_planner_frequency: 20.0  # original: 20.0; Desired global planner run frequency.
     use_sim_time: False  # original: True; planner runs on real-time hardware clock.
     planner_plugins: ["GridBased"]  # original: ["GridBased"]; List of planner plugins to load.
-    GridBased:  # original: (none); Grid-based NavFn planner parameters.
-      plugin: "nav2_navfn_planner/NavfnPlanner"  # original: "nav2_navfn_planner/NavfnPlanner"; Fully qualified plugin class implementing this capability.
-      tolerance: 0.5  # original: 0.5; Planner goal tolerance (m); increase for easier goal acceptance.
-      use_astar: false  # original: false; Toggle between NavFn Dijkstra (false) and A* (true).
+    GridBased:  # original: (none); Smac Planner 2D for omnidirectional robot.
+      plugin: "nav2_smac_planner/SmacPlanner2D"  # CHANGED from NavfnPlanner to Smac2D for better cost-awareness.
+      tolerance: 0.25  # original: 0.5; Tighter tolerance for precise navigation.
+      downsample_costmap: false  # Use full resolution costmap for accurate planning.
+      downsampling_factor: 1  # No downsampling when downsample_costmap is false.
       allow_unknown: true  # original: true; Allow planner to traverse unknown cells if true.
+      max_iterations: 1000000  # Maximum search iterations before giving up.
+      max_on_approach_iterations: 1000  # Max iterations when close to goal.
+      max_planning_time: 5.0  # Maximum planning time in seconds (generous for outdoor).
+      motion_model_for_search: "MOORE"  # 8-connected grid for omnidirectional motion (vs 4-connected).
+      angle_quantization_bins: 72  # Number of angle bins for smooth orientation (72 = 5° resolution).
+      analytic_expansion_ratio: 3.5  # When to use analytic expansion vs search.
+      analytic_expansion_max_length: 3.0  # Max length for analytic expansion.
+      minimum_turning_radius: 0.20  # Tight turns allowed for omnidirectional base.
+      reverse_penalty: 2.0  # Penalty for reverse motion.
+      change_penalty: 0.0  # No penalty for direction change (omni can move any direction).
+      non_straight_penalty: 1.2  # Small penalty for non-straight paths.
+      cost_penalty: 2.0  # Penalty weight for high-cost areas (respects inflation).
+      retrospective_penalty: 0.015  # Penalty for retrospective search.
+      lookup_table_size: 20.0  # Size of lookup table for heuristics.
+      cache_obstacle_heuristic: false  # Don't cache for dynamic garden environment.
+      smooth_path: true  # Enable path smoothing for better trajectories.
 
 smoother_server:  # original: (none); Path smoother server configuration block.
   ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
@@ -320,11 +360,11 @@ velocity_smoother:  # original: (none); Velocity smoother node configuration blo
     smoothing_frequency: 20.0  # original: 20.0; How fast the smoother filters incoming cmd_vel.
     scale_velocities: False  # original: False; Scale commands proportionally when smoothing rather than clipping.
     feedback: "OPEN_LOOP"  # original: "OPEN_LOOP"; Feedback mode; OPEN_LOOP ignores odom while CLOSED_LOOP tracks it.
-    max_velocity: [0.26, 0.0, 1.0]  # original: [0.26, 0.0, 1.0]; higher linear speed for outdoor Ranger.
-    min_velocity: [-0.26, 0.0, -1.0]  # original: [-0.26, 0.0, -1.0]; slightly faster reverse allowed.
-    max_accel: [0.8, 0.0, 1.5]  # original: [2.5, 0.0, 3.2]; gentler acceleration for heavier platform.
-    max_decel: [-0.8, 0.0, -1.5]  # original: [-2.5, 0.0, -3.2]; smoother deceleration and stopping.
+    max_velocity: [0.26, 0.26, 1.0]  # original: [0.26, 0.0, 1.0]; ENABLED omnidirectional Y velocity.
+    min_velocity: [-0.26, -0.26, -1.0]  # original: [-0.26, 0.0, -1.0]; ENABLED reverse lateral motion.
+    max_accel: [0.8, 0.8, 1.5]  # original: [2.5, 0.0, 3.2]; ENABLED omnidirectional lateral acceleration.
+    max_decel: [-0.8, -0.8, -1.5]  # original: [-2.5, 0.0, -3.2]; ENABLED omnidirectional lateral deceleration.
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
-    deadband_velocity: [0.02, 0.0, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands that don't move the robot.
+    deadband_velocity: [0.02, 0.02, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands including lateral.
     velocity_timeout: 1.0  # original: 1.0; Timeout (s) after which commands decay to zero if none received.
