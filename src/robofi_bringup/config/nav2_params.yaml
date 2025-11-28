@@ -123,7 +123,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
       plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
       xy_goal_tolerance: 0.5  # INCREASED from 0.25m to 0.5m for more relaxed goal positioning
-      yaw_goal_tolerance: 0.8  # INCREASED from 0.4 rad (~23°) to 0.8 rad (~46°) for more relaxed orientation
+      yaw_goal_tolerance: 0.4  # INCREASED from 0.4 rad (~23°) to 0.8 rad (~46°) for more relaxed orientation
     FollowPath:  # MPPI Controller: Model Predictive Path Integral controller for omnidirectional robot
       plugin: "nav2_mppi_controller::MPPIController"  # CHANGED from DWB to MPPI for better dynamic obstacle handling
       time_steps: 75  # Number of time steps to predict forward (75 steps * 0.05s = 3.75s lookahead) - INCREASED for smoother motion
@@ -176,10 +176,10 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       PathAlignCritic:  # Aligns velocity vector with path direction
         enabled: true
         cost_power: 1
-        cost_weight: 10.0  # Weight for path alignment; REDUCED to allow smoother deviation when avoiding obstacles
+        cost_weight: 5.0  # Weight for path alignment; REDUCED to allow smoother deviation when avoiding obstacles
         max_path_occupancy_ratio: 0.05  # Fraction of path in collision before switching behavior
         trajectory_point_step: 4  # Check every 4th point for efficiency
-        threshold_to_consider: 0.5  # Distance (m) to goal before reducing path alignment
+        threshold_to_consider: 1.0  # Distance (m) to goal before reducing path alignment
         offset_from_furthest: 20  # Look-ahead offset (indices) on path for alignment reference
         use_path_orientations: false  # Don't use path orientations (for holonomic planners)
       PathFollowCritic:  # Keeps robot close to path
@@ -194,7 +194,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
         cost_weight: 2.0  # Weight for path angle alignment; lower for omnidirectional flexibility
         offset_from_furthest: 4  # Look-ahead offset for angle reference
         threshold_to_consider: 0.5  # Distance to goal before disabling
-        max_angle_to_furthest: 1.0  # Maximum angle (rad) deviation before high penalty
+        max_angle_to_furthest: 1.57  # Maximum angle (rad) deviation before high penalty
         mode: 0  # 0 = forward prefer, 1 = consider path orientation, 2 = bidirectional
 
 local_costmap:  # original: (none); Local rolling costmap configuration block.
