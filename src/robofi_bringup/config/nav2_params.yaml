@@ -183,37 +183,37 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
         plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
         cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
         inflation_radius: 0.55  # original: 0.55; Increased for better safety buffer in dynamic environments.
-      stvl_layer:  # CHANGED from voxel_layer; SpatioTemporalVoxelLayer for Livox Mid-360 3D LiDAR.
-        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Nav2 tuning guide recommendation for 3D LiDARs.
-        enabled: True  # original: True; Enable/disable this block without removing it.
-        voxel_decay: 2.0  # Seconds before voxel decays (temporal decay for dynamic obstacles like branches).
-        decay_model: 0  # 0=linear decay, 1=exponential, 2=persistent (linear best for gardens).
-        voxel_size: 0.05  # Match costmap resolution for consistency.
-        track_unknown_space: true  # Track unknown space in the voxel grid.
-        observation_persistence: 0.0  # Don't persist observations; use temporal decay instead.
-        max_obstacle_height: 2.4  # original: 2.4; match typical obstacles in garden.
-        min_obstacle_height: 0.1  # original: 0.1; filter ground returns.
-        obstacle_range: 15.0  # original: 15.0; detect obstacles farther away outdoors.
-        origin_z: 0.0  # original: 0.0; start voxel grid at ground level.
-        publish_voxel_map: true  # Enable for visualization and debugging.
-        transform_tolerance: 0.3  # TF tolerance for FASTLIO2 timing.
-        mapping_mode: false  # False for navigation (true only for mapping).
-        map_save_duration: 60.0  # Duration to save map in mapping mode.
-        observation_sources: fastlio2_cloud  # Use FASTLIO2 registered cloud.
-        fastlio2_cloud:  # FASTLIO2 registered point cloud configuration.
-          data_type: PointCloud2  # 3D point cloud from Livox Mid-360.
-          topic: /fastlio2/world_cloud  # FASTLIO2 world cloud (odom frame).
-          marking: true  # Mark obstacles in costmap.
-          clearing: true  # Clear space with raycasting.
-          obstacle_range: 15.0  # Max range for obstacle detection.
-          min_obstacle_height: 0.1  # Ignore ground returns.
-          max_obstacle_height: 2.4  # Capture obstacles up to 2.4m height.
-          expected_update_rate: 0.0  # 0 disables timeout checks.
-          observation_persistence: 0.0  # Use temporal decay instead of persistence.
-          inf_is_valid: false  # Infinite range readings are invalid.
-          clear_after_reading: true  # Clear observation buffer after reading.
-          voxel_filter: true  # Enable voxel filtering for sparse 3D LiDAR data.
-          enabled: true  # Enable this observation source.
+      stvl_layer:  # SpatioTemporalVoxelLayer for 3D obstacle detection from Livox Mid-360 LiDAR.
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Recommended for 3D LiDARs (Nav2 tuning guide).
+        enabled: True  # Enable this layer for real-time 3D obstacle detection.
+        voxel_decay: 2.0  # Temporal decay: voxels expire after 2 seconds (good for dynamic obstacles like moving people/branches).
+        decay_model: 0  # Linear decay model (0=linear, 1=exponential, 2=persistent); linear best for outdoor gardens.
+        voxel_size: 0.05  # Voxel resolution (5cm); matches costmap resolution for consistency.
+        track_unknown_space: true  # Track unexplored areas in the voxel grid.
+        observation_persistence: 0.0  # Don't persist observations; rely on temporal decay to remove stale data.
+        max_obstacle_height: 2.4  # Maximum height to consider as obstacle (2.4m); filters tree canopies and high branches.
+        min_obstacle_height: 0.07  # Minimum height in odom frame (7cm); allows detection of small ground obstacles after TF transform.
+        obstacle_range: 15.0  # Maximum detection range (15m); suitable for outdoor navigation.
+        origin_z: -0.7  # Voxel grid origin offset (-0.7m); accounts for LiDAR mount height to capture ground-level obstacles.
+        publish_voxel_map: true  # Publish voxel grid for RViz visualization and debugging.
+        transform_tolerance: 0.3  # TF lookup tolerance (300ms); accommodates FASTLIO2 transform timing.
+        mapping_mode: false  # Navigation mode (not mapping); set to true only when building initial maps.
+        map_save_duration: 60.0  # Map save interval (60s); only used when mapping_mode is true.
+        observation_sources: fastlio2_cloud  # Point cloud source: FASTLIO2 body cloud (current scan, not accumulated history).
+        fastlio2_cloud:  # Configuration for FASTLIO2 body cloud observation source.
+          data_type: PointCloud2  # Standard ROS 2 point cloud message type.
+          topic: /fastlio2/body_cloud  # Topic: current LiDAR scan in fastlio2_body frame (NOT /fastlio2/world_cloud which is accumulated).
+          marking: true  # Mark detected obstacles in the costmap.
+          clearing: true  # Clear space using raycasting (remove obstacles when no longer detected).
+          obstacle_range: 10.0  # Obstacle marking range (10m); focused on immediate surroundings for local avoidance.
+          min_obstacle_height: -0.2  # Minimum height in fastlio2_body frame (-20cm); negative due to 45° LiDAR tilt, detects ground obstacles.
+          max_obstacle_height: 2.0  # Maximum height in fastlio2_body frame (2m); focuses on robot-height obstacles, excludes high overhangs.
+          expected_update_rate: 0.0  # Expected sensor rate (0 = no timeout check); FASTLIO2 publishes at variable rate ~10Hz.
+          observation_persistence: 0.0  # Don't persist observations; use voxel_decay for temporal filtering instead.
+          inf_is_valid: false  # Treat infinite range readings as invalid (common with LiDAR in open areas).
+          clear_after_reading: true  # Clear observation buffer after processing to avoid duplicate insertions.
+          voxel_filter: true  # Enable voxel filtering for sparse 3D LiDAR data (reduces noise from Livox scanning pattern).
+          enabled: true  # Enable this observation source for active obstacle detection.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 global_costmap:  # original: (none); Global planning costmap configuration block.
@@ -232,38 +232,7 @@ global_costmap:  # original: (none); Global planning costmap configuration block
       height: 100  # original: 100; Total height (m) of the costmap area.
       origin_x: -50.0  # original: -50.0; X origin (m) of the global costmap in its frame.; Center the costmap around the origin
       origin_y: -50.0  # original: -50.0; Y origin (m) of the global costmap in its frame.
-      plugins: ["static_layer", "stvl_layer", "inflation_layer"]  # CHANGED to use STVL for dynamic obstacles.
-      stvl_layer:  # CHANGED from obstacle_layer; SpatioTemporalVoxelLayer for global dynamic obstacles.
-        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Consistent with local costmap.
-        enabled: True  # original: True; Enable/disable this block without removing it.
-        voxel_decay: 5.0  # Longer decay for global costmap (5s vs 2s for local).
-        decay_model: 0  # 0=linear decay, 1=exponential, 2=persistent.
-        voxel_size: 0.05  # Match costmap resolution.
-        track_unknown_space: true  # Track unknown space in the voxel grid.
-        observation_persistence: 0.0  # Use temporal decay instead.
-        max_obstacle_height: 2.4  # original: 2.4; match obstacles in garden.
-        min_obstacle_height: 0.1  # original: 0.1; filter ground returns.
-        obstacle_range: 20.0  # original: 20.0; detect obstacles farther ahead.
-        origin_z: 0.0  # Start voxel grid at ground level.
-        publish_voxel_map: false  # Disable for global (less frequent updates).
-        transform_tolerance: 0.3  # TF tolerance for FASTLIO2.
-        mapping_mode: false  # False for navigation.
-        map_save_duration: 60.0  # Duration to save map.
-        observation_sources: fastlio2_cloud  # Use FASTLIO2 registered cloud.
-        fastlio2_cloud:  # FASTLIO2 registered point cloud configuration.
-          data_type: PointCloud2  # 3D point cloud from Livox Mid-360.
-          topic: /fastlio2/world_cloud  # FASTLIO2 world cloud (odom frame).
-          marking: true  # Mark obstacles in costmap.
-          clearing: true  # Clear space with raycasting.
-          obstacle_range: 20.0  # Max range for obstacle detection.
-          min_obstacle_height: 0.1  # Ignore ground returns.
-          max_obstacle_height: 2.4  # Capture obstacles up to 2.4m height.
-          expected_update_rate: 0.0  # 0 disables timeout checks.
-          observation_persistence: 0.0  # Use temporal decay instead.
-          inf_is_valid: false  # Infinite range readings are invalid.
-          clear_after_reading: true  # Clear observation buffer after reading.
-          voxel_filter: true  # Enable voxel filtering for sparse 3D LiDAR.
-          enabled: true  # Enable this observation source.
+      plugins: ["static_layer", "inflation_layer"]  # Use static map only for global planning.
       static_layer:  # original: (none); Static layer parameters combining map data.
         plugin: "nav2_costmap_2d::StaticLayer"  # original: "nav2_costmap_2d::StaticLayer"; Fully qualified plugin class implementing this capability.
         map_subscribe_transient_local: True  # original: True; Use latched QoS to catch latched map updates even when late.
