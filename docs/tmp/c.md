@@ -451,6 +451,9 @@ Edit URDF properties in `ranger_description/urdf/ranger_complete.urdf.xacro`:
 ```
 
 ### Tuning Navigation
+
+**IMPORTANT**: When tuning Nav2 parameters, always consult the official Nav2 Tuning Guide at https://docs.nav2.org/tuning/index.html for best practices and detailed explanations.
+
 Edit parameters in [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bringup/config/nav2_params.yaml):
 
 **Robot Configuration:**
@@ -472,6 +475,8 @@ Edit parameters in [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bring
 - **Odometry source**: Use `/Odometry` from FASTLIO2 for smooth, accurate control
 - **DWB controller weights**: Tune path following behavior for omnidirectional motion
 - **Goal tolerance**: Adjust based on application requirements
+
+**Reference**: For detailed parameter tuning guidance, see https://docs.nav2.org/tuning/index.html
 
 ### Creating Custom Behaviors
 Add behavior tree XML files to `src/robofi_bringup/config/behavior_trees/` and reference in nav2_params.yaml
@@ -582,6 +587,9 @@ Edit parameters in [src/robofi_bringup/config/octomap_server.yaml](src/robofi_br
 - **Publish frequency**: Rate for publishing 2D projected map
 
 ### Integrating FASTLIO2 with Navigation
+
+**IMPORTANT**: When configuring Nav2 integration, refer to the Nav2 documentation at https://docs.nav2.org/getting_started/index.html for setup guidance and https://docs.nav2.org/tuning/index.html for parameter optimization.
+
 The integrated system uses FASTLIO2 odometry directly with Nav2:
 
 **Recommended Setup:**
@@ -809,7 +817,9 @@ pcl_viewer /path/to/map.pcd
 - OctoMap library: https://octomap.github.io/
 
 **Navigation and Control:**
-- Navigation2 docs: https://navigation.ros.org/
+- Navigation2 documentation: https://navigation.ros.org/
+- Nav2 Getting Started: https://docs.nav2.org/getting_started/index.html
+- Nav2 Tuning Guide: https://docs.nav2.org/tuning/index.html
 - Nav2 costmap plugins: https://navigation.ros.org/plugins/index.html
 - MoveIt 2 docs: https://moveit.ros.org/
 

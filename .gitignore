@@ -19,6 +19,7 @@ build_isolated/
 devel_isolated/
 
 # Agent instruction files
+.github/
 /AGENTS.md
 /CLAUDE.md
 
