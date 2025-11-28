@@ -187,7 +187,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
         cost_power: 1
         cost_weight: 5.0  # Weight for staying near path; balance with dynamic obstacle avoidance
         offset_from_furthest: 5  # Look-ahead offset (indices) for path proximity reference
-        threshold_to_consider: 1.4  # Distance (m) to goal before reducing path following
+        threshold_to_consider: 1.0  # Distance (m) to goal before reducing path following
       PathAngleCritic:  # Penalizes deviation from path heading (for non-holonomic behaviors)
         enabled: true
         cost_power: 1
