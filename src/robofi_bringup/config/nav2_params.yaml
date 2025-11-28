@@ -122,11 +122,11 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
     general_goal_checker:  # original: (none); Namespace for the default goal checker parameters.
       stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
       plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
-      xy_goal_tolerance: 0.25  # original: 0.25; stricter position tolerance for precise docking/row alignment.
-      yaw_goal_tolerance: 0.4  # original: 0.25; slightly tighter heading alignment.
+      xy_goal_tolerance: 0.5  # INCREASED from 0.25m to 0.5m for more relaxed goal positioning
+      yaw_goal_tolerance: 0.8  # INCREASED from 0.4 rad (~23°) to 0.8 rad (~46°) for more relaxed orientation
     FollowPath:  # MPPI Controller: Model Predictive Path Integral controller for omnidirectional robot
       plugin: "nav2_mppi_controller::MPPIController"  # CHANGED from DWB to MPPI for better dynamic obstacle handling
-      time_steps: 56  # Number of time steps to predict forward (56 steps * 0.05s = 2.8s lookahead)
+      time_steps: 75  # Number of time steps to predict forward (75 steps * 0.05s = 3.75s lookahead) - INCREASED for smoother motion
       model_dt: 0.05  # Time step for simulation model (50ms); must be >= controller period (1/20Hz = 0.05s)
       batch_size: 2000  # Number of trajectories to sample each cycle; higher = better optimization but more CPU
       vx_std: 0.2  # Standard deviation for forward velocity sampling (m/s); tune for exploration vs exploitation
@@ -153,13 +153,13 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       GoalCritic:  # Attracts robot to goal position
         enabled: true
         cost_power: 1
-        cost_weight: 5.0  # Weight for goal attraction; moderate to balance with path following
-        threshold_to_consider: 1.4  # Distance (m) to goal before applying this critic
+        cost_weight: 3.0  # REDUCED from 5.0 to 3.0 for less aggressive goal approach
+        threshold_to_consider: 2.0  # INCREASED from 1.4m to 2.0m - robot starts slowing down later
       GoalAngleCritic:  # Attracts robot to goal orientation
         enabled: true
         cost_power: 1
-        cost_weight: 3.0  # Weight for goal angle alignment; important for final pose
-        threshold_to_consider: 0.5  # Distance (m) to goal before considering angle alignment
+        cost_weight: 0.5  # REDUCED from 3.0 to 2.0 for more relaxed final orientation
+        threshold_to_consider: 1.0  # INCREASED from 0.5m to 1.0m - starts aligning orientation later
       PreferForwardCritic:  # Penalizes reverse motion to prefer forward driving
         enabled: true
         cost_power: 1
@@ -167,7 +167,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       CostCritic:  # Uses costmap to avoid obstacles
         enabled: true
         cost_power: 1
-        cost_weight: 3.81  # Weight for costmap-based obstacle avoidance; critical for safety
+        cost_weight: 2.5  # Weight for costmap-based obstacle avoidance; REDUCED to prevent overreaction to small obstacles
         critical_cost: 300.0  # Costmap cost above which trajectory is rejected (inscribed radius)
         consider_footprint: true  # Use full robot footprint for collision checking (important!)
         collision_cost: 1000000.0  # Cost assigned to trajectories in collision
@@ -176,7 +176,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       PathAlignCritic:  # Aligns velocity vector with path direction
         enabled: true
         cost_power: 1
-        cost_weight: 14.0  # Weight for path alignment; important for accurate tracking
+        cost_weight: 10.0  # Weight for path alignment; REDUCED to allow smoother deviation when avoiding obstacles
         max_path_occupancy_ratio: 0.05  # Fraction of path in collision before switching behavior
         trajectory_point_step: 4  # Check every 4th point for efficiency
         threshold_to_consider: 0.5  # Distance (m) to goal before reducing path alignment
