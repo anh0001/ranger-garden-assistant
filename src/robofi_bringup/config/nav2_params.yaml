@@ -124,45 +124,78 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
       xy_goal_tolerance: 0.25  # original: 0.25; stricter position tolerance for precise docking/row alignment.
       yaw_goal_tolerance: 0.4  # original: 0.25; slightly tighter heading alignment.
-    FollowPath:  # original: (none); Namespace for the DWB FollowPath controller parameters.
-      plugin: "dwb_core::DWBLocalPlanner"  # original: "dwb_core::DWBLocalPlanner"; Fully qualified plugin class implementing this capability.
-      debug_trajectory_details: True  # original: True; Enable verbose logging of sampled trajectories for tuning.
-      min_vel_x: 0.0  # original: 0.0; avoid very small commands that don't move the base.
-      min_vel_y: 0.0  # original: 0.0; Minimum allowed lateral velocity for omnidirectional motion.
-      max_vel_x: 0.26  # original: 0.26; higher max speed for outdoor navigation.
-      max_vel_y: 0.26  # original: 0.0; ENABLED omnidirectional lateral velocity.
-      max_vel_theta: 1.0  # original: 1.0; slightly faster rotation acceptable for this platform.
-      min_speed_xy: 0.05  # original: 0.0; consistent with non-zero min_vel_x.
-      max_speed_xy: 0.26  # original: 0.26; match higher linear speed capability.
-      min_speed_theta: 0.0  # original: 0.0; Minimum angular speed considered motion; lower to detect slow rotation.
-      acc_lim_x: 0.6  # original: 2.5; gentler acceleration for heavier outdoor robot.
-      acc_lim_y: 0.6  # original: 0.0; ENABLED omnidirectional lateral acceleration.
-      acc_lim_theta: 1.5  # original: 3.2; reduce rotational jerk.
-      decel_lim_x: -0.6  # original: -2.5; smoother stopping.
-      decel_lim_y: -0.6  # original: 0.0; ENABLED omnidirectional lateral deceleration.
-      decel_lim_theta: -1.5  # original: -3.2; smoother rotational braking.
-      vx_samples: 20  # original: 20; slightly fewer samples to save CPU.
-      vy_samples: 20  # original: 5; INCREASED for omnidirectional lateral motion sampling.
-      vtheta_samples: 20  # original: 20; Number of angular velocity samples DWB evaluates each cycle.
-      sim_time: 1.7  # original: 1.7; longer lookahead to suit higher speeds.
-      linear_granularity: 0.05  # original: 0.05; Step distance for simulating trajectories; smaller captures detail.
-      angular_granularity: 0.025  # original: 0.025; Angular step for trajectory simulation; smaller resolves slow turns.
-      transform_tolerance: 0.2  # original: 0.2; Allowed TF extrapolation window; increase if transforms arrive late.
-      xy_goal_tolerance: 0.25  # original: 0.25; tight stop tolerance matching goal checker.
-      trans_stopped_velocity: 0.25  # original: 0.25; consider robot stopped at lower speed.
-      short_circuit_trajectory_evaluation: True  # original: True; Stop evaluating once a good trajectory is found to save CPU.
-      stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # original: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]; List of DWB critics that score each trajectory.
-      BaseObstacle.scale: 0.02  # original: 0.02; Weight applied to the base obstacle critic; raise to avoid obstacles more aggressively.
-      PathAlign.scale: 32.0  # original: 32.0; slightly reduce aggressiveness of path alignment.
-      PathAlign.forward_point_distance: 0.1  # original: 0.1; look a bit further ahead on the path.
-      GoalAlign.scale: 24.0  # original: 24.0; softer goal alignment weighting.
-      GoalAlign.forward_point_distance: 0.1  # original: 0.1; smoother alignment with further lookahead.
-      PathDist.scale: 32.0  # original: 32.0; moderate path distance weight.
-      GoalDist.scale: 24.0  # original: 24.0; slightly softer attraction to goal.
-      RotateToGoal.scale: 32.0  # original: 32.0; slightly less aggressive rotate-in-place behavior.
-      RotateToGoal.slowing_factor: 5.0  # original: 5.0; Factor that slows rotation near goal; raise to reduce overshoot.
-      RotateToGoal.lookahead_time: -1.0  # original: -1.0; Time horizon (s) used to preview heading when rotating to goal.
+    FollowPath:  # MPPI Controller: Model Predictive Path Integral controller for omnidirectional robot
+      plugin: "nav2_mppi_controller::MPPIController"  # CHANGED from DWB to MPPI for better dynamic obstacle handling
+      time_steps: 56  # Number of time steps to predict forward (56 steps * 0.05s = 2.8s lookahead)
+      model_dt: 0.05  # Time step for simulation model (50ms); must be >= controller period (1/20Hz = 0.05s)
+      batch_size: 2000  # Number of trajectories to sample each cycle; higher = better optimization but more CPU
+      vx_std: 0.2  # Standard deviation for forward velocity sampling (m/s); tune for exploration vs exploitation
+      vy_std: 0.2  # Standard deviation for lateral velocity sampling (m/s); ENABLED for omnidirectional motion
+      wx_std: 0.2  # Standard deviation for angular velocity sampling (rad/s)
+      vx_max: 0.26  # Maximum forward velocity (m/s); matches robot capability
+      vx_min: -0.26  # Minimum forward velocity (m/s); allows reverse motion
+      vy_max: 0.26  # Maximum lateral velocity (m/s); ENABLED for omnidirectional strafing
+      vy_min: -0.26  # Minimum lateral velocity (m/s); full omnidirectional capability
+      wz_max: 1.0  # Maximum angular velocity (rad/s); matches platform rotation capability
+      ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
+      ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
+      ay_max: 0.6  # Maximum lateral acceleration (m/s²); ENABLED for omnidirectional dynamics
+      az_max: 1.5  # Maximum angular acceleration (rad/s²); smooth rotation changes
+      iteration_count: 1  # Number of MPPI iterations per control cycle; 1 is typically sufficient
+      prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
+      transform_tolerance: 0.2  # TF tolerance (s); increase if transforms arrive late with FASTLIO2
+      motion_model: "Omni"  # CRITICAL: Motion model for omnidirectional robot (Omni/DiffDrive/Ackermann)
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+      ConstraintCritic:  # Enforces kinematic and safety constraints
+        enabled: true
+        cost_power: 1  # Power order for constraint cost (linear)
+        cost_weight: 4.0  # Weight for constraint violations; high priority for safety
+      GoalCritic:  # Attracts robot to goal position
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0  # Weight for goal attraction; moderate to balance with path following
+        threshold_to_consider: 1.4  # Distance (m) to goal before applying this critic
+      GoalAngleCritic:  # Attracts robot to goal orientation
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0  # Weight for goal angle alignment; important for final pose
+        threshold_to_consider: 0.5  # Distance (m) to goal before considering angle alignment
+      PreferForwardCritic:  # Penalizes reverse motion to prefer forward driving
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0  # Weight to discourage backward motion; adjust if reverse needed
+      CostCritic:  # Uses costmap to avoid obstacles
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81  # Weight for costmap-based obstacle avoidance; critical for safety
+        critical_cost: 300.0  # Costmap cost above which trajectory is rejected (inscribed radius)
+        consider_footprint: true  # Use full robot footprint for collision checking (important!)
+        collision_cost: 1000000.0  # Cost assigned to trajectories in collision
+        near_goal_distance: 0.5  # Distance (m) to goal where costmap influence is reduced
+        trajectory_point_step: 2  # Check every Nth point on trajectory for efficiency (1=all points)
+      PathAlignCritic:  # Aligns velocity vector with path direction
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0  # Weight for path alignment; important for accurate tracking
+        max_path_occupancy_ratio: 0.05  # Fraction of path in collision before switching behavior
+        trajectory_point_step: 4  # Check every 4th point for efficiency
+        threshold_to_consider: 0.5  # Distance (m) to goal before reducing path alignment
+        offset_from_furthest: 20  # Look-ahead offset (indices) on path for alignment reference
+        use_path_orientations: false  # Don't use path orientations (for holonomic planners)
+      PathFollowCritic:  # Keeps robot close to path
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0  # Weight for staying near path; balance with dynamic obstacle avoidance
+        offset_from_furthest: 5  # Look-ahead offset (indices) for path proximity reference
+        threshold_to_consider: 1.4  # Distance (m) to goal before reducing path following
+      PathAngleCritic:  # Penalizes deviation from path heading (for non-holonomic behaviors)
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0  # Weight for path angle alignment; lower for omnidirectional flexibility
+        offset_from_furthest: 4  # Look-ahead offset for angle reference
+        threshold_to_consider: 0.5  # Distance to goal before disabling
+        max_angle_to_furthest: 1.0  # Maximum angle (rad) deviation before high penalty
+        mode: 0  # 0 = forward prefer, 1 = consider path orientation, 2 = bidirectional
 
 local_costmap:  # original: (none); Local rolling costmap configuration block.
   local_costmap:  # original: (none); Local rolling costmap configuration block.
@@ -177,7 +210,7 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
       height: 8  # original: 3; larger local window for outdoor navigation.
       resolution: 0.05  # original: 0.05; Costmap resolution (m/cell); lower numbers capture finer detail.
       transform_tolerance: 0.3  # original: default; explicit TF tolerance for FASTLIO2 TF timing.
-      robot_radius: 0.42  # original: 0.3; matches larger Ranger chassis for safer clearance.
+      footprint: "[[0.35, 0.25], [0.35, -0.25], [-0.35, -0.25], [-0.35, 0.25]]"  # Rectangular footprint for Ranger Mini 3.0 (approx 0.7m x 0.5m)
       plugins: ["stvl_layer", "inflation_layer"]  # CHANGED to SpatioTemporalVoxelLayer for 3D LiDAR support.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
         plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
@@ -224,7 +257,7 @@ global_costmap:  # original: (none); Global planning costmap configuration block
       global_frame: map  # original: map; Global frame used by this component; usually map for Nav2.
       robot_base_frame: base_footprint  # original: base_footprint; Robot base frame used for TF lookups; typically base_footprint or base_link.
       use_sim_time: False  # original: True; global costmap uses real time.
-      robot_radius: 0.42  # original: 0.22; larger footprint for Ranger base.
+      footprint: "[[0.35, 0.25], [0.35, -0.25], [-0.35, -0.25], [-0.35, 0.25]]"  # Rectangular footprint for Ranger Mini 3.0 (approx 0.7m x 0.5m)
       resolution: 0.05  # original: 0.05; coarser but efficient global map for large outdoor areas.
       track_unknown_space: true  # original: true; Treat unknown cells as occupied so planner skirts unmapped space.
       rolling_window: false  # original: false; Whether the costmap moves with the robot (true) or stays fixed.; Use static map from Octomap projection
