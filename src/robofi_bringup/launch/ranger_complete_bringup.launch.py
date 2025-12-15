@@ -9,12 +9,17 @@ Complete system bringup for Ranger Mini 3.0 with:
 - Robot description and TF
 """
 
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command, FindExecutable
+from launch.substitutions import (
+    Command,
+    FindExecutable,
+    LaunchConfiguration,
+    PathJoinSubstitution,
+    TextSubstitution,
+)
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
@@ -94,6 +99,92 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_camera",
+            default_value="true",
+            description="Whether to launch the Tier IV C2-176 camera driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_device",
+            default_value="/dev/tieriv_c2_video0",
+            description="V4L2 device path for the Tier IV camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_namespace",
+            default_value="/camera",
+            description="Namespace applied to the camera topics.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_frame_id",
+            default_value="camera_optical_frame",
+            description="Frame ID reported by the camera driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_width",
+            default_value="2880",
+            description="Image width for the Tier IV camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_height",
+            default_value="1860",
+            description="Image height for the Tier IV camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_pixel_format",
+            default_value="UYVY",
+            description="Pixel format configured in the camera driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_output_encoding",
+            default_value="bgr8",
+            description="Desired ROS image encoding for the camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_name",
+            default_value="tier4_c2_176",
+            description="Camera name for calibration and CameraInfo.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_calibration_file",
+            default_value=PathJoinSubstitution(
+                [
+                    FindPackageShare("robofi_bringup"),
+                    "config",
+                    "tier4_c2_176_2880x1860_intrinsic.yaml",
+                ]
+            ),
+            description="Calibration YAML for the Tier IV C2-176 camera.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -103,6 +194,16 @@ def generate_launch_description():
     publish_joint_states = LaunchConfiguration("publish_joint_states")
     publish_odom_tf = LaunchConfiguration("publish_odom_tf")
     use_rviz = LaunchConfiguration("use_rviz")
+    launch_camera = LaunchConfiguration("launch_camera")
+    camera_device = LaunchConfiguration("camera_device")
+    camera_namespace = LaunchConfiguration("camera_namespace")
+    camera_frame_id = LaunchConfiguration("camera_frame_id")
+    camera_width = LaunchConfiguration("camera_width")
+    camera_height = LaunchConfiguration("camera_height")
+    camera_pixel_format = LaunchConfiguration("camera_pixel_format")
+    camera_output_encoding = LaunchConfiguration("camera_output_encoding")
+    camera_name = LaunchConfiguration("camera_name")
+    camera_calibration_file = LaunchConfiguration("camera_calibration_file")
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -203,6 +304,33 @@ def generate_launch_description():
     #     launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
     # )
 
+    camera_info_url = ParameterValue(
+        [TextSubstitution(text="file://"), camera_calibration_file],
+        value_type=str,
+    )
+
+    tier4_camera_node = Node(
+        package="v4l2_camera",
+        executable="v4l2_camera_node",
+        namespace=camera_namespace,
+        name="tier4_c2_176_camera",
+        output="both",
+        parameters=[
+            {
+                "video_device": camera_device,
+                "image_width": camera_width,
+                "image_height": camera_height,
+                "pixel_format": camera_pixel_format,
+                "output_encoding": camera_output_encoding,
+                "camera_frame_id": camera_frame_id,
+                "camera_name": camera_name,
+                "camera_info_url": camera_info_url,
+                "use_sensor_data_qos": True,
+            }
+        ],
+        condition=IfCondition(launch_camera),
+    )
+
     # RViz visualization (optional)
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("robofi_bringup"), "rviz", "robot_bringup.rviz"]
@@ -223,6 +351,7 @@ def generate_launch_description():
             robot_state_publisher_node,
             joint_state_publisher_node,
             livox_launch,
+            tier4_camera_node,
             rviz_node,
             # static_tf_lidar,
             ranger_base_launch,
