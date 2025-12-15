@@ -1,0 +1,43 @@
+# udev rules for Tier IV C2-176 Camera (GMSL2-USB3.0 Conversion Kit)
+# This file ensures consistent naming and permissions for the Tier IV camera
+#
+# Installation: sudo cp 99-tieriv-c2-camera.rules /etc/udev/rules.d/
+# Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Camera Information:
+#   Vendor ID: 1419 (ABILITY ENTERPRISE CO., LTD.)
+#   Product ID: 011d (GMSL2-USB3.0 Conversion Kit)
+#   Serial: C2-Master-10fps
+#   Device nodes: /dev/video2, /dev/video3 (default)
+#   Symlinks created: /dev/tieriv_c2_video0, /dev/tieriv_c2_video1
+
+# Match Tier IV C2-176 camera by vendor, product, and serial
+# Creates consistent symlinks for the video devices
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1419", ATTRS{idProduct}=="011d", \
+    ATTRS{serial}=="C2-Master-10fps", \
+    ATTR{index}=="0", \
+    SYMLINK+="tieriv_c2_video0", \
+    GROUP="video", MODE="0660", \
+    TAG+="systemd"
+
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1419", ATTRS{idProduct}=="011d", \
+    ATTRS{serial}=="C2-Master-10fps", \
+    ATTR{index}=="1", \
+    SYMLINK+="tieriv_c2_video1", \
+    GROUP="video", MODE="0660", \
+    TAG+="systemd"
+
+# Media device rule
+SUBSYSTEM=="media", ATTRS{idVendor}=="1419", ATTRS{idProduct}=="011d", \
+    ATTRS{serial}=="C2-Master-10fps", \
+    SYMLINK+="tieriv_c2_media", \
+    GROUP="video", MODE="0660"
+
+# Set group ownership to 'video' for all Tier IV camera devices
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1419", ATTRS{idProduct}=="011d", \
+    GROUP="video", MODE="0660"
+
+# Optional: If you want to rename the actual device (not recommended, use symlinks instead)
+# SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1419", ATTRS{idProduct}=="011d", \
+#     ATTRS{serial}=="C2-Master-10fps", ATTR{index}=="0", \
+#     KERNEL=="video*", NAME="tieriv_c2_0"
