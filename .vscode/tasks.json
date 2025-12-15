@@ -55,7 +55,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
