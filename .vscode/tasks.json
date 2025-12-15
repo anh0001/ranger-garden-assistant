@@ -35,7 +35,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+        "DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -135,7 +135,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
