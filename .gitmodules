@@ -7,13 +7,13 @@
 [submodule "src/ranger_ros2"]
 	path = src/ranger_ros2
 	url = https://github.com/agilexrobotics/ranger_ros2.git
-[submodule "src/piper_ros"]
-	path = src/piper_ros
-	url = https://github.com/agilexrobotics/piper_ros.git
-	branch = humble
 [submodule "src/FASTLIO2_ROS2"]
 	path = src/FASTLIO2_ROS2
 	url = https://github.com/anh0001/FASTLIO2_ROS2.git
 [submodule "src/octomap_server2"]
 	path = src/octomap_server2
 	url = https://github.com/iKrishneel/octomap_server2
+[submodule "src/piper_ros"]
+	path = src/piper_ros
+	url = https://github.com/anh0001/piper_ros.git
+	branch = ranger
