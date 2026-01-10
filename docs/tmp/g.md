@@ -1,7 +1,7 @@
 # Copilot Instructions for Ranger Garden Assistant
 
 ## Project Overview
-ROS 2 Humble workspace for an omnidirectional mobile manipulation platform combining AgileX Ranger Mini 3.0 base, Livox Mid-360 LiDAR, RealSense D435 camera, and PiPER 6-DOF arm. Built for autonomous navigation (Nav2) and manipulation (MoveIt 2).
+ROS 2 Humble workspace for an omnidirectional mobile manipulation platform combining AgileX Ranger Mini 3.0 base, Livox Mid-360 LiDAR, Tier IV C2-176 fisheye camera, and PiPER 6-DOF arm. Built for autonomous navigation (Nav2) and manipulation (MoveIt 2).
 
 ## Rules for AI Assistants
 
@@ -135,8 +135,9 @@ sudo ./scripts/setup_can.sh
 # CAN traffic (base powered)
 candump can0
 
-# RealSense connected
-rs-enumerate-devices
+# Tier IV camera connected
+ls -l /dev/tieriv_c2_video0
+v4l2-ctl --device=/dev/tieriv_c2_video0 --all
 
 # LiDAR reachable
 ping 192.168.1.1XX  # Check LiDAR IP

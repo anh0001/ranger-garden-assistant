@@ -6,7 +6,7 @@ This document describes the architecture of the Ranger Garden Assistant ROS 2 sy
 
 The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Humble, integrating:
 - **Mobility**: 4-wheel omnidirectional base (Ranger Mini 3.0)
-- **Perception**: 3D LiDAR (Livox Mid-360) and RGB-D camera (RealSense D435)
+- **Perception**: 3D LiDAR (Livox Mid-360) and fisheye camera (Tier IV C2-176)
 - **Manipulation**: 6-DOF robotic arm (PiPER)
 - **Autonomy**: Navigation2 stack for path planning and obstacle avoidance
 - **Motion Planning**: MoveIt 2 for arm trajectory planning
@@ -22,7 +22,7 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 │  │  Perception  │  │  Navigation  │  │ Manipulation │         │
 │  ├──────────────┤  ├──────────────┤  ├──────────────┤         │
 │  │ Livox Driver │  │    Nav2      │  │   MoveIt 2   │         │
-│  │ RealSense    │  │  SLAM        │  │  PiPER Ctrl  │         │
+│  │ Tier IV C2   │  │  SLAM        │  │  PiPER Ctrl  │         │
 │  │              │  │  AMCL        │  │              │         │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘         │
 │         │                 │                  │                 │
@@ -74,19 +74,15 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 - **Update Rate**: 10 Hz
 - **FOV**: 360° horizontal, ~±52° vertical
 
-#### Intel RealSense D435
-- **Interface**: USB 3.0
-- **Driver**: `realsense2_camera` package
+#### Tier IV C2-176 Fisheye Camera
+- **Interface**: USB 3.0 (GMSL2-USB3.0 conversion)
+- **Driver**: `v4l2_camera` package
 - **Topics**:
-  - `/camera/color/image_raw` - RGB image
-  - `/camera/depth/image_rect_raw` - Depth image
-  - `/camera/aligned_depth_to_color/image_raw` - Aligned depth
-  - `/camera/depth/color/points` - Colored point cloud
-  - `/camera/infra1/image_rect_raw` - IR camera 1
-  - `/camera/infra2/image_rect_raw` - IR camera 2
-- **TF**: `camera_link` → various optical frames
-- **Resolution**: 640x480 to 1920x1080 (configurable)
-- **Framerate**: 6-90 FPS (configurable)
+  - `/camera/image_raw` - Fisheye image
+  - `/camera/camera_info` - Calibration and intrinsics
+- **TF**: `camera_link` → `camera_optical_frame`
+- **Resolution**: 2880x1860
+- **Framerate**: 10 FPS (configurable)
 
 #### PiPER 6-DOF Arm
 - **Interface**: CAN bus (can1, 1000 kbps)
@@ -110,7 +106,7 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 - **Output**: Used by Navigation costmaps
 
 #### Vision Processing
-- **Input**: Camera RGB and depth streams
+- **Input**: Fisheye camera stream
 - **Potential Uses**:
   - Object detection (YOLO, etc.)
   - Grasp pose estimation
@@ -236,9 +232,8 @@ map (from AMCL or SLAM)
      └─ base_footprint
          └─ base_link
              ├─ lidar_link (Livox sensor)
-             ├─ camera_link (RealSense)
-             │   ├─ camera_depth_optical_frame
-             │   └─ camera_color_optical_frame
+             ├─ camera_link (Tier IV C2-176)
+             │   └─ camera_optical_frame
              └─ piper_base_link (Arm mount)
                  └─ piper_link_1
                      └─ piper_link_2
@@ -379,7 +374,7 @@ map (from AMCL or SLAM)
 - Manual goal setting
 
 ### Field Operation
-- Processing on onboard computer (NUC/Jetson)
+- Processing on onboard computer (Jetson AGX Orin 64GB)
 - Remote monitoring via WiFi
 - Waypoint-based missions
 

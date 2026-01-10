@@ -35,12 +35,12 @@ This workspace provides a fully integrated mobile manipulation platform suitable
 - **Tier IV C2-176** - Fisheye camera (2880x1860, GMSL2-USB3.0)
 - **AgileX PiPER Arm** - 6-DOF robotic arm (optional)
 - **2x USB-CAN Adapters** - For base and arm control
-- **Computing Platform** - Ubuntu 22.04 capable PC/NUC/Jetson
+- **Computing Platform** - NVIDIA Jetson AGX Orin 64GB (Ubuntu 22.04 / JetPack 6)
 
 ### Recommended Specifications
-- CPU: Intel Core i5 or better (i7 recommended)
-- RAM: 8GB minimum (16GB recommended)
-- Storage: 50GB free space
+- Compute: NVIDIA Jetson AGX Orin 64GB
+- RAM: 64GB (onboard)
+- Storage: 100GB free space (NVMe recommended)
 - USB 3.0 ports for camera and sensors
 - Network: Ethernet or WiFi for sensor communication
 
@@ -64,26 +64,17 @@ This workspace provides a fully integrated mobile manipulation platform suitable
 
 ### 2. Install Additional Dependencies
 
+Install ROS package dependencies using rosdep:
+
 ```bash
-# Navigation and control
-sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup -y
-sudo apt install ros-humble-slam-toolbox -y
+# Install all ROS dependencies declared in package.xml files
+cd /home/robofi/codes/ranger-garden-assistant
+rosdep install --from-paths src --ignore-src -r -y
+```
 
-# MoveIt 2
-sudo apt install ros-humble-moveit ros-humble-moveit-resources -y
+Install Python dependencies (not managed by rosdep):
 
-# Control packages
-sudo apt install ros-humble-ros2-control ros-humble-ros2-controllers -y
-sudo apt install ros-humble-controller-manager -y
-
-# TF and robot state
-sudo apt install ros-humble-joint-state-publisher-gui -y
-sudo apt install ros-humble-xacro -y
-
-# V4L2 camera support (for Tier IV C2-176)
-sudo apt install ros-humble-v4l2-camera -y
-
-# Python dependencies
+```bash
 pip3 install python-can piper_sdk scipy
 ```
 

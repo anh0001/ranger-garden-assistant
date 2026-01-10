@@ -510,7 +510,7 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- Camera Link (RealSense D435) -->
+  <!-- Camera Link (Tier IV C2-176) -->
   <link name="camera_link">
     <visual>
       <geometry>
@@ -540,21 +540,12 @@
     <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
   </joint>
 
-  <!-- Camera depth optical frame -->
-  <link name="camera_depth_optical_frame"/>
+  <!-- Camera optical frame -->
+  <link name="camera_optical_frame"/>
 
-  <joint name="camera_depth_optical_joint" type="fixed">
+  <joint name="camera_optical_joint" type="fixed">
     <parent link="camera_link"/>
-    <child link="camera_depth_optical_frame"/>
-    <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
-  </joint>
-
-  <!-- Camera color optical frame -->
-  <link name="camera_color_optical_frame"/>
-
-  <joint name="camera_color_optical_joint" type="fixed">
-    <parent link="camera_link"/>
-    <child link="camera_color_optical_frame"/>
+    <child link="camera_optical_frame"/>
     <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
   </joint>
 

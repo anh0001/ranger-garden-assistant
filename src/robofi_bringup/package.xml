@@ -3,7 +3,7 @@
 <package format="3">
   <name>robofi_bringup</name>
   <version>1.0.0</version>
-  <description>Integration package for Ranger Mini 3.0 with Livox Mid-360, RealSense D435, and PiPER arm</description>
+  <description>Integration package for Ranger Mini 3.0 with Livox Mid-360, Tier IV C2-176 camera, and PiPER arm</description>
   <maintainer email="your-email@example.com">Your Name</maintainer>
   <license>MIT</license>
 
@@ -17,7 +17,6 @@
   <depend>ranger_base</depend>
   <depend>ranger_msgs</depend>
   <exec_depend>livox_ros_driver2</exec_depend>
-  <exec_depend>realsense2_camera</exec_depend>
 
   <!-- Navigation dependencies -->
   <exec_depend>nav2_bringup</exec_depend>
@@ -29,11 +28,15 @@
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <!-- Visualization -->
   <exec_depend>rviz2</exec_depend>
 
   <!-- MoveIt dependencies -->
+  <exec_depend>moveit</exec_depend>
+  <exec_depend>moveit_resources</exec_depend>
   <exec_depend>moveit_ros_planning_interface</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
 
@@ -41,6 +44,9 @@
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>ros2_control</exec_depend>
   <exec_depend>ros2_controllers</exec_depend>
+
+  <!-- Camera support -->
+  <exec_depend>v4l2_camera</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

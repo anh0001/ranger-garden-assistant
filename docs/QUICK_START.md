@@ -24,10 +24,11 @@ sudo apt install -y \
     ros-humble-moveit \
     ros-humble-ros2-control \
     ros-humble-ros2-controllers \
-    ros-humble-realsense2-camera \
+    ros-humble-v4l2-camera \
     ros-humble-joint-state-publisher-gui \
     ros-humble-xacro \
     can-utils \
+    v4l-utils \
     python3-pip
 
 # Install Python dependencies
@@ -65,10 +66,16 @@ ip link show can0
 ip link show can1
 ```
 
+**Tier IV Camera udev rules:**
+```bash
+sudo ./scripts/install_camera_udev.sh
+```
+
 **Verify Sensors:**
 ```bash
-# Check RealSense camera
-rs-enumerate-devices
+# Check Tier IV camera device
+ls -l /dev/tieriv_c2_video0
+v4l2-ctl --device=/dev/tieriv_c2_video0 --all
 
 # Check LiDAR (should see device on network)
 ping 192.168.1.1XX  # Replace XX with your LiDAR's IP
@@ -118,12 +125,21 @@ rviz2
 **Test 4: Camera**
 ```bash
 # Terminal 1: Launch camera
-ros2 launch realsense2_camera rs_launch.py
+ros2 run v4l2_camera v4l2_camera_node \
+  --ros-args -r __ns:=/camera \
+  -p video_device:=/dev/tieriv_c2_video0 \
+  -p image_width:=2880 \
+  -p image_height:=1860 \
+  -p pixel_format:=UYVY \
+  -p output_encoding:=bgr8 \
+  -p camera_frame_id:=camera_optical_frame \
+  -p camera_name:=tier4_c2_176 \
+  -p camera_info_url:=file://$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/config/tier4_c2_176_2880x1860_intrinsic.yaml
 
 # Terminal 2: View image
 ros2 run rqt_image_view rqt_image_view
 ```
-- Select `/camera/color/image_raw` from dropdown
+- Select `/camera/image_raw` from dropdown
 - You should see camera feed
 
 ### 5. Full System Launch
@@ -224,11 +240,14 @@ ping 192.168.1.1XX  # Use your LiDAR's IP
 ### Issue: Camera not detected
 
 ```bash
-# Check if librealsense can see it
-rs-enumerate-devices
+# Check if device nodes exist
+ls -l /dev/tieriv_c2_video*
 
-# If not found, reinstall
-sudo apt install --reinstall librealsense2-utils librealsense2-dkms
+# Verify udev rules were installed
+ls -l /etc/udev/rules.d/99-tieriv-c2-camera.rules
+
+# Check camera capabilities
+v4l2-ctl --list-devices
 
 # Check USB connection (must be USB 3.0)
 lsusb -t

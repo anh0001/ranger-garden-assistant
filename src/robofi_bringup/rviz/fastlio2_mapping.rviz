@@ -74,11 +74,7 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        camera_color_optical_frame:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        camera_depth_optical_frame:
+        camera_optical_frame:
           Alpha: 1
           Show Axes: false
           Show Trail: false

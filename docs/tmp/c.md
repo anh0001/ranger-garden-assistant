@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a ROS 2 Humble workspace for the **Ranger Garden Assistant** - a mobile manipulation platform combining:
 - **AgileX Ranger Mini 3.0** omnidirectional base (CAN bus @ 500 kbps)
 - **Livox Mid-360** LiDAR for 3D perception
-- **Intel RealSense D435** RGB-D camera
+- **Tier IV C2-176** fisheye camera
 - **AgileX PiPER** 6-DOF robotic arm (CAN bus @ 1000 kbps, optional)
 - **FASTLIO2_ROS2** for LiDAR-Inertial Odometry, loop closure, and localization
 - **Octomap Server 2** for 3D volumetric mapping and 2D occupancy grid generation
@@ -84,8 +84,9 @@ sudo ip link set can1 up
 ip link show can0
 candump can0  # Should see messages if base is powered on
 
-# Check RealSense
-rs-enumerate-devices
+# Check Tier IV camera
+ls -l /dev/tieriv_c2_video0
+v4l2-ctl --device=/dev/tieriv_c2_video0 --all
 
 # Check LiDAR network (Mid-360 typically at 192.168.1.1XX)
 ping 192.168.1.1XX
@@ -97,7 +98,7 @@ ping 192.168.1.1XX
 ```bash
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 ```
-Starts: base controller, LiDAR, RealSense, robot state publisher, TF tree
+Starts: base controller, LiDAR, Tier IV C2-176, robot state publisher, TF tree
 
 ### Individual Components
 ```bash
@@ -232,7 +233,7 @@ rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_vi
 - **Odometry**: FASTLIO2 LIO node provides high-accuracy `/Odometry` topic
 - **Localization**: PGO or Localizer node provides `map → odom` transform
 - **Global costmap**: Uses static map (from Octomap projection) + obstacle layer
-- **Local costmap**: Uses voxel layer from Mid-360 point cloud + optional D435 depth
+- **Local costmap**: Uses voxel layer from Mid-360 point cloud; add RGB-D layers only if a depth camera is installed
 - **Controllers**: Use FASTLIO2 odometry directly for smooth, accurate control
 
 #### Navigation with Static Map (Alternative)
@@ -296,7 +297,7 @@ ros2 node info /ranger_base_node
 ### View Images
 ```bash
 ros2 run rqt_image_view rqt_image_view
-# Select topic from dropdown: /camera/color/image_raw
+# Select topic from dropdown: /camera/image_raw
 ```
 
 ### Monitor System Resources
@@ -357,9 +358,8 @@ map (from PGO or Localizer node)
       └─ base_link
          ├─ lidar_link (Livox Mid-360)
          │  └─ livox_frame (IMU frame for FASTLIO2)
-         ├─ camera_link (RealSense D435)
-         │  ├─ camera_depth_optical_frame
-         │  └─ camera_color_optical_frame
+         ├─ camera_link (Tier IV C2-176)
+         │  └─ camera_optical_frame
          └─ piper_base_link (arm mount)
             └─ piper_link_1 → ... → piper_tool0
 ```
@@ -371,9 +371,8 @@ odom (provided by LIO node)
    └─ base_link
       ├─ lidar_link (Livox Mid-360)
       │  └─ livox_frame (IMU frame)
-      ├─ camera_link (RealSense D435)
-      │  ├─ camera_depth_optical_frame
-      │  └─ camera_color_optical_frame
+      ├─ camera_link (Tier IV C2-176)
+      │  └─ camera_optical_frame
       └─ piper_base_link (arm mount)
          └─ piper_link_1 → ... → piper_tool0
 ```
@@ -393,9 +392,8 @@ odom (provided by LIO node)
 **Sensors:**
 - `/livox/lidar` (sensor_msgs/PointCloud2) - Raw 3D point cloud from LiDAR
 - `/livox/imu` (sensor_msgs/Imu) - IMU data from Livox Mid-360
-- `/camera/color/image_raw` (sensor_msgs/Image) - RGB camera stream
-- `/camera/depth/image_rect_raw` (sensor_msgs/Image) - Depth image
-- `/camera/depth/color/points` (sensor_msgs/PointCloud2) - RGB-D point cloud
+- `/camera/image_raw` (sensor_msgs/Image) - Fisheye camera stream
+- `/camera/camera_info` (sensor_msgs/CameraInfo) - Intrinsics and calibration
 
 **FASTLIO2 LIO Node:**
 - `/Odometry` (nav_msgs/Odometry) - High-accuracy LiDAR-inertial odometry
@@ -466,7 +464,7 @@ Edit parameters in [src/robofi_bringup/config/nav2_params.yaml](src/robofi_bring
 - **Resolution**: Balance accuracy vs performance (default 0.05m)
 
 **Local Costmap (for obstacle avoidance):**
-- **Layers**: `voxel_layer` (primary, from Mid-360) + `rgbd_obstacle_layer` (optional, from D435)
+- **Layers**: `voxel_layer` (primary, from Mid-360) + optional RGB-D layer when a depth camera is installed
 - **Voxel layer**: Subscribe to `/cloud_registered` from FASTLIO2 for 3D obstacle detection
 - **Update frequency**: Higher frequency for dynamic environments (10-20 Hz)
 - **Inflation radius**: Set safety buffer around obstacles
@@ -614,7 +612,7 @@ global_costmap:
 local_costmap:
   plugins:
     - voxel_layer  # Subscribe to /cloud_registered from FASTLIO2
-    - rgbd_obstacle_layer  # Optional: from D435 depth camera
+    - rgbd_obstacle_layer  # Optional: only if a depth camera is installed
     - inflation_layer
 ```
 
@@ -648,7 +646,7 @@ ros2 launch robofi_bringup ranger_complete_bringup.launch.py namespace:=robot1
 ```
 
 ### Performance on Embedded Platforms
-For Jetson or lower-power computers:
+For Jetson AGX Orin 64GB (or lower-power computers):
 - Reduce sensor rates (LiDAR to 5Hz, camera to 15 FPS)
 - Increase costmap resolution to 0.1m
 - Lower costmap update frequencies in nav2_params.yaml
@@ -664,7 +662,7 @@ For Jetson or lower-power computers:
 ### Runtime Issues
 - **CAN not found**: Run `sudo ./scripts/setup_can.sh` and verify with `ip link show`
 - **LiDAR no data**: Check network config (PC must be on 192.168.1.x subnet)
-- **Camera not detected**: Verify USB 3.0 connection, run `rs-enumerate-devices`
+- **Camera not detected**: Verify USB 3.0 connection, check `/dev/tieriv_c2_video0` and run `v4l2-ctl --list-devices`
 - **TF errors**: Check all required nodes are running with `ros2 node list`
 - **Navigation failures**: Verify sensor data visible in RViz, check costmap topics
 
@@ -826,4 +824,4 @@ pcl_viewer /path/to/map.pcd
 **Hardware:**
 - AgileX Ranger documentation: https://www.agilex.ai/
 - Livox Mid-360: https://www.livoxtech.com/mid-360
-- RealSense D435: https://www.intelrealsense.com/depth-camera-d435/
+- Tier IV C2-176: https://tier4.jp/en/
