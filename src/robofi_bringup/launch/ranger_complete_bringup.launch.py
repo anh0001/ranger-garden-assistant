@@ -4,7 +4,7 @@
 Complete system bringup for Ranger Mini 3.0 with:
 - Base controller (ranger_ros2)
 - Livox Mid-360 LiDAR
-- RealSense D435 camera
+- Tier IV C2-176 fisheye camera
 - PiPER 6-DOF arm
 - Robot description and TF
 """
@@ -275,23 +275,6 @@ def generate_launch_description():
         }.items(),
     )
 
-    # # RealSense camera launch
-    # realsense_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         PathJoinSubstitution([
-    #             FindPackageShare("realsense2_camera"),
-    #             "launch",
-    #             "rs_launch.py"
-    #         ])
-    #     ),
-    #     launch_arguments={
-    #         "align_depth.enable": "true",
-    #         "pointcloud.enable": "true",
-    #         "enable_color": "true",
-    #         "enable_depth": "true",
-    #     }.items(),
-    # )
-
     # PiPER arm driver (commented out by default, uncomment when ready)
     # piper_launch = IncludeLaunchDescription(
     #     PythonLaunchDescriptionSource(
@@ -355,7 +338,6 @@ def generate_launch_description():
             rviz_node,
             # static_tf_lidar,
             ranger_base_launch,
-            # realsense_launch,
             # piper_launch,
         ]
     )
