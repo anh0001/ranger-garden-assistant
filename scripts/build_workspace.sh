@@ -51,12 +51,15 @@ fi
 
 # Build Livox SDK2 (required by livox_ros_driver2)
 echo "Building Livox SDK2..."
-if [ -d "src/livox_ros_driver2/Livox-SDK2" ]; then
-    cd src/livox_ros_driver2/Livox-SDK2
+if [ -d "src/Livox-SDK2" ]; then
+    cd src/Livox-SDK2
     mkdir -p build && cd build
     cmake .. && make -j$(nproc)
     sudo make install
-    cd ../../../..
+    cd ../../..
+    echo "Livox SDK2 installed successfully"
+else
+    echo "Warning: Livox-SDK2 submodule not found at src/Livox-SDK2"
 fi
 
 # Build the workspace
