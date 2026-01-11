@@ -17,3 +17,6 @@
 	path = src/piper_ros
 	url = https://github.com/anh0001/piper_ros.git
 	branch = ranger
+[submodule "src/Livox-SDK2"]
+	path = src/Livox-SDK2
+	url = https://github.com/Livox-SDK/Livox-SDK2.git
