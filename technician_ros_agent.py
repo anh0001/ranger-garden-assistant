@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
-"""ROSA - Robot Operating System Agent for Ranger Garden Assistant"""
+"""Technician ROS - Robot Operating System Agent for Ranger Garden Assistant
+
+Installation:
+    git clone https://github.com/anh0001/ros-technician-cli
+    cd ros-technician-cli
+    pip install -e .
+"""
 
 import os
+import sys
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from rosa import ROSA
+
+try:
+    from technician_ros import TechnicianROS
+except ImportError:
+    print("Error: technician_ros module not found.")
+    print("Please install it by running:")
+    print("  git clone https://github.com/anh0001/ros-technician-cli")
+    print("  cd ros-technician-cli")
+    print("  pip install -e .")
+    sys.exit(1)
 
 # Load environment variables from .env
 load_dotenv()
@@ -17,10 +33,10 @@ def main():
         temperature=0
     )
 
-    # Create ROSA agent for ROS 2
-    agent = ROSA(ros_version=2, llm=llm)
+    # Create Technician ROS agent for ROS 2
+    agent = TechnicianROS(ros_version=2, llm=llm)
 
-    print("ROSA Agent initialized for ROS 2")
+    print("Technician ROS Agent initialized for ROS 2")
     print("Type your queries or 'quit' to exit.\n")
 
     while True:
@@ -33,7 +49,7 @@ def main():
                 continue
 
             response = agent.invoke(query)
-            print(f"\nROSA: {response}\n")
+            print(f"\nTechnician: {response}\n")
         except KeyboardInterrupt:
             print("\nGoodbye!")
             break
