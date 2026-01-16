@@ -13,9 +13,9 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 try:
-    from technician_ros import TechnicianROS
+    from rosa import ROSA
 except ImportError:
-    print("Error: technician_ros module not found.")
+    print("Error: rosa module not found.")
     print("Please install it by running:")
     print("  git clone https://github.com/anh0001/ros-technician-cli")
     print("  cd ros-technician-cli")
@@ -33,8 +33,8 @@ def main():
         temperature=0
     )
 
-    # Create Technician ROS agent for ROS 2
-    agent = TechnicianROS(ros_version=2, llm=llm)
+    # Create ROSA agent for ROS 2
+    agent = ROSA(ros_version=2, llm=llm)
 
     print("Technician ROS Agent initialized for ROS 2")
     print("Type your queries or 'quit' to exit.\n")
