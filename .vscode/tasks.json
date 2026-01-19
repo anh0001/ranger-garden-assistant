@@ -90,6 +90,26 @@
       "isBackground": false
     },
     {
+      "label": "Launch: Camera-LiDAR Fuse",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch camera_lidar_fuse camera_lidar_fuse.launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches camera-LiDAR fusion projection node for projecting LiDAR points onto camera images",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
       "label": "Display: Robot Model with GUI",
       "type": "shell",
       "command": "bash",
