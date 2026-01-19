@@ -1,0 +1,21 @@
+# Example configuration for the camera_lidar_fuse package.
+# Update the calibration paths and topics to match your setup before running.
+
+general:
+  # Base folder used to resolve relative calibration file paths.
+  config_folder: ''
+  # Filenames (relative to config_folder) or absolute paths to calibration products.
+  camera_intrinsic_calibration: tier4_c1_198_1920x1280.yaml
+  camera_extrinsic_calibration: camera_extrinsic_calibration.yaml
+
+lidar:
+  # PointCloud2 topic emitted by the LiDAR.
+  lidar_topic: /livox/lidar_converted
+  # Frame id for the projected cloud (it should be your real LiDAR frame).
+  frame_id: livox_frame
+
+projection:
+  # Topic published by the projection node (PointCloud2 with per-point u,v).
+  projected_topic: /lidar_points_projected
+  # Only used if you want to decimate the incoming point cloud.
+  skip_rate: 1
