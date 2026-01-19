@@ -1,0 +1,26 @@
+image_width: 2880
+image_height: 1860
+camera_name: tier4_c2_176
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [1027.006165,    0.      , 1480.537295,
+            0.      , 1020.348817,  917.193421,
+            0.      ,    0.      ,    1.      ]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [-0.134293, 0.013363, -0.000727, 0.001147, 0.000000]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1., 0., 0.,
+         0., 1., 0.,
+         0., 0., 1.]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [ 702.769510,    0.      , 1484.647215,    0.      ,
+            0.      ,  885.425563,  909.431592,    0.      ,
+            0.      ,    0.      ,    1.      ,    0.      ]
