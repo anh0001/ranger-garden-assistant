@@ -1,0 +1,21 @@
+[Unit]
+Description=Configure Jetson Hardware CAN Interfaces for Ranger
+After=network.target
+Before=ros.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\
+  ip link set can0 down 2>/dev/null || true && \
+  ip link set can0 type can bitrate 500000 && \
+  ip link set can0 up && \
+  ip link set can1 down 2>/dev/null || true && \
+  ip link set can1 type can bitrate 1000000 && \
+  ip link set can1 up'
+ExecStop=/bin/bash -c '\
+  ip link set can0 down 2>/dev/null || true && \
+  ip link set can1 down 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target

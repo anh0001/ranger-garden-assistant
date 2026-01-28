@@ -18,8 +18,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "can_device",
-            default_value="can_base",
-            description="CAN device name (using udev rule, default is can_base)",
+            default_value="can0",
+            description="CAN device name (can0 for Jetson hardware CAN, can_base for USB adapter)",
         )
     )
 
