@@ -13,7 +13,7 @@ setup(
         ('share/' + package_name + '/config', [
             'config/projection_config.yaml',
             'config/camera_extrinsic_calibration.yaml',
-            'config/tier4_c1_198_1920x1280.yaml'
+            'config/tier4_c2_176_2880x1860.yaml'
         ]),
     ],
     install_requires=['setuptools'],

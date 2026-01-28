@@ -33,7 +33,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "can_device",
             default_value="can0",
-            description="CAN device for base controller (can0 for Jetson, can_base for USB adapter)",
+            description="CAN device for base controller (standardized to can0 for both Jetson and USB adapters)",
         )
     )
 
@@ -41,7 +41,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "arm_can_port",
             default_value="can1",
-            description="CAN port for PiPER arm (can1 for Jetson, can_arm for USB adapter)",
+            description="CAN port for PiPER arm (standardized to can1 for both Jetson and USB adapters)",
         )
     )
 
