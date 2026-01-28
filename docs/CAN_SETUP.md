@@ -310,4 +310,3 @@ sudo journalctl -u can-base-setup.service -f
 
 - [CLAUDE.md](../CLAUDE.md#hardware-setup) - Hardware setup overview
 - [README.md](../README.md) - Project overview
-- [setup_can.sh](../scripts/setup_can.sh) - Original manual setup script

@@ -152,22 +152,23 @@ After installation, unplug and replug the camera for the rules to take effect.
 
 ### 3. Configure CAN Interfaces
 
+Install udev rules for automatic CAN interface configuration (one-time setup):
+
 ```bash
-sudo ./scripts/setup_can.sh
+sudo ./scripts/install_can_udev.sh
 ```
 
-Or manually:
+This will:
+- Create persistent CAN interface names (`can_base` for base, `can_arm` for arm)
+- Automatically configure interfaces on boot
+- Add your user to the `dialout` group for CAN access
 
+After installation, unplug and replug your CAN adapters. The interfaces will be automatically configured.
+
+To verify:
 ```bash
-# For Ranger base (500 kbps)
-sudo ip link set can0 down
-sudo ip link set can0 type can bitrate 500000
-sudo ip link set can0 up
-
-# For PiPER arm (1000 kbps)
-sudo ip link set can1 down
-sudo ip link set can1 type can bitrate 1000000
-sudo ip link set can1 up
+ip link show can_base
+candump can_base  # Should show CAN traffic when base is powered on
 ```
 
 ### 4. Launch FAST-LIO2 Mapping Stack
@@ -336,7 +337,7 @@ ranger-garden-assistant/
 │   └── octomap_server2/          # OctoMap server port (submodule)
 │
 ├── scripts/                      # Helper scripts
-│   ├── setup_can.sh              # CAN bus configuration
+│   ├── install_can_udev.sh       # CAN bus automatic configuration
 │   └── build_workspace.sh        # Workspace build script
 │
 └── README.md                     # This file
@@ -436,29 +437,35 @@ declared_arguments.append(
 
 ### CAN Interface Issues
 
-**Problem**: `can0` or `can1` not found
+**Problem**: `can_base` or `can_arm` not found
 
 **Solution**:
 ```bash
+# Check if udev rules are installed
+ls -l /etc/udev/rules.d/99-ranger-can.rules
+
+# If not installed, run:
+sudo ./scripts/install_can_udev.sh
+
 # Check available CAN devices
-dmesg | grep gs_usb
+ip link show | grep can
 
-# Your devices might be named differently
-ip link show
-
-# Use correct names in launch files or create symbolic links
+# Verify devices after replugging adapters
+ip link show can_base
+ip link show can_arm
 ```
 
 **Problem**: Permission denied on CAN device
 
 **Solution**:
 ```bash
-# Add user to dialout group
+# The install_can_udev.sh script adds user to dialout group
+# If not already done, manually add:
 sudo usermod -a -G dialout $USER
-# Log out and back in
+# Log out and back in for changes to take effect
 
-# Or run with sudo (not recommended)
-sudo ./scripts/setup_can.sh
+# Verify group membership
+groups | grep dialout
 ```
 
 ### LiDAR Connection Issues

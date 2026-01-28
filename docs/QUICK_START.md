@@ -58,12 +58,15 @@ echo "source ~/ranger-garden-assistant/install/setup.bash" >> ~/.bashrc
 
 **CAN Interfaces:**
 ```bash
-# Setup CAN (run once per boot)
-sudo ./scripts/setup_can.sh
+# One-time setup (automatic configuration on boot)
+sudo ./scripts/install_can_udev.sh
+
+# After installation, unplug and replug CAN adapters
+# Interfaces will be automatically configured
 
 # Verify CAN interfaces are up
-ip link show can0
-ip link show can1
+ip link show can_base
+ip link show can_arm
 ```
 
 **Tier IV Camera udev rules:**
@@ -218,9 +221,14 @@ lsusb | grep -i can
 # Check dmesg for CAN adapter
 dmesg | tail -20 | grep -i can
 
-# Manual CAN setup
-sudo ip link set can0 type can bitrate 500000
-sudo ip link set can0 up
+# Verify udev rules are installed
+ls -l /etc/udev/rules.d/99-ranger-can.rules
+
+# If not installed, run:
+sudo ./scripts/install_can_udev.sh
+
+# Check interface status
+ip link show can_base
 ```
 
 ### Issue: LiDAR not publishing

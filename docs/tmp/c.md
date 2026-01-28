@@ -60,22 +60,23 @@ colcon build
 ## Hardware Setup
 
 ### CAN Bus Configuration
-**MUST be run after each reboot** before launching robot:
+**One-time setup** for automatic CAN interface configuration:
 ```bash
-sudo ./scripts/setup_can.sh
+sudo ./scripts/install_can_udev.sh
 ```
 
-Or manually:
-```bash
-# can0 for Ranger base (500 kbps)
-sudo ip link set can0 down
-sudo ip link set can0 type can bitrate 500000
-sudo ip link set can0 up
+This installs udev rules that automatically configure CAN interfaces when adapters are plugged in:
+- Creates persistent interface names (`can_base` for Ranger base, `can_arm` for PiPER arm)
+- Automatically sets correct bitrates (500 kbps for base, 1000 kbps for arm)
+- Adds user to `dialout` group for CAN access
 
-# can1 for PiPER arm (1000 kbps)
-sudo ip link set can1 down
-sudo ip link set can1 type can bitrate 1000000
-sudo ip link set can1 up
+After installation, unplug and replug CAN adapters. Interfaces will be automatically configured on every boot.
+
+Verify interfaces:
+```bash
+ip link show can_base
+ip link show can_arm
+candump can_base  # Should see messages if base is powered on
 ```
 
 ### Verify Hardware
@@ -624,8 +625,8 @@ local_costmap:
 
 ## Important Notes
 
-### CAN Bus Dependency
-The CAN interfaces **must be configured after every system reboot**. Without running `sudo ./scripts/setup_can.sh`, the base and arm controllers will fail to start.
+### CAN Bus Setup
+After running the one-time setup (`sudo ./scripts/install_can_udev.sh`), CAN interfaces will be automatically configured when adapters are plugged in. The udev rules and systemd services handle interface configuration on every boot, so no manual intervention is required.
 
 ### Submodule Updates
 When pulling changes that affect submodules:
@@ -660,7 +661,7 @@ For Jetson AGX Orin 64GB (or lower-power computers):
 - **Stale build**: Remove build/install/log directories and rebuild
 
 ### Runtime Issues
-- **CAN not found**: Run `sudo ./scripts/setup_can.sh` and verify with `ip link show`
+- **CAN not found**: Verify udev rules are installed with `ls -l /etc/udev/rules.d/99-ranger-can.rules`. If not, run `sudo ./scripts/install_can_udev.sh` and replug adapters. Check interfaces with `ip link show can_base`
 - **LiDAR no data**: Check network config (PC must be on 192.168.1.x subnet)
 - **Camera not detected**: Verify USB 3.0 connection, check `/dev/tieriv_c2_video0` and run `v4l2-ctl --list-devices`
 - **TF errors**: Check all required nodes are running with `ros2 node list`
