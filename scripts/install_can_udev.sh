@@ -179,13 +179,29 @@ else
     echo -e "${GREEN}✓${NC} udev rules triggered"
 fi
 
-# Add current user to dialout group (if not root)
+# Add current user to dialout group
+echo ""
 if [ -n "$SUDO_USER" ]; then
-    echo ""
-    echo "Adding user '$SUDO_USER' to 'dialout' group for CAN access..."
-    usermod -a -G dialout "$SUDO_USER"
-    echo -e "${GREEN}✓${NC} User added to dialout group"
-    echo -e "${YELLOW}⚠${NC} User must log out and back in for group changes to take effect"
+    TARGET_USER="$SUDO_USER"
+    echo "Adding user '$TARGET_USER' to 'dialout' group for CAN access..."
+elif [ -n "$USER" ] && [ "$USER" != "root" ]; then
+    TARGET_USER="$USER"
+    echo "Adding user '$TARGET_USER' to 'dialout' group for CAN access..."
+else
+    echo -e "${YELLOW}⚠${NC} Could not detect user automatically"
+    echo "Please manually add your user to dialout group:"
+    echo "  sudo usermod -a -G dialout \$USER"
+    TARGET_USER=""
+fi
+
+if [ -n "$TARGET_USER" ]; then
+    if id "$TARGET_USER" &>/dev/null; then
+        usermod -a -G dialout "$TARGET_USER"
+        echo -e "${GREEN}✓${NC} User '$TARGET_USER' added to dialout group"
+        echo -e "${YELLOW}⚠${NC} User must log out and back in for group changes to take effect"
+    else
+        echo -e "${RED}✗${NC} User '$TARGET_USER' not found"
+    fi
 fi
 
 echo ""
@@ -204,9 +220,11 @@ if [ "$IS_JETSON" = true ]; then
     ip link show can1 2>/dev/null || echo "  can1: Not available"
     echo ""
     echo "Next steps:"
-    echo "1. Check interface status: ip link show can0 can1"
-    echo "2. Monitor Ranger base: candump can0"
-    echo "3. Monitor PiPER arm: candump can1"
+    echo "1. Log out and back in (or reboot) for group changes to take effect"
+    echo "2. Check interface status: ip link show can0 can1"
+    echo "3. Verify you're in dialout group: groups | grep dialout"
+    echo "4. Monitor Ranger base: candump can0"
+    echo "5. Monitor PiPER arm: candump can1"
     echo ""
     echo "Service management:"
     echo "  Check status: sudo systemctl status ranger-can-setup.service"
@@ -217,10 +235,12 @@ else
     echo "  can1 -> PiPER arm @ 1000 kbps"
     echo ""
     echo "Next steps:"
-    echo "1. Unplug and replug your CAN adapter(s)"
-    echo "2. Check interface status: ip link show can0 can1"
-    echo "3. Monitor Ranger base: candump can0"
-    echo "4. Monitor PiPER arm: candump can1"
+    echo "1. Log out and back in (or reboot) for group changes to take effect"
+    echo "2. Unplug and replug your CAN adapter(s)"
+    echo "3. Check interface status: ip link show can0 can1"
+    echo "4. Verify you're in dialout group: groups | grep dialout"
+    echo "5. Monitor Ranger base: candump can0"
+    echo "6. Monitor PiPER arm: candump can1"
     echo ""
     echo "Service management:"
     echo "  Enable: sudo systemctl enable can0-setup.service"
