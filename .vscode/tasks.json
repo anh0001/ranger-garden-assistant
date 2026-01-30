@@ -35,7 +35,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority xterm -hold -e bash -lc \"source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json\""
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -45,7 +45,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Runs Livox driver and RViz in xterm on DISPLAY :3; uses the MID360 config.",
+      "detail": "Runs Livox driver and RViz directly on DISPLAY :77 without xterm; uses the MID360 config.",
       "problemMatcher": [],
       "isBackground": false
     },
