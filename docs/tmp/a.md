@@ -101,7 +101,7 @@ Example patterns used in this repo:
 ## Device & Networking Conventions
 
 - CAN bus:
-  - Base on `can0` at 500 kbps, PiPER arm on `can1` at 1000 kbps by default.
+  - Base on `can_base` at 500 kbps, PiPER arm on `can_piper` at 1000 kbps by default.
   - Use `scripts/setup_can.sh` to configure; don’t embed `sudo` in launches.
 - Tier IV C2-176: use `v4l2_camera` `v4l2_camera_node` with the udev device path and calibration YAML.
 - Livox Mid‑360: use `livox_ros_driver2` with `MID360_config.json` and `frame_id=livox_frame` unless changed in URDF.

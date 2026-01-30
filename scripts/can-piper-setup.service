@@ -1,0 +1,22 @@
+[Unit]
+Description=Setup CAN interface for PiPER Arm (can_piper)
+After=network.target
+BindsTo=sys-subsystem-net-devices-can_piper.device
+After=sys-subsystem-net-devices-can_piper.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Wait a moment for device to stabilize
+ExecStartPre=/bin/sleep 1
+# Bring interface down (in case it was up)
+ExecStartPre=-/sbin/ip link set can_piper down
+# Configure bitrate for PiPER arm (1000 kbps)
+ExecStart=/sbin/ip link set can_piper type can bitrate 1000000
+# Bring interface up
+ExecStart=/sbin/ip link set can_piper up
+# Cleanup on stop
+ExecStop=/sbin/ip link set can_piper down
+
+[Install]
+WantedBy=multi-user.target

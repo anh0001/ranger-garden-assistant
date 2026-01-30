@@ -44,7 +44,7 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 └─────────┼──────────────────────────────────┼─────────────────┘
           │                                  │
      ┌────▼────┐                        ┌────▼────┐
-     │  CAN0   │                        │  CAN1   │
+     │ CAN_BASE│                        │ CAN_PIPER│
      │ Ranger  │                        │ PiPER   │
      │  Base   │                        │  Arm    │
      └─────────┘                        └─────────┘
@@ -55,7 +55,7 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 ### 1. Hardware Layer
 
 #### Ranger Mini 3.0 Base
-- **Interface**: CAN bus (can0, 500 kbps)
+- **Interface**: CAN bus (can_base, 500 kbps)
 - **Driver**: `ranger_ros2` package
 - **Topics**:
   - `/odom` (nav_msgs/Odometry) - Wheel odometry
@@ -85,7 +85,7 @@ The Ranger Garden Assistant is a mobile manipulation platform built on ROS 2 Hum
 - **Framerate**: 10 FPS (configurable)
 
 #### PiPER 6-DOF Arm
-- **Interface**: CAN bus (can1, 1000 kbps)
+- **Interface**: CAN bus (can_piper, 1000 kbps)
 - **Driver**: `piper_ros` package
 - **Topics**:
   - `/joint_states` - Current joint positions

@@ -66,7 +66,7 @@ sudo ./scripts/install_can_udev.sh
 ```
 
 This installs udev rules that automatically configure CAN interfaces when adapters are plugged in:
-- Creates persistent interface names (`can_base` for Ranger base, `can_arm` for PiPER arm)
+- Creates persistent interface names (`can_base` for Ranger base, `can_piper` for PiPER arm)
 - Automatically sets correct bitrates (500 kbps for base, 1000 kbps for arm)
 - Adds user to `dialout` group for CAN access
 
@@ -75,15 +75,15 @@ After installation, unplug and replug CAN adapters. Interfaces will be automatic
 Verify interfaces:
 ```bash
 ip link show can_base
-ip link show can_arm
+ip link show can_piper
 candump can_base  # Should see messages if base is powered on
 ```
 
 ### Verify Hardware
 ```bash
 # Check CAN interfaces
-ip link show can0
-candump can0  # Should see messages if base is powered on
+ip link show can_base
+candump can_base  # Should see messages if base is powered on
 
 # Check Tier IV camera
 ls -l /dev/tieriv_c2_video0
@@ -253,7 +253,7 @@ rviz2 -d $(ros2 pkg prefix nav2_bringup)/share/nav2_bringup/rviz/nav2_default_vi
 ### Arm Control (PiPER)
 ```bash
 # Launch arm separately
-ros2 launch piper_ros start_single_piper.launch.py can_port:=can1
+ros2 launch piper_ros start_single_piper.launch.py can_port:=can_piper
 
 # Launch with MoveIt for motion planning
 ros2 launch piper_moveit piper_moveit.launch.py

@@ -93,6 +93,8 @@ sudo usermod -a -G dialout $USER
 # Log out and log back in for this to take effect
 ```
 
+**Jetson gs_usb note**: If you are using a Jetson and USB-CAN adapters, install the `gs_usb` kernel module first. This repo does not configure MTTCAN (`can0`/`can1`); use `can_base` and `can_piper` instead. See the [gs_usb Installation Guide](docs/gs_usb_installation.md) for the Jetson Orin AGX procedure.
+
 ### 4. Clone and Build Workspace
 
 ```bash
@@ -129,8 +131,8 @@ source install/setup.bash
 ### 1. Setup Hardware
 
 **Connect CAN adapters:**
-- Plug USB-CAN adapter for base into USB port (should appear as `can0`)
-- Plug USB-CAN adapter for arm into USB port (should appear as `can1`)
+- Plug USB-CAN adapter for base into USB port (should appear as `can_base`)
+- Plug USB-CAN adapter for arm into USB port (should appear as `can_piper`)
 
 **Connect sensors:**
 - Connect Livox Mid-360 via Ethernet or USB
@@ -159,7 +161,7 @@ sudo ./scripts/install_can_udev.sh
 ```
 
 This will:
-- Create persistent CAN interface names (`can_base` for base, `can_arm` for arm)
+- Create persistent CAN interface names (`can_base` for base, `can_piper` for arm)
 - Automatically configure interfaces on boot
 - Add your user to the `dialout` group for CAN access
 
@@ -305,7 +307,7 @@ Launch the PiPER arm:
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Or launch arm separately
-ros2 launch piper_ros start_single_piper.launch.py can_port:=can1
+ros2 launch piper_ros start_single_piper.launch.py can_port:=can_piper
 ```
 
 Use MoveIt for motion planning:
@@ -426,9 +428,9 @@ If your CAN devices have different names, edit launch files:
 ```python
 # In ranger_complete_bringup.launch.py
 declared_arguments.append(
-    DeclareLaunchArgument(
-        "can_device",
-        default_value="can0",  # Change this
+        DeclareLaunchArgument(
+            "can_device",
+        default_value="can_base",  # Change this
     )
 )
 ```
@@ -437,7 +439,7 @@ declared_arguments.append(
 
 ### CAN Interface Issues
 
-**Problem**: `can_base` or `can_arm` not found
+**Problem**: `can_base` or `can_piper` not found
 
 **Solution**:
 ```bash
@@ -452,7 +454,7 @@ ip link show | grep can
 
 # Verify devices after replugging adapters
 ip link show can_base
-ip link show can_arm
+ip link show can_piper
 ```
 
 **Problem**: Permission denied on CAN device

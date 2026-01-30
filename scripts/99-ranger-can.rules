@@ -5,25 +5,25 @@
 # Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
 #
 # Naming convention (standardized across all platforms):
-#   can0   -> CAN adapter for AgileX Ranger Mini 3.0 base (500 kbps)
-#   can1   -> CAN adapter for AgileX PiPER arm (1000 kbps)
+#   can_base  -> CAN adapter for AgileX Ranger Mini 3.0 base (500 kbps)
+#   can_piper -> CAN adapter for AgileX PiPER arm (1000 kbps)
 
 # Rule for candleLight/gs_usb CAN adapter - Ranger Base
 # Match by vendor ID (1d50), product ID (606f), and specific serial number
-# Renames to can0 for consistency with Jetson hardware CAN
+# Renames to can_base for consistent USB CAN naming
 SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
     ATTRS{serial}=="002300405246571220393733", \
-    NAME="can0", \
+    NAME="can_base", \
     TAG+="systemd", \
-    ENV{SYSTEMD_WANTS}="can0-setup.service"
+    ENV{SYSTEMD_WANTS}="can-base-setup.service"
 
 # Second CAN adapter for PiPER arm
 # Uncomment and adjust serial number when you have a second adapter
 # SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
 #     ATTRS{serial}=="YOUR_SECOND_ADAPTER_SERIAL", \
-#     NAME="can1", \
+#     NAME="can_piper", \
 #     TAG+="systemd", \
-#     ENV{SYSTEMD_WANTS}="can1-setup.service"
+#     ENV{SYSTEMD_WANTS}="can-piper-setup.service"
 
 # Generic fallback rule for any gs_usb adapter (if serial matching fails)
 # Ensures proper initialization even if serial numbers don't match

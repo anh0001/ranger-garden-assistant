@@ -14,7 +14,7 @@ ROS 2 Humble workspace for an omnidirectional mobile manipulation platform combi
 ## Critical Architecture
 
 ### Hardware & Communication
-- **Dual CAN buses**: `can0` for base (500 kbps), `can1` for arm (1000 kbps). Must run `sudo ./scripts/setup_can.sh` after every reboot before launching.
+- **Dual CAN buses**: `can_base` for base (500 kbps), `can_piper` for arm (1000 kbps). Must run `sudo ./scripts/setup_can.sh` after every reboot before launching.
 - **Vendor submodules** (read-only): `livox_ros_driver2`, `ranger_ros2`, `ugv_sdk`, `piper_ros` - never modify directly; overlay via launch/config.
 - **Frame hierarchy**: `map` → `odom` → `base_footprint` → `base_link` → sensor frames (defined in `ranger_description/urdf/ranger_complete.urdf.xacro`).
 
@@ -86,7 +86,7 @@ Then reference in joint origins. Never hardcode transforms in launch files.
 ### Launch Arguments Pattern
 Expose all tunables as arguments with sensible defaults:
 ```python
-DeclareLaunchArgument("can_device", default_value="can0", description="CAN device for base")
+DeclareLaunchArgument("can_device", default_value="can_base", description="CAN device for base")
 ```
 
 ## Common Tasks
@@ -111,10 +111,10 @@ Wire through launch: `params_file` argument in `navigation.launch.py`
 ### Debugging CAN Issues
 ```bash
 # Check interfaces up
-ip link show can0 can1
+ip link show can_base can_piper
 
 # Monitor traffic
-candump can0
+candump can_base
 
 # Re-setup if needed
 sudo ./scripts/setup_can.sh
@@ -122,7 +122,7 @@ sudo ./scripts/setup_can.sh
 
 ## Critical Pitfalls
 
-1. **Missing CAN setup**: Launches fail silently if `setup_can.sh` not run. Always check `ip link show can0` first.
+1. **Missing CAN setup**: Launches fail silently if `setup_can.sh` not run. Always check `ip link show can_base` first.
 2. **Frame mismatches**: URDF defines `livox_frame`, driver must match via `frame_id` argument. Check with `ros2 run tf2_tools view_frames`.
 3. **Submodule modifications**: Never edit code in `src/{livox_ros_driver2,ranger_ros2,ugv_sdk,piper_ros}`. Overlay via config/launch in `robofi_bringup`.
 4. **Forgotten `source install/setup.bash`**: After build, must source before launch. Add to `~/.bashrc` for convenience.
@@ -133,7 +133,7 @@ sudo ./scripts/setup_can.sh
 ### Quick Hardware Checks
 ```bash
 # CAN traffic (base powered)
-candump can0
+candump can_base
 
 # Tier IV camera connected
 ls -l /dev/tieriv_c2_video0

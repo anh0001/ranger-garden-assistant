@@ -66,7 +66,7 @@ sudo ./scripts/install_can_udev.sh
 
 # Verify CAN interfaces are up
 ip link show can_base
-ip link show can_arm
+ip link show can_piper
 ```
 
 **Tier IV Camera udev rules:**
@@ -84,7 +84,7 @@ v4l2-ctl --device=/dev/tieriv_c2_video0 --all
 ping 192.168.1.1XX  # Replace XX with your LiDAR's IP
 
 # Check CAN communication
-candump can0  # Should see messages when base is powered on
+candump can_base  # Should see messages when base is powered on
 ```
 
 ### 4. First Launch - Test Individual Components

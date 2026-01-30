@@ -1,5 +1,6 @@
 [Unit]
-Description=Configure Jetson Hardware CAN Interfaces for Ranger
+Description=Configure Jetson Hardware CAN Interfaces for Ranger (deprecated)
+# Deprecated: This repo uses gs_usb adapters (can_base/can_piper) instead of MTTCAN.
 After=network.target
 Before=ros.service
 

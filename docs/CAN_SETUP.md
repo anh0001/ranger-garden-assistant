@@ -19,7 +19,7 @@ The Ranger Garden Assistant uses USB CAN adapters for communication with:
 
 ### Recommended Names
 - **`can_base`** - CAN adapter for Ranger base controller (500 kbps)
-- **`can_arm`** - CAN adapter for PiPER arm controller (1000 kbps)
+- **`can_piper`** - CAN adapter for PiPER arm controller (1000 kbps)
 
 ### Why These Names?
 ✅ **Descriptive**: Clearly indicates which hardware the interface connects to
@@ -27,10 +27,12 @@ The Ranger Garden Assistant uses USB CAN adapters for communication with:
 ✅ **Intuitive**: Easy to remember and use in launch files
 ✅ **Compatible**: Works with ROS 2 naming conventions
 
+**Jetson note:** This repo uses USB gs_usb adapters on Jetson as well. The built-in MTTCAN interfaces (`can0`, `can1`) are not configured by our setup scripts; keep them down and use `can_base` / `can_piper`.
+
 ### Alternative Naming Schemes Considered
 | Name | Pros | Cons | Verdict |
 |------|------|------|---------|
-| `can_base`, `can_arm` | Descriptive, intuitive | None | **SELECTED** ✓ |
+| `can_base`, `can_piper` | Descriptive, intuitive | None | **SELECTED** ✓ |
 | `can0`, `can1` | Standard Linux naming | Not persistent, unclear purpose | ✗ |
 | `ranger_base_can`, `piper_arm_can` | Very descriptive | Too verbose | ✗ |
 | `canbus0`, `canbus1` | Clear it's CAN | Generic, doesn't indicate purpose | ✗ |
@@ -76,7 +78,7 @@ sudo cp scripts/99-ranger-can.rules /etc/udev/rules.d/
 
 # Copy systemd services
 sudo cp scripts/can-base-setup.service /etc/systemd/system/
-sudo cp scripts/can-arm-setup.service /etc/systemd/system/
+sudo cp scripts/can-piper-setup.service /etc/systemd/system/
 
 # Reload and apply
 sudo systemctl daemon-reload
@@ -115,9 +117,9 @@ sudo ip link set can_base type can bitrate 500000
 sudo ip link set can_base up
 
 # Bring up PiPER arm interface (if available)
-sudo ip link set can_arm down
-sudo ip link set can_arm type can bitrate 1000000
-sudo ip link set can_arm up
+sudo ip link set can_piper down
+sudo ip link set can_piper type can bitrate 1000000
+sudo ip link set can_piper up
 ```
 
 ### Testing CAN Communication
@@ -255,7 +257,7 @@ To remove custom naming and go back to `can0`, `can1`:
 ```bash
 # Disable services
 sudo systemctl disable can-base-setup.service
-sudo systemctl disable can-arm-setup.service
+sudo systemctl disable can-piper-setup.service
 
 # Remove udev rules
 sudo rm /etc/udev/rules.d/99-ranger-can.rules
@@ -298,13 +300,13 @@ sudo journalctl -u can-base-setup.service -f
 ### Created Files
 - [`scripts/99-ranger-can.rules`](../scripts/99-ranger-can.rules) - udev rules for device naming
 - [`scripts/can-base-setup.service`](../scripts/can-base-setup.service) - systemd service for base interface
-- [`scripts/can-arm-setup.service`](../scripts/can-arm-setup.service) - systemd service for arm interface
+- [`scripts/can-piper-setup.service`](../scripts/can-piper-setup.service) - systemd service for arm interface
 - [`scripts/install_can_udev.sh`](../scripts/install_can_udev.sh) - Installation script
 
 ### Installed Locations
 - `/etc/udev/rules.d/99-ranger-can.rules`
 - `/etc/systemd/system/can-base-setup.service`
-- `/etc/systemd/system/can-arm-setup.service`
+- `/etc/systemd/system/can-piper-setup.service`
 
 ## See Also
 
