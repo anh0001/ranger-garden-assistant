@@ -301,7 +301,7 @@ def generate_launch_description():
         parameters=[
             {
                 "video_device": camera_device,
-                "image_size": [camera_width, camera_height],
+                "image_size": [2880, 1860],  # Fixed: must be integer array, not LaunchConfiguration
                 "pixel_format": camera_pixel_format,
                 "output_encoding": camera_output_encoding,
                 "camera_frame_id": camera_frame_id,
