@@ -1,6 +1,7 @@
 image_width: 2880
 image_height: 1860
 camera_name: tier4_c2_176
+camera_frame_id: camera_link
 camera_matrix:
   rows: 3
   cols: 3
