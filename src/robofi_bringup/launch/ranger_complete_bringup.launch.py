@@ -126,7 +126,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "camera_frame_id",
-            default_value="camera_optical_frame",
+            default_value="camera_link",
             description="Frame ID reported by the camera driver.",
         )
     )
