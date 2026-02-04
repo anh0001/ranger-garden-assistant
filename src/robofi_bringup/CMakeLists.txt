@@ -18,6 +18,7 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/fastlio2_auto_relocalize.py
+  scripts/camera_info_frame_id_fixer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

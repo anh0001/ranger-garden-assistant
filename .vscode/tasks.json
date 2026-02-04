@@ -115,7 +115,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -125,7 +125,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :3 to verify meshes and sensor frames",
+      "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :77 to verify meshes and sensor frames",
       "problemMatcher": [],
       "isBackground": false
     },
@@ -135,7 +135,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -145,7 +145,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches the complete Ranger system: base controller, LiDAR, Tier IV C2-176 camera, robot state publisher, and TF tree on DISPLAY :3",
+      "detail": "Launches the complete Ranger system: base controller, LiDAR, Tier IV C2-176 camera, robot state publisher, and TF tree on DISPLAY :77",
       "problemMatcher": [],
       "isBackground": false
     },
@@ -165,7 +165,7 @@
         "reveal": "always",
         "panel": "new"
       },
-      "detail": "Launches complete Ranger system + FASTLIO2 LIO + Octomap Server on DISPLAY :3 for mapping, pinned to robofi_bringup/rviz/fastlio2_mapping.rviz"
+      "detail": "Launches complete Ranger system + FASTLIO2 LIO + Octomap Server on DISPLAY :77 for mapping, pinned to robofi_bringup/rviz/fastlio2_mapping.rviz"
     },
     {
       "label": "FASTLIO2 Navigation Stack",
@@ -173,7 +173,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_start_delay:=5.0 nav2_use_amcl:=false map_path:=${input:mapPath}"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_start_delay:=5.0 nav2_use_amcl:=false map_path:=${input:mapPath}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -183,7 +183,7 @@
         "reveal": "always",
         "panel": "new"
       },
-      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack on DISPLAY :3 for autonomous navigation with saved map"
+      "detail": "Launches complete Ranger system + FASTLIO2 Localizer + Nav2 stack on DISPLAY :77 for autonomous navigation with saved map"
     },
     {
       "label": "FASTLIO2 Navigation Stack (Auto-Latest Map)",
@@ -191,7 +191,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name \"map.pcd\" -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:3 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_use_amcl:=false map_path:=$LATEST_MAP rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_navigation.rviz"
+        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name \"map.pcd\" -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_use_amcl:=false map_path:=$LATEST_MAP rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_navigation.rviz"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

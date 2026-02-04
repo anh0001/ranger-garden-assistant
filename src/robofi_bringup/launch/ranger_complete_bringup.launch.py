@@ -10,8 +10,8 @@ Complete system bringup for Ranger Mini 3.0 with:
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     Command,
@@ -185,6 +185,38 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "fix_camera_info_frame_id",
+            default_value="true",
+            description="Republish CameraInfo with a populated frame_id when the driver leaves it empty.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_info_topic",
+            default_value="camera_info",
+            description="CameraInfo topic name exposed by the bringup.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_info_raw_topic",
+            default_value="camera_info_raw",
+            description="Internal CameraInfo topic name used before frame_id fixup.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "camera_info_only_if_empty",
+            default_value="true",
+            description="Only override CameraInfo frame_id when it is empty.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -204,6 +236,10 @@ def generate_launch_description():
     camera_output_encoding = LaunchConfiguration("camera_output_encoding")
     camera_name = LaunchConfiguration("camera_name")
     camera_calibration_file = LaunchConfiguration("camera_calibration_file")
+    fix_camera_info_frame_id = LaunchConfiguration("fix_camera_info_frame_id")
+    camera_info_topic = LaunchConfiguration("camera_info_topic")
+    camera_info_raw_topic = LaunchConfiguration("camera_info_raw_topic")
+    camera_info_only_if_empty = LaunchConfiguration("camera_info_only_if_empty")
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -292,25 +328,65 @@ def generate_launch_description():
         value_type=str,
     )
 
-    tier4_camera_node = Node(
+    camera_parameters = {
+        "video_device": camera_device,
+        "image_size": [2880, 1860],  # Fixed: must be integer array, not LaunchConfiguration
+        "pixel_format": camera_pixel_format,
+        "output_encoding": camera_output_encoding,
+        "camera_frame_id": camera_frame_id,
+        "camera_name": camera_name,
+        "camera_info_url": camera_info_url,
+        "use_sensor_data_qos": True,
+    }
+
+    tier4_camera_node_fixed = Node(
         package="v4l2_camera",
         executable="v4l2_camera_node",
         namespace=camera_namespace,
         name="tier4_c2_176_camera",
         output="both",
+        parameters=[camera_parameters],
+        remappings=[("camera_info", camera_info_raw_topic)],
+        condition=IfCondition(fix_camera_info_frame_id),
+    )
+
+    tier4_camera_node_unfixed = Node(
+        package="v4l2_camera",
+        executable="v4l2_camera_node",
+        namespace=camera_namespace,
+        name="tier4_c2_176_camera",
+        output="both",
+        parameters=[camera_parameters],
+        remappings=[("camera_info", camera_info_topic)],
+        condition=UnlessCondition(fix_camera_info_frame_id),
+    )
+
+    camera_info_fixer_node = Node(
+        package="robofi_bringup",
+        executable="camera_info_frame_id_fixer.py",
+        namespace=camera_namespace,
+        name="camera_info_frame_id_fixer",
+        output="both",
         parameters=[
             {
-                "video_device": camera_device,
-                "image_size": [2880, 1860],  # Fixed: must be integer array, not LaunchConfiguration
-                "pixel_format": camera_pixel_format,
-                "output_encoding": camera_output_encoding,
-                "camera_frame_id": camera_frame_id,
-                "camera_name": camera_name,
-                "camera_info_url": camera_info_url,
-                "use_sensor_data_qos": True,
+                "frame_id": camera_frame_id,
+                "only_if_empty": ParameterValue(camera_info_only_if_empty, value_type=bool),
             }
         ],
+        remappings=[
+            ("camera_info_raw", camera_info_raw_topic),
+            ("camera_info", camera_info_topic),
+        ],
+        condition=IfCondition(fix_camera_info_frame_id),
+    )
+
+    camera_group = GroupAction(
         condition=IfCondition(launch_camera),
+        actions=[
+            tier4_camera_node_fixed,
+            tier4_camera_node_unfixed,
+            camera_info_fixer_node,
+        ],
     )
 
     # RViz visualization (optional)
@@ -333,7 +409,7 @@ def generate_launch_description():
             robot_state_publisher_node,
             joint_state_publisher_node,
             livox_launch,
-            tier4_camera_node,
+            camera_group,
             rviz_node,
             # static_tf_lidar,
             ranger_base_launch,
