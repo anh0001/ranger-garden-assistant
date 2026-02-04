@@ -176,9 +176,9 @@ def generate_launch_description():
             "camera_calibration_file",
             default_value=PathJoinSubstitution(
                 [
-                    FindPackageShare("robofi_bringup"),
+                    FindPackageShare("camera_lidar_fuse"),
                     "config",
-                    "tier4_c2_176_2880x1860_intrinsic.yaml",
+                    "tier4_c2_176_2880x1860.yaml",
                 ]
             ),
             description="Calibration YAML for the Tier IV C2-176 camera.",
