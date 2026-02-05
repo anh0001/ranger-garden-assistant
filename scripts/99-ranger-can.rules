@@ -19,11 +19,11 @@ SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
 
 # Second CAN adapter for PiPER arm
 # Uncomment and adjust serial number when you have a second adapter
-# SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
-#     ATTRS{serial}=="YOUR_SECOND_ADAPTER_SERIAL", \
-#     NAME="can_piper", \
-#     TAG+="systemd", \
-#     ENV{SYSTEMD_WANTS}="can-piper-setup.service"
+SUBSYSTEM=="net", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", \
+    ATTRS{serial}=="002900335246571220393733", \
+    NAME="can_piper", \
+    TAG+="systemd", \
+    ENV{SYSTEMD_WANTS}="can-piper-setup.service"
 
 # Generic fallback rule for any gs_usb adapter (if serial matching fails)
 # Ensures proper initialization even if serial numbers don't match
