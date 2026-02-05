@@ -433,6 +433,13 @@
       <child link="${prefix}camera_link"/>
       <origin xyz="${camera_xyz}" rpy="${camera_roll} ${camera_pitch - 1.5708} ${camera_yaw}"/>
     </joint>
+    <!-- PiPER wrist camera optical frame -->
+    <link name="${prefix}camera_optical_frame"/>
+    <joint name="${prefix}camera_optical_joint" type="fixed">
+      <parent link="${prefix}camera_link"/>
+      <child link="${prefix}camera_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
+    </joint>
     <link
       name="${prefix}link7">
       <inertial>
