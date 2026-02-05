@@ -125,7 +125,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches robot model visualization in RViz with Joint State Publisher GUI on DISPLAY :77 to verify meshes and sensor frames",
+      "detail": "Launches complete robot model (Ranger base + PiPER arm + sensors) in RViz with Joint State Publisher GUI on DISPLAY :77. Use sliders to move arm joints interactively.",
       "problemMatcher": [],
       "isBackground": false
     },
