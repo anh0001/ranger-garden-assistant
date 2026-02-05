@@ -90,6 +90,26 @@
       "isBackground": false
     },
     {
+      "label": "Launch: RealSense D405 (PiPER Wrist Camera)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch realsense2_camera rs_launch.py camera_name:=piper_gripper_d405"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches Intel RealSense D405 wrist camera on PiPER gripper. Publishes RGB to /piper_gripper_d405/color/image_raw and depth to /piper_gripper_d405/depth/image_rect_raw. View with RQT Image View task.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
       "label": "Launch: Camera-LiDAR Fuse",
       "type": "shell",
       "command": "bash",

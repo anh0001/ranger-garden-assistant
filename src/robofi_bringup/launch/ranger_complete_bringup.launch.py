@@ -5,6 +5,7 @@ Complete system bringup for Ranger Mini 3.0 with:
 - Base controller (ranger_ros2)
 - Livox Mid-360 LiDAR
 - Tier IV C2-176 fisheye camera
+- RealSense D405 (PiPER wrist camera)
 - PiPER 6-DOF arm
 - Robot description and TF
 """
@@ -217,6 +218,134 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_wrist_camera",
+            default_value="true",
+            description="Whether to launch the RealSense D405 wrist camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_name",
+            default_value="piper_d405",
+            description="RealSense camera name for the PiPER wrist camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_namespace",
+            default_value="/piper/wrist_camera",
+            description="Namespace applied to the PiPER wrist camera topics.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_serial",
+            default_value="''",
+            description="Serial number for selecting the RealSense D405.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_usb_port_id",
+            default_value="''",
+            description="USB port ID for selecting the RealSense D405.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_device_type",
+            default_value="''",
+            description="Device type filter for the RealSense camera (e.g., D405).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_config_file",
+            default_value="''",
+            description="Optional YAML config file for the RealSense D405.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_base_frame_id",
+            default_value="piper_camera_link",
+            description="Base frame for the RealSense TF tree.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_enable_color",
+            default_value="true",
+            description="Enable the RealSense color stream.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_enable_depth",
+            default_value="true",
+            description="Enable the RealSense depth stream.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_enable_rgbd",
+            default_value="false",
+            description="Enable the RealSense RGBD topic.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_pointcloud",
+            default_value="false",
+            description="Enable the RealSense pointcloud topic.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_align_depth",
+            default_value="false",
+            description="Enable align depth filter for the RealSense camera.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_color_profile",
+            default_value="0,0,0",
+            description="Color stream profile (width,height,fps).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_depth_profile",
+            default_value="0,0,0",
+            description="Depth stream profile (width,height,fps).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "wrist_camera_publish_tf",
+            default_value="true",
+            description="Publish TF frames from the RealSense driver.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -240,6 +369,22 @@ def generate_launch_description():
     camera_info_topic = LaunchConfiguration("camera_info_topic")
     camera_info_raw_topic = LaunchConfiguration("camera_info_raw_topic")
     camera_info_only_if_empty = LaunchConfiguration("camera_info_only_if_empty")
+    launch_wrist_camera = LaunchConfiguration("launch_wrist_camera")
+    wrist_camera_name = LaunchConfiguration("wrist_camera_name")
+    wrist_camera_namespace = LaunchConfiguration("wrist_camera_namespace")
+    wrist_camera_serial = LaunchConfiguration("wrist_camera_serial")
+    wrist_camera_usb_port_id = LaunchConfiguration("wrist_camera_usb_port_id")
+    wrist_camera_device_type = LaunchConfiguration("wrist_camera_device_type")
+    wrist_camera_config_file = LaunchConfiguration("wrist_camera_config_file")
+    wrist_camera_base_frame_id = LaunchConfiguration("wrist_camera_base_frame_id")
+    wrist_camera_enable_color = LaunchConfiguration("wrist_camera_enable_color")
+    wrist_camera_enable_depth = LaunchConfiguration("wrist_camera_enable_depth")
+    wrist_camera_enable_rgbd = LaunchConfiguration("wrist_camera_enable_rgbd")
+    wrist_camera_pointcloud = LaunchConfiguration("wrist_camera_pointcloud")
+    wrist_camera_align_depth = LaunchConfiguration("wrist_camera_align_depth")
+    wrist_camera_color_profile = LaunchConfiguration("wrist_camera_color_profile")
+    wrist_camera_depth_profile = LaunchConfiguration("wrist_camera_depth_profile")
+    wrist_camera_publish_tf = LaunchConfiguration("wrist_camera_publish_tf")
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -389,6 +534,32 @@ def generate_launch_description():
         ],
     )
 
+    wrist_camera_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("realsense2_camera"), "launch", "rs_launch.py"]
+            )
+        ),
+        launch_arguments={
+            "camera_name": wrist_camera_name,
+            "camera_namespace": wrist_camera_namespace,
+            "serial_no": wrist_camera_serial,
+            "usb_port_id": wrist_camera_usb_port_id,
+            "device_type": wrist_camera_device_type,
+            "config_file": wrist_camera_config_file,
+            "enable_color": wrist_camera_enable_color,
+            "enable_depth": wrist_camera_enable_depth,
+            "enable_rgbd": wrist_camera_enable_rgbd,
+            "pointcloud.enable": wrist_camera_pointcloud,
+            "align_depth.enable": wrist_camera_align_depth,
+            "rgb_camera.color_profile": wrist_camera_color_profile,
+            "depth_module.depth_profile": wrist_camera_depth_profile,
+            "publish_tf": wrist_camera_publish_tf,
+            "base_frame_id": wrist_camera_base_frame_id,
+        }.items(),
+        condition=IfCondition(launch_wrist_camera),
+    )
+
     # RViz visualization (optional)
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("robofi_bringup"), "rviz", "robot_bringup.rviz"]
@@ -410,6 +581,7 @@ def generate_launch_description():
             joint_state_publisher_node,
             livox_launch,
             camera_group,
+            wrist_camera_launch,
             rviz_node,
             # static_tf_lidar,
             ranger_base_launch,
