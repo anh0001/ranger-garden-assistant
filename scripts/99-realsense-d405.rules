@@ -1,0 +1,20 @@
+# udev rules for Intel RealSense D405 (PiPER gripper camera)
+# This file ensures consistent permissions and a stable USB symlink.
+#
+# Installation: sudo cp 99-realsense-d405.rules /etc/udev/rules.d/
+# Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Camera Information:
+#   Vendor ID: 8086 (Intel Corp.)
+#   Product ID: 0b5b (RealSense D405)
+#   Symlink created: /dev/piper_gripper_d405 (USB device node)
+
+# USB device rule for D405
+SUBSYSTEM=="usb", ATTR{idVendor}=="8086", ATTR{idProduct}=="0b5b", \
+    SYMLINK+="piper_gripper_d405", \
+    GROUP="video", MODE="0660", \
+    TAG+="uaccess", TAG+="systemd"
+
+# Set group ownership to 'video' for all D405 video4linux nodes
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b5b", \
+    GROUP="video", MODE="0660"

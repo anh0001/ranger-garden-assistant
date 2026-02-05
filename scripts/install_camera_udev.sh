@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Installation script for Tier IV C2-176 Camera udev rules
+# Installation script for camera udev rules (Tier IV C2-176 + RealSense D405)
 # This script sets up automatic camera device configuration and consistent naming
 #
 # Usage: sudo ./install_camera_udev.sh
@@ -15,7 +15,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo "======================================"
-echo "Tier IV C2-176 Camera udev Rules Installer"
+echo "Camera udev Rules Installer"
+echo "  - Tier IV C2-176"
+echo "  - Intel RealSense D405 (PiPER gripper)"
 echo "======================================"
 echo ""
 
@@ -39,6 +41,14 @@ if [ -f "$SCRIPT_DIR/99-tieriv-c2-camera.rules" ]; then
     echo -e "${GREEN}✓${NC} Copied 99-tieriv-c2-camera.rules to /etc/udev/rules.d/"
 else
     echo -e "${RED}✗${NC} File not found: $SCRIPT_DIR/99-tieriv-c2-camera.rules"
+    exit 1
+fi
+
+if [ -f "$SCRIPT_DIR/99-realsense-d405.rules" ]; then
+    cp "$SCRIPT_DIR/99-realsense-d405.rules" /etc/udev/rules.d/
+    echo -e "${GREEN}✓${NC} Copied 99-realsense-d405.rules to /etc/udev/rules.d/"
+else
+    echo -e "${RED}✗${NC} File not found: $SCRIPT_DIR/99-realsense-d405.rules"
     exit 1
 fi
 
@@ -73,16 +83,20 @@ echo "Camera Information:"
 echo "  - Vendor: ABILITY ENTERPRISE CO., LTD."
 echo "  - Model: Tier IV C2-176 (GMSL2-USB3.0 Conversion Kit)"
 echo "  - Serial: C2-Master-10fps"
+echo "  - Vendor: Intel Corp."
+echo "  - Model: RealSense D405 (PiPER gripper)"
+echo "  - Product ID: 0b5b"
 echo ""
 echo "Device Symlinks Created:"
 echo "  - ${BLUE}/dev/tieriv_c2_video0${NC} (main video device)"
 echo "  - ${BLUE}/dev/tieriv_c2_video1${NC} (metadata/secondary)"
 echo "  - ${BLUE}/dev/tieriv_c2_media${NC} (media controller)"
+echo "  - ${BLUE}/dev/piper_gripper_d405${NC} (RealSense USB device symlink)"
 echo ""
 echo "Next steps:"
-echo "1. Unplug and replug your Tier IV C2-176 camera"
+echo "1. Unplug and replug your Tier IV C2-176 camera and RealSense D405"
 echo "2. Verify symlinks were created:"
-echo "   ${BLUE}ls -l /dev/tieriv_c2_*${NC}"
+echo "   ${BLUE}ls -l /dev/tieriv_c2_* /dev/piper_gripper_d405${NC}"
 echo ""
 echo "3. Check camera detection:"
 echo "   ${BLUE}v4l2-ctl --list-devices${NC}"
@@ -92,9 +106,11 @@ echo "   ${BLUE}v4l2-ctl --device=/dev/tieriv_c2_video0 --all${NC}"
 echo ""
 echo "5. Test camera with (if gstreamer installed):"
 echo "   ${BLUE}gst-launch-1.0 v4l2src device=/dev/tieriv_c2_video0 ! videoconvert ! autovideosink${NC}"
+echo "   ${BLUE}ros2 launch realsense2_camera rs_launch.py camera_name:=piper_gripper_d405${NC}"
 echo ""
 echo "Troubleshooting:"
 echo "  - Check if camera is detected: ${BLUE}lsusb | grep 1419${NC}"
+echo "  - Check if RealSense is detected: ${BLUE}lsusb | grep 8086${NC}"
 echo "  - View udev events: ${BLUE}udevadm monitor --subsystem-match=video4linux${NC}"
 echo "  - Check device permissions: ${BLUE}ls -l /dev/video*${NC}"
 echo ""

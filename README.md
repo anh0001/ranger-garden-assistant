@@ -7,6 +7,7 @@
 A complete ROS 2 Humble stack for the AgileX Ranger Mini 3.0 omnidirectional mobile robot integrated with:
 - **Livox Mid-360 LiDAR** for 360° 3D perception
 - **Tier IV C2-176 Fisheye Camera** for wide-angle vision
+- **Intel RealSense D405** wrist camera on the PiPER gripper
 - **AgileX PiPER 6-DOF Arm** for manipulation
 - **Navigation2** for autonomous navigation
 - **MoveIt 2** for motion planning
@@ -33,6 +34,7 @@ This workspace provides a fully integrated mobile manipulation platform suitable
 - **AgileX Ranger Mini 3.0** - Omnidirectional mobile base
 - **Livox Mid-360** - 3D LiDAR sensor
 - **Tier IV C2-176** - Fisheye camera (2880x1860, GMSL2-USB3.0)
+- **Intel RealSense D405** - Wrist camera on PiPER gripper (USB)
 - **AgileX PiPER Arm** - 6-DOF robotic arm (optional)
 - **2x USB-CAN Adapters** - For base and arm control
 - **Computing Platform** - NVIDIA Jetson AGX Orin 64GB (Ubuntu 22.04 / JetPack 6)
@@ -54,6 +56,7 @@ This workspace provides a fully integrated mobile manipulation platform suitable
   - MoveIt 2
   - slam_toolbox
   - v4l2_camera
+  - realsense2_camera (for D405)
   - OctoMap (octomap_server2 + octomap_msgs + pcl_msgs + perception_pcl)
   - python-can
   - piper_sdk
@@ -137,8 +140,9 @@ source install/setup.bash
 **Connect sensors:**
 - Connect Livox Mid-360 via Ethernet or USB
 - Connect Tier IV C2-176 to USB 3.0 port
+- Connect Intel RealSense D405 (PiPER gripper) to USB 3.0/USB-C
 
-### 2. Setup Tier IV Camera
+### 2. Setup Cameras (Tier IV C2-176 + RealSense D405)
 
 Install the udev rules for consistent device naming:
 
@@ -149,8 +153,9 @@ sudo ./scripts/install_camera_udev.sh
 This creates persistent symlinks:
 - `/dev/tieriv_c2_video0` - Main video device
 - `/dev/tieriv_c2_video1` - Metadata/secondary stream
+- `/dev/piper_gripper_d405` - Recommended USB symlink for the PiPER gripper D405
 
-After installation, unplug and replug the camera for the rules to take effect.
+After installation, unplug and replug the cameras for the rules to take effect.
 
 ### 3. Configure CAN Interfaces
 
@@ -298,7 +303,19 @@ Or disable it:
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py launch_camera:=false
 ```
 
-#### 5. Arm Control (PiPER)
+#### 5. Camera Visualization (RealSense D405)
+
+Launch the D405 using `realsense2_camera`:
+
+```bash
+ros2 launch realsense2_camera rs_launch.py \
+  camera_name:=piper_gripper_d405 \
+  serial_no:=<D405_SERIAL>
+```
+
+If you have only one RealSense connected, you can omit `serial_no`. Use `rs-enumerate-devices` or `realsense-viewer` to find the serial number.
+
+#### 6. Arm Control (PiPER)
 
 Launch the PiPER arm:
 
@@ -564,6 +581,31 @@ ls -l /dev/video*
 
 # Check camera capabilities (if v4l-utils installed)
 v4l2-ctl --device=/dev/tieriv_c2_video0 --list-formats-ext
+```
+
+### RealSense D405 Camera Issues
+
+**Problem**: D405 not detected
+
+**Solution**:
+```bash
+# Check USB detection
+lsusb | grep 8086
+
+# Check udev rules
+ls -l /etc/udev/rules.d/99-realsense-d405.rules
+
+# Reinstall rules if missing
+sudo ./scripts/install_camera_udev.sh
+```
+
+**Problem**: Permission denied accessing D405
+
+**Solution**:
+```bash
+# Add user to video group
+sudo usermod -a -G video $USER
+# Log out and back in for changes to take effect
 ```
 
 ### Navigation Issues
