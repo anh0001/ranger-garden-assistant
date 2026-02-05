@@ -417,8 +417,8 @@
         <geometry>
           <box size="0.04 0.04 0.025"/>
         </geometry>
-        <material name="d405_black">
-          <color rgba="0.1 0.1 0.1 1.0"/>
+        <material name="silver">
+          <color rgba="0.8 0.8 0.8 1.0"/>
         </material>
       </visual>
       <collision>
