@@ -17,6 +17,9 @@
   <xacro:property name="arm_z" value="0.30"/>
   <xacro:property name="mesh_dir" value="$(arg mesh_dir)"/>
 
+  <!-- PiPER arm wrapper -->
+  <xacro:include filename="$(find ranger_description)/urdf/piper_arm_macro.xacro" />
+
   <link
     name="base_link">
     <inertial>
@@ -549,34 +552,11 @@
     <origin xyz="0 0 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
   </joint>
 
-  <!-- PiPER Arm Base Link (placeholder - actual arm from piper_ros) -->
-  <link name="piper_base_link">
-    <visual>
-      <geometry>
-        <cylinder radius="0.06" length="0.10"/>
-      </geometry>
-      <material name="blue">
-        <color rgba="0.2 0.2 0.8 1.0"/>
-      </material>
-    </visual>
-    <collision>
-      <geometry>
-        <cylinder radius="0.06" length="0.10"/>
-      </geometry>
-    </collision>
-    <inertial>
-      <mass value="1.0"/>
-      <origin xyz="0 0 0"/>
-      <inertia ixx="0.01" ixy="0.0" ixz="0.0"
-               iyy="0.01" iyz="0.0"
-               izz="0.01"/>
-    </inertial>
-  </link>
-
-  <joint name="arm_mount" type="fixed">
-    <parent link="base_link"/>
-    <child link="piper_base_link"/>
-    <origin xyz="${arm_x} ${arm_y} ${arm_z}" rpy="0 0 0"/>
-  </joint>
+  <!-- PiPER arm -->
+  <xacro:piper_arm
+    parent_link="base_link"
+    xyz="${arm_x} ${arm_y} ${arm_z}"
+    rpy="0 0 0"
+    prefix="piper_"/>
 
 </robot>

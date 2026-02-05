@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Include PiPER arm description with prefixed link/joint names. -->
+  <xacro:include filename="$(find ranger_description)/urdf/piper_description_prefixed.xacro" />
+
+  <!-- Wrapper macro to mount the PiPER arm to an arbitrary parent link. -->
+  <xacro:macro name="piper_arm" params="parent_link xyz:='0 0 0' rpy:='0 0 0' prefix:='piper_'">
+
+    <xacro:piper_with_gripper prefix="${prefix}" />
+
+    <!--
+      Mount PiPER's world link to the requested parent.
+      Prefix is applied to all PiPER links/joints via the prefixed description.
+    -->
+    <joint name="${prefix}arm_mount_joint" type="fixed">
+      <parent link="${parent_link}"/>
+      <child link="${prefix}world"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>
