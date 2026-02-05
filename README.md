@@ -81,7 +81,15 @@ Install Python dependencies (not managed by rosdep):
 pip3 install python-can piper_sdk scipy
 ```
 
-### 3. Setup CAN Interface
+### 3. Install Intel RealSense (D405 Gripper Camera)
+
+```bash
+sudo ./scripts/install_realsense.sh
+```
+
+Test: `rs-enumerate-devices` or `realsense-viewer`
+
+### 4. Setup CAN Interface
 
 Install can-utils for CAN communication:
 
@@ -98,7 +106,7 @@ sudo usermod -a -G dialout $USER
 
 **Jetson gs_usb note**: If you are using a Jetson and USB-CAN adapters, install the `gs_usb` kernel module first. This repo does not configure MTTCAN (`can0`/`can1`); use `can_base` and `can_piper` instead. See the [gs_usb Installation Guide](docs/gs_usb_installation.md) for the Jetson Orin AGX procedure.
 
-### 4. Clone and Build Workspace
+### 5. Clone and Build Workspace
 
 ```bash
 # Clone the repository
