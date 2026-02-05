@@ -16,7 +16,7 @@
     </transmission>
   </xacro:macro>
 
-  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_rpy:='0 0 0'">
+  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0'">
 
   <!-- world -->
     <link name="${prefix}world"/>
@@ -408,14 +408,14 @@
       <inertial>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <mass value="0.07" />
-        <inertia ixx="0.00001298" ixy="0.0" ixz="0.0"
+        <inertia ixx="0.00001867" ixy="0.0" ixz="0.0"
                  iyy="0.00001298" iyz="0.0"
-                 izz="0.00001867" />
+                 izz="0.00001298" />
       </inertial>
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <box size="0.04 0.04 0.025"/>
+          <box size="0.025 0.04 0.04"/>
         </geometry>
         <material name="silver">
           <color rgba="0.8 0.8 0.8 1.0"/>
@@ -424,14 +424,14 @@
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <box size="0.04 0.04 0.025"/>
+          <box size="0.025 0.04 0.04"/>
         </geometry>
       </collision>
     </link>
     <joint name="${prefix}camera_mount_joint" type="fixed">
       <parent link="${prefix}gripper_base"/>
       <child link="${prefix}camera_link"/>
-      <origin xyz="${camera_xyz}" rpy="${camera_rpy}"/>
+      <origin xyz="${camera_xyz}" rpy="${camera_roll} ${camera_pitch - 1.5708} ${camera_yaw}"/>
     </joint>
     <link
       name="${prefix}link7">
