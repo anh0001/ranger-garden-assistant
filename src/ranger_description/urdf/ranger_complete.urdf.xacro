@@ -19,7 +19,7 @@
   <xacro:property name="piper_camera_y" value="0.0"/>
   <xacro:property name="piper_camera_z" value="0.04"/>
   <xacro:property name="piper_camera_roll" value="0.0"/>
-  <xacro:property name="piper_camera_pitch" value="0.0"/>
+  <xacro:property name="piper_camera_pitch" value="0.2618"/>  <!-- 15 degrees -->
   <xacro:property name="piper_camera_yaw" value="0.0"/>
   <xacro:property name="mesh_dir" value="$(arg mesh_dir)"/>
 
