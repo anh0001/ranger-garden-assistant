@@ -2,6 +2,160 @@
 
 This guide walks you through creating a custom MoveIt 2 configuration for the Ranger Garden Assistant mobile manipulator using the MoveIt Setup Assistant GUI.
 
+## 🐳 Quick Start with Docker (Recommended)
+
+The MoveIt Setup Assistant crashes on Jetson/ARM platforms due to a RViz/Qt bug. The recommended solution is to run it in a Docker container with GUI support.
+
+### Prerequisites
+
+1. **Install Docker:**
+   ```bash
+   # Follow official Docker installation
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+   sudo usermod -aG docker $USER
+   # Log out and back in for group changes to take effect
+   ```
+
+2. **(Optional) Install NVIDIA Docker Runtime for GPU acceleration:**
+   ```bash
+   # For NVIDIA GPU support
+   distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+   curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+       sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+   sudo apt-get update
+   sudo apt-get install -y nvidia-container-toolkit
+   sudo nvidia-ctk runtime configure --runtime=docker
+   sudo systemctl restart docker
+   ```
+
+### Docker Workflow
+
+#### Step 1: Launch Docker Container with Setup Assistant
+
+```bash
+cd /home/robofi/codes/ranger-garden-assistant
+./scripts/moveit_setup_assistant_docker.sh
+```
+
+This will:
+- Pull the MoveIt2 Docker image (first time only)
+- Mount your workspace at `/root/ws_moveit` in the container
+- Start an interactive bash session with GUI support
+
+#### Step 2: Inside Container - Launch Setup Assistant
+
+```bash
+# Inside the container
+ros2 launch moveit_setup_assistant setup_assistant.launch.py
+```
+
+The MoveIt Setup Assistant GUI will open.
+
+#### Step 3: Load Your Robot URDF
+
+In the Setup Assistant GUI:
+
+1. Click **"Create New MoveIt Configuration Package"**
+2. Click **"Browse"** next to URDF field
+3. Navigate to: `/root/ws_moveit/src/ranger_description/urdf/ranger_complete.urdf.xacro`
+4. Click **"Load Files"**
+5. Wait for the robot to load in the 3D viewer
+
+#### Step 4: Configure MoveIt (Follow Steps 3-12 Below)
+
+Continue with the detailed configuration steps from **Step 3: Self-Collisions** through **Step 12: Configuration Files** in this guide.
+
+**Important:** When saving the package in Step 12, use the path:
+- **Configuration Package Save Path**: `/root/ws_moveit/src/`
+- **Package Name**: `ranger_piper_moveit`
+
+#### Step 5: Exit Container
+
+```bash
+# Inside container
+exit
+```
+
+The generated `ranger_piper_moveit` package will be in your host workspace at:
+```
+/home/robofi/codes/ranger-garden-assistant/src/ranger_piper_moveit/
+```
+
+#### Step 6: Build the Generated Package
+
+Back on your host machine:
+
+```bash
+cd /home/robofi/codes/ranger-garden-assistant
+colcon build --symlink-install --packages-select ranger_piper_moveit
+source install/setup.bash
+```
+
+### Docker Troubleshooting
+
+**Docker Permission Denied:**
+```bash
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+**X11 Connection Issues:**
+```bash
+xhost +local:docker
+```
+
+**Container Won't Start:**
+```bash
+# Check Docker status
+sudo systemctl status docker
+
+# Pull image manually
+docker pull moveit/moveit2:humble-release
+```
+
+**URDF Not Found in Container:**
+```bash
+# Inside container, verify workspace is mounted
+ls -la /root/ws_moveit/src/ranger_description/urdf/
+```
+
+**Re-entering Container:**
+```bash
+# Start the same container again
+./scripts/moveit_setup_assistant_docker.sh
+
+# Or use gui-docker directly
+./scripts/gui-docker -c ranger_moveit_setup
+```
+
+### Advanced Docker Usage
+
+**Custom Docker Image:**
+```bash
+./scripts/gui-docker \
+    -c ranger_moveit_setup \
+    -v "$PWD:/root/ws_moveit:rw" \
+    --rm -it \
+    moveit/moveit2:rolling-release \
+    bash
+```
+
+**Mount Additional Directories:**
+```bash
+./scripts/gui-docker \
+    -c ranger_moveit_setup \
+    -v "$PWD:/root/ws_moveit:rw" \
+    -v "$HOME/my_configs:/root/configs:rw" \
+    --rm -it \
+    moveit/moveit2:humble-release \
+    bash
+```
+
+---
+
 ## Overview
 
 We're creating a MoveIt config package (`ranger_piper_moveit`) that uses the complete robot description from `ranger_description` package, including the PiPER arm with `piper_` prefix.
@@ -22,9 +176,20 @@ We're creating a MoveIt config package (`ranger_piper_moveit`) that uses the com
 ### Root Cause
 The crash occurs in `rviz_common::properties::PropertyTreeModel::propertyHiddenChanged()` - a known RViz Humble bug that affects Jetson/ARM platforms even with recent package versions.
 
-### Workaround Options
+### ✅ RECOMMENDED SOLUTION: Docker with GUI Support
 
-**Option 1: Manual Configuration (Recommended)**
+**See the complete Docker workflow above in the "🐳 Quick Start with Docker" section** for detailed step-by-step instructions including:
+- Docker installation and prerequisites
+- Launching the Setup Assistant in a container
+- Loading your URDF and configuring MoveIt
+- Saving the generated package back to your host
+- Building and testing the configuration
+
+The Docker approach completely avoids the platform-specific RViz/Qt crash by running in an x86_64 container environment.
+
+### Alternative Workaround Options
+
+**Option 1: Manual Configuration**
 Use the provided script to create a MoveIt config package template manually:
 ```bash
 ./scripts/create_moveit_config_manual.sh
@@ -40,13 +205,6 @@ cp -r src/piper_ros/src/piper_moveit/piper_with_gripper_moveit src/ranger_piper_
 
 **Option 3: Use Another Machine**
 Run the Setup Assistant on a x86_64 Ubuntu 22.04 machine with ROS 2 Humble, then copy the generated package back.
-
-**Attempted Fixes (did not resolve):**
-- Upgrading/reinstalling RViz packages
-- Setting XDG_RUNTIME_DIR
-- Clean ROS environment sourcing
-
-The crash is a platform-specific RViz bug. If you must use the GUI, try on x86_64 hardware.
 
 📘 **See [MANUAL_MOVEIT_CONFIG.md](MANUAL_MOVEIT_CONFIG.md) for detailed manual configuration instructions.**
 
@@ -452,6 +610,8 @@ After successfully creating the MoveIt config:
 - [MoveIt 2 Documentation](https://moveit.picknik.ai/humble/index.html)
 - [MoveIt Setup Assistant Tutorial](https://moveit.picknik.ai/humble/doc/examples/setup_assistant/setup_assistant_tutorial.html)
 - [MoveIt 2 Tutorials](https://moveit.picknik.ai/humble/doc/tutorials/tutorials.html)
+- [MoveIt2 Docker Documentation](https://moveit.picknik.ai/main/doc/how_to_guides/how_to_setup_docker_containers_in_ubuntu.html)
+- [gui-docker script source](https://github.com/moveit/moveit2_tutorials/tree/main/.docker)
 - [ros2_control Documentation](https://control.ros.org/humble/index.html)
 
 ---
