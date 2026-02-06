@@ -79,6 +79,19 @@ elif [ -f /opt/ros/humble/local_setup.bash ]; then
     source /opt/ros/humble/local_setup.bash
 fi
 
+# Install Xvfb and GLX dependencies if not present
+if ! command -v Xvfb &> /dev/null; then
+    echo "Installing Xvfb and OpenGL dependencies..."
+    apt-get update -qq && apt-get install -y -qq \
+        xvfb \
+        x11-utils \
+        mesa-utils \
+        libgl1-mesa-glx \
+        libgl1-mesa-dri \
+        libglu1-mesa \
+        > /dev/null 2>&1
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"
 echo "  MoveIt Setup Assistant Ready"
@@ -86,8 +99,12 @@ echo "════════════════════════�
 echo ""
 echo "Your workspace is mounted at: /root/ws_moveit"
 echo ""
-echo "To launch MoveIt Setup Assistant:"
+echo "To launch MoveIt Setup Assistant (with Xvfb fallback):"
 echo "  ros2 launch moveit_setup_assistant setup_assistant.launch.py"
+echo ""
+echo "Or with Xvfb virtual display (if X11 forwarding fails):"
+echo "  xvfb-run -a -s '-screen 0 1920x1080x24 +extension GLX' \\"
+echo "    ros2 launch moveit_setup_assistant setup_assistant.launch.py"
 echo ""
 echo "To load your robot URDF:"
 echo "  Browse to: /root/ws_moveit/src/ranger_description/urdf/ranger_complete.urdf.xacro"
@@ -130,6 +147,9 @@ fi
     -c ranger_moveit_setup \
     -v "$WORKSPACE_DIR:/root/ws_moveit:rw" \
     -v "$TEMP_STARTUP:/tmp/startup.sh:ro" \
+    --env="QT_LOGGING_RULES=*.debug=false" \
+    --env="QT_QPA_PLATFORM=xcb" \
+    --env="LIBGL_DEBUG=verbose" \
     $GPU_ARGS \
     -it \
     moveit/moveit2:humble-release \
