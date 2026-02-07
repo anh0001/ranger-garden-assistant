@@ -200,12 +200,12 @@ Define how the robot connects to the world frame.
 
 4. In the kinematic chain dialog:
    - **Base Link**: Select `piper_gripper_base`
-   - **Tip Link**: Select `piper_link7`
+   - **Tip Link**: Select `piper_link7` *(right gripper tip)*
 
 5. Click **"Save"** (in the kinematic chain dialog)
 6. Click **"Save"** (in the main group dialog)
 
-**Note:** The URDF includes `piper_joint8` for the mirrored finger. Keep it passive (Step 9) and only include `piper_joint7` in the gripper group.
+**Note:** The frame tree is `piper_link6 → piper_gripper_base → piper_link7/piper_link8`. `piper_link7` is the right tip and `piper_link8` is the left tip. The URDF includes `piper_joint8` for the mirrored finger, so keep it passive (Step 9) and only include `piper_joint7` in the gripper group.
 
 ---
 
