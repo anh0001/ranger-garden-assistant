@@ -1,218 +1,136 @@
 # MoveIt Setup Assistant Guide - Ranger + PiPER
 
-Quick step-by-step guide to create a MoveIt 2 configuration for the Ranger Garden Assistant using Docker (solves Jetson/ARM RViz crash).
+Step-by-step guide to create a MoveIt 2 configuration for the Ranger Garden Assistant using the containerized MoveIt workspace.
 
-## Why Docker?
+## Recommended Approach: ros2-moveit-workspace
 
-⚠️ **Problem**: MoveIt Setup Assistant crashes on Jetson/ARM due to RViz/Qt bug  
-✅ **Solution**: Run in Docker container with x86_64 binaries and GPU support
+**Repository**: https://github.com/anh0001/ros2-moveit-workspace
+
+This containerized development environment solves MoveIt Setup Assistant crashes on Jetson/ARM platforms and provides a reproducible setup with patched RViz components.
 
 ---
 
-## Prerequisites (One-Time Setup)
+## Prerequisites
 
-### 1. Install Docker
+### 1. Install Docker and VSCode
 
-### 2. Install NVIDIA Docker Runtime (for GPU acceleration)
+Ensure Docker and Visual Studio Code with the Dev Containers extension are installed on your system.
 
-### 3. Test Installation
+### 2. Clone the MoveIt Workspace
+
+```bash
+cd ~/codes
+git clone --recurse-submodules https://github.com/anh0001/ros2-moveit-workspace.git
+cd ros2-moveit-workspace
+```
+
+The `--recurse-submodules` flag initializes the patched RViz directory that fixes segmentation faults in the Setup Assistant.
 
 ---
 
 ## Step-by-Step Setup
 
-### Step 1: Launch Docker Container
+### Step 1: Copy Robot Description Packages
 
-**For Local Display (Direct HDMI/Monitor):**
+Copy the required packages from this workspace to the MoveIt workspace:
+
 ```bash
-cd ~/codes/ranger-garden-assistant
-./scripts/moveit_setup_assistant_docker.sh
+cd ~/codes/ros2-moveit-workspace/src
+cp -r ~/codes/ranger-garden-assistant/src/ranger_description .
+cp -r ~/codes/ranger-garden-assistant/src/piper_ros/src/piper_description .
+cp -r ~/codes/ranger-garden-assistant/src/piper_ros/src/piper_msgs .
 ```
 
-**For SSH X11 Forwarding:**
+### Step 2: Open in VSCode Dev Container
+
 ```bash
-cd ~/codes/ranger-garden-assistant
-./scripts/moveit_setup_assistant_ssh.sh
+cd ~/codes/ros2-moveit-workspace
+code .
 ```
 
-**Manual Launch (if scripts fail):**
-```bash
-sg docker -c "docker run --rm -it \
-    -e DISPLAY=\$DISPLAY \
-    -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-    -v \$HOME/.Xauthority:/root/.Xauthority:ro \
-    -v \$HOME/codes/ranger-garden-assistant:/root/ws_moveit:rw \
-    --runtime=nvidia --gpus all --net=host \
-    moveit/moveit2:humble-release bash"
-```
+Press **F1** and select **"Dev Containers: Rebuild and Reopen in Container"**
 
-### Step 2: Inside Container - Build Workspace and Launch Setup Assistant
+### Step 3: Build Workspace and Launch Setup Assistant
 
-**Note:** The automated scripts (`moveit_setup_assistant_docker.sh` and `moveit_setup_assistant_ssh.sh`) handle this automatically, including cleaning stale build artifacts. If you launched manually, follow these steps:
+Inside the container terminal:
 
 ```bash
-# Navigate to workspace
-cd /root/ws_moveit
-
-# Source ROS 2
-source /opt/ros/humble/setup.bash
-
-# Clean any stale build artifacts (IMPORTANT: prevents CMake cache conflicts)
-rm -rf build/ranger_description install/ranger_description build/piper_description install/piper_description build/piper_msgs install/piper_msgs build/piper_gazebo install/piper_gazebo
-
-# Update apt package cache (CRITICAL: Docker containers have stale package lists)
-apt-get update
-
-# Install dependencies
-rosdep update
-rosdep install --from-paths src --ignore-src -r -y
-
-# Build the workspace (ranger_description + piper packages needed for Setup Assistant)
-# Note: piper_ros is a repository, not a package. The actual packages are in src/piper_ros/src/
-# piper_gazebo is required because ranger_description URDF references it in Gazebo plugin
-colcon build --packages-select ranger_description piper_description piper_msgs piper_gazebo --symlink-install
-
-# Source the workspace
+cd /workspace
+colcon build --symlink-install
 source install/setup.bash
-
-# Launch Setup Assistant
 ros2 launch moveit_setup_assistant setup_assistant.launch.py
 ```
 
-**Why cleaning is needed:** CMake caches absolute paths from previous builds. If you built outside the container (on host), the cached paths won't match the container's `/root/ws_moveit` location, causing build failures.
-
-**Why building is needed:** The Setup Assistant uses `ament_index_cpp` to find packages, which only knows about packages that have been built and sourced. Without building the workspace, `ranger_description` won't be found even though the files are mounted.
-
-### Step 3: Load Robot URDF
+### Step 4: Load Robot URDF
 
 In the Setup Assistant GUI:
 1. Click **"Create New MoveIt Configuration Package"**
 2. Click **"Browse"**
-3. Navigate to: `/root/ws_moveit/src/ranger_description/urdf/ranger_complete.urdf.xacro`
+3. Navigate to: `/workspace/src/ranger_description/urdf/ranger_complete.urdf.xacro`
 4. Click **"Load Files"**
 5. Wait for robot model to appear in 3D viewer
 
-### Step 4: Generate Self-Collision Matrix
+### Step 5: Configure in Setup Assistant
 
-1. Click **"Self-Collisions"** in left sidebar
-2. Set **Sampling Density**: `10000`
-3. Click **"Generate Collision Matrix"**
-4. Wait 1-2 minutes for completion
-5. Review matrix (green cells = disabled collision pairs)
+Follow these configuration steps in the GUI:
 
-### Step 5: Define Virtual Joints
+#### 1. Self-Collisions
+- Set **Sampling Density**: `10000`
+- Click **"Generate Collision Matrix"**
 
-1. Click **"Virtual Joints"** in left sidebar
-2. Click **"Add Virtual Joint"**
-3. Configure:
-   - **Virtual Joint Name**: `virtual_joint`
-   - **Child Link**: `base_footprint`
-   - **Parent Frame Name**: `map` (or `world`)
-   - **Joint Type**: `fixed`
-4. Click **"Save"**
+#### 2. Virtual Joints
+- **Virtual Joint Name**: `virtual_joint`
+- **Child Link**: `base_footprint`
+- **Parent Frame**: `world`
+- **Joint Type**: `fixed`
 
-### Step 6: Create Planning Groups
+#### 3. Planning Groups
 
-#### Create Arm Planning Group:
-1. Click **"Planning Groups"**
-2. Click **"Add Group"**
-3. Configure:
-   - **Group Name**: `piper_arm`
-   - **Kinematic Solver**: `kdl_kinematics_plugin/KDLKinematicsPlugin`
-   - **Group Default Planner**: `RRTConnect`
-4. Click **"Add Joints"**
-5. Select joints: `piper_joint_1` through `piper_joint_6`
-6. Click **"Save"**
+**Arm Group:**
+- **Group Name**: `piper_arm`
+- **Kinematic Solver**: `kdl_kinematics_plugin/KDLKinematicsPlugin`
+- Add kinematic chain from `piper_world` to `piper_link6`
 
-#### Create Gripper Planning Group:
-1. Click **"Add Group"** again
-2. Configure:
-   - **Group Name**: `piper_gripper`
-   - **Kinematic Solver**: `None`
-3. Click **"Add Joints"**
-4. Select: `piper_joint_gripper`
-5. Click **"Save"**
+**Gripper Group:**
+- **Group Name**: `piper_gripper`
+- **Kinematic Solver**: `None`
+- Add joint: `piper_joint7`
 
-### Step 7: Define Robot Poses
+#### 4. Robot Poses
+Define preset poses (home, stowed, open, closed) for arm and gripper.
 
-1. Click **"Robot Poses"**
-2. Click **"Add Pose"**
-3. Define standard poses:
+#### 5. End Effectors
+- **End Effector Name**: `piper_gripper`
+- **Parent Link**: `piper_link6`
+- **Parent Group**: `piper_arm`
 
-**Home Pose:**
-- Name: `home`
-- Planning Group: `piper_arm`
-- Set all joints to 0.0
+#### 6. Passive Joints
+Mark wheel joints (`fl_wheel`, `fr_wheel`, `rl_wheel`, `rr_wheel`) and steering joints as passive.
 
-**Ready Pose:**
-- Name: `ready`
-- Planning Group: `piper_arm`
-- Joint values: `[0, -0.785, 1.57, 0, 0.785, 0]` (example values)
+#### 7. ROS 2 Controllers
+Click **"Auto Add FollowJointsTrajectory Controllers"** for automatic setup.
 
-**Gripper Open/Closed:**
-- Name: `open` / `closed`
-- Planning Group: `piper_gripper`
-- Set gripper joint accordingly
+#### 8. Author Information
+Fill in your name and email.
 
-### Step 8: Define End Effectors
+#### 9. Generate Configuration Files
+- **Save Path**: `/workspace/src/`
+- **Package Name**: `ranger_piper_moveit`
+- Click **"Generate Package"**
 
-1. Click **"End Effectors"**
-2. Click **"Add End Effector"**
-3. Configure:
-   - **End Effector Name**: `piper_gripper`
-   - **End Effector Group**: `piper_gripper`
-   - **Parent Link**: `piper_link_6`
-   - **Parent Group**: `piper_arm`
-4. Click **"Save"**
-
-### Step 9: Passive Joints (Optional)
-
-1. Click **"Passive Joints"**
-2. Mark joints that don't actively control (if any)
-3. For most setups, leave empty
-
-### Step 10: ROS 2 Controllers
-
-1. Click **"ROS 2 Controllers"**
-2. Click **"Auto Add Follow
-JointTrajectory Controllers"**
-3. Configure controller for `piper_arm`
-4. Click **"Save"**
-
-### Step 11: Perception (Optional)
-
-1. Click **"Perception"**
-2. Skip for now (add later if using 3D cameras)
-
-### Step 12: Author Information
-
-1. Click **"Author Information"**
-2. Fill in your name and email
-3. Click **"Save"**
-
-### Step 13: Generate Configuration Files
-
-1. Click **"Configuration Files"**
-2. Set paths:
-   - **Save Path**: `/root/ws_moveit/src/`
-   - **Package Name**: `ranger_piper_moveit`
-3. Click **"Generate Package"**
-4. Wait for completion
-5. Click **"Exit Setup Assistant"**
-
-### Step 14: Exit Container and Build
+### Step 6: Copy Configuration to Main Workspace
 
 ```bash
-# Exit Docker container
-exit
+# On host machine (outside container)
+cp -r ~/codes/ros2-moveit-workspace/src/ranger_piper_moveit ~/codes/ranger-garden-assistant/src/
 
-# Build on host machine
+# Build in main workspace
 cd ~/codes/ranger-garden-assistant
-colcon build --symlink-install --packages-select ranger_piper_moveit
+colcon build --packages-select ranger_piper_moveit --symlink-install
 source install/setup.bash
 ```
 
-### Step 15: Test the Configuration
+### Step 7: Test the Configuration
 
 ```bash
 # Demo with fake hardware
@@ -227,23 +145,14 @@ ros2 launch ranger_piper_moveit move_group.launch.py
 
 ## Troubleshooting
 
-### Docker Issues
-
-| Problem | Solution |
-|---------|----------|
-| Permission denied | `sudo usermod -aG docker $USER` → log out/in |
-| X11 display error | Use `./scripts/moveit_setup_assistant_ssh.sh` |
-| Container won't start | `sudo systemctl restart docker` |
-| Image not downloaded | `docker pull moveit/moveit2:humble-release` |
-
 ### Setup Assistant Issues
 
 | Problem | Solution |
 |---------|----------|
-| URDF load fails | Check file path and xacro syntax |
+| URDF load fails | Check file path and rebuild workspace |
 | Joints missing | Verify `piper_` prefix in joint names |
-| Save fails | Use `/root/ws_moveit/src/` path |
-| Crash on start | Use Docker method (not local install) |
+| Crash on start | Use ros2-moveit-workspace container |
+| Package not found | Run `colcon build` and `source install/setup.bash` |
 
 ### Build/Runtime Issues
 
@@ -257,102 +166,20 @@ ros2 launch ranger_piper_moveit move_group.launch.py
 
 ## Quick Reference
 
-### File Paths (in Container)
-```
-URDF:  /root/ws_moveit/src/ranger_description/urdf/ranger_complete.urdf.xacro
-Save:  /root/ws_moveit/src/ranger_piper_moveit/
-```
-
 ### Planning Groups
 - **piper_arm**: Joints 1-6, KDL solver
-- **piper_gripper**: Joint 7, no solver
+- **piper_gripper**: Joint gripper, no solver
 
-### Commands
-```bash
-# Launch Setup Assistant (local)
-./scripts/moveit_setup_assistant_docker.sh
-
-# Launch Setup Assistant (SSH)
-./scripts/moveit_setup_assistant_ssh.sh
-
-# Build generated package
-colcon build --symlink-install --packages-select ranger_piper_moveit
-
-# Test demo
-ros2 launch ranger_piper_moveit demo.launch.py
-```
+### Workspace Aliases (in container)
+- `cb` — builds all packages
+- `cbs package_name` — builds specific package
+- `setup` — sources workspace
 
 ---
 
-## Alternative Methods (Not Recommended)
+## Detailed Configuration Steps
 
-### Method 1: Manual Configuration
-```bash
-./scripts/create_moveit_config_manual.sh
-```
-Then manually edit SRDF files.
-
-### Method 2: Copy Existing Config
-```bash
-cp -r src/piper_ros/src/piper_moveit/piper_with_gripper_moveit src/ranger_piper_moveit
-# Edit URDFs and frame references
-```
-
-### Method 3: x86_64 Machine
-Run Setup Assistant on another Ubuntu 22.04 x86_64 machine, then copy the generated package back.
-
----
-
-## Related Documentation
-
-- [MOVEIT_DOCKER_QUICKSTART.md](MOVEIT_DOCKER_QUICKSTART.md) - Detailed Docker setup
-- [DOCKER_INTEGRATION.md](DOCKER_INTEGRATION.md) - Docker integration details
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
-- MoveIt 2 Docs: https://moveit.picknik.ai/humble/
-- Setup Assistant Tutorial: https://moveit.picknik.ai/humble/doc/examples/setup_assistant/setup_assistant_tutorial.html
-```bash
-cp -r src/piper_ros/src/piper_moveit/piper_with_gripper_moveit src/ranger_piper_moveit
-# Then edit URDFs and frame references
-```
-
-**Option 3: Use Another Machine**
-Run the Setup Assistant on a x86_64 Ubuntu 22.04 machine with ROS 2 Humble, then copy the generated package back.
-
-📘 **See [MANUAL_MOVEIT_CONFIG.md](MANUAL_MOVEIT_CONFIG.md) for detailed manual configuration instructions.**
-
----
-
-## Continue Reading (for GUI method on x86_64)
-
-## Step-by-Step Guide
-
-### Step 1: Launch MoveIt Setup Assistant
-
-Open a terminal and run:
-
-```bash
-cd /home/robofi/codes/ranger-garden-assistant
-source install/setup.bash
-ros2 launch moveit_setup_assistant setup_assistant.launch.py
-```
-
-The MoveIt Setup Assistant GUI will open.
-
----
-
-### Step 2: Start Screen - Load Robot URDF
-
-1. Click **"Create New MoveIt Configuration Package"**
-2. Click the **"Browse"** button next to "URDF/COLLADA/URDF Package" field
-3. Navigate to and select:
-   ```
-   /home/robofi/codes/ranger-garden-assistant/src/ranger_description/urdf/ranger_complete.urdf.xacro
-   ```
-4. Click **"Load Files"**
-5. Wait for the robot to load (you should see the Ranger base with PiPER arm in the 3D viewer)
-6. Click **"Next"** or select the next tab
-
-**Troubleshooting:** If it crashes here, see the troubleshooting doc mentioned above.
+For detailed step-by-step instructions for each configuration tab, see the sections below.
 
 ---
 

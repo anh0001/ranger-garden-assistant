@@ -343,19 +343,11 @@ ros2 launch piper_moveit piper_moveit.launch.py
 
 ### Creating MoveIt Configuration for Complete Robot
 
-To create a MoveIt configuration package for the complete Ranger + PiPER system:
+To create a MoveIt configuration package for the complete Ranger + PiPER system, use the containerized MoveIt workspace:
 
-```bash
-# Use Docker to run MoveIt Setup Assistant (recommended - avoids platform bugs)
-./scripts/moveit_setup_assistant_docker.sh
+**Reference**: https://github.com/anh0001/ros2-moveit-workspace
 
-# Inside the container, launch Setup Assistant:
-# ros2 launch moveit_setup_assistant setup_assistant.launch.py
-# Load URDF from: /root/ws_moveit/src/ranger_description/urdf/ranger_complete.urdf.xacro
-# Save config to: /root/ws_moveit/src/ranger_piper_moveit
-```
-
-See [docs/MOVEIT_SETUP_GUIDE.md](docs/MOVEIT_SETUP_GUIDE.md) for detailed instructions.
+Once the workspace is running, follow the detailed step-by-step instructions in [docs/MOVEIT_SETUP_GUIDE.md](docs/MOVEIT_SETUP_GUIDE.md).
 
 ## Package Structure
 
