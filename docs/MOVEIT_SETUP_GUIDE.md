@@ -14,14 +14,15 @@ This containerized development environment solves MoveIt Setup Assistant crashes
 
 ### Step 1: Copy Robot Description Packages
 
-Copy the required packages from this workspace to the MoveIt workspace:
+Copy the required description packages from this workspace to the MoveIt workspace:
 
 ```bash
 cd ~/codes/ros2-moveit-workspace/src
 cp -r ~/codes/ranger-garden-assistant/src/ranger_description .
 cp -r ~/codes/ranger-garden-assistant/src/piper_ros/src/piper_description .
-cp -r ~/codes/ranger-garden-assistant/src/piper_ros/src/piper_msgs .
 ```
+
+`ranger_complete.urdf.xacro` references meshes from `piper_description`, so that package must be present for the model to load.
 
 ### Step 2: Open in VSCode Dev Container
 
@@ -38,7 +39,7 @@ Inside the container terminal:
 
 ```bash
 cd /workspace
-colcon build --symlink-install
+colcon build --symlink-install --packages-select ranger_description piper_description
 source install/setup.bash
 ros2 launch moveit_setup_assistant setup_assistant.launch.py
 ```
@@ -106,7 +107,9 @@ ros2 launch ranger_piper_moveit move_group.launch.py
 
 ### Planning Groups
 - **piper_arm**: Joints 1-6, KDL solver
-- **piper_gripper**: Joint gripper, no solver
+- **piper_gripper**: `piper_joint7` (with `piper_joint8` passive/mirrored), no solver
+- **mobile_base** (optional): `virtual_joint` only, no solver
+- **mobile_manipulator** (optional): combines `mobile_base` + `piper_arm`
 
 ### Workspace Aliases (in container)
 - `cb` — builds all packages
@@ -147,11 +150,13 @@ Define how the robot connects to the world frame.
 3. Fill in the fields:
    - **Virtual Joint Name**: `virtual_joint`
    - **Child Link**: `base_footprint`
-   - **Parent Frame Name**: `world`
-   - **Joint Type**: `fixed`
+   - **Parent Frame Name**: `map` *(or `odom` if you are not running SLAM/localization yet)*
+   - **Joint Type**:
+     - `fixed` for arm-only planning
+     - `planar` if you want MoveIt to plan base + arm together
 4. Click **"Save"**
 
-**What this does:** Since the Ranger is a mobile robot, this creates a fixed attachment to the world. For mobile manipulation, you can later change this to a planar or floating joint.
+**What this does:** `fixed` keeps the base stationary for arm-only planning. `planar` adds x/y/yaw base motion to the planning scene for mobile manipulation.
 
 ---
 
@@ -170,8 +175,8 @@ Define how the robot connects to the world frame.
 4. Click **"Add Kin. Chain"** button (in the middle section)
 
 5. In the kinematic chain dialog:
-   - **Base Link**: Select `piper_world`
-     *(This is the arm's mounting point on the base)*
+   - **Base Link**: Select `piper_base_link`
+     *(First actuated joint `piper_joint1` is attached here; `piper_world` is a fixed mount link)*
    - **Tip Link**: Select `piper_link6`
      *(This is the wrist link, before the gripper)*
 
@@ -191,14 +196,48 @@ Define how the robot connects to the world frame.
      *(Grippers don't need inverse kinematics)*
    - Leave other fields default
 
-3. Click **"Add Joints"** button (in the middle section)
+3. Click **"Add Kin. Chain"** button (in the middle section)
 
-4. In the joint selection dialog:
-   - Find and select `piper_joint7` (the gripper joint)
-   - Move it to the "Selected Joints" column
+4. In the kinematic chain dialog:
+   - **Base Link**: Select `piper_gripper_base`
+   - **Tip Link**: Select `piper_link7`
 
-5. Click **"Save"** (in the joint selection dialog)
+5. Click **"Save"** (in the kinematic chain dialog)
 6. Click **"Save"** (in the main group dialog)
+
+**Note:** The URDF includes `piper_joint8` for the mirrored finger. Keep it passive (Step 9) and only include `piper_joint7` in the gripper group.
+
+---
+
+### Step 6B: Planning Groups - MOBILE BASE (Optional)
+
+If you set the virtual joint to `planar`, add a base-only group:
+
+1. Click **"Add Group"**
+2. Fill in:
+   - **Group Name**: `mobile_base`
+   - **Kinematic Solver**: `None`
+3. Click **"Add Joints"**
+4. Select `virtual_joint`
+5. Click **"Save"**
+
+---
+
+### Step 6C: Planning Groups - MOBILE MANIPULATOR (Optional)
+
+Create a combined group so MoveIt can plan base + arm together:
+
+1. Click **"Add Group"**
+2. Fill in:
+   - **Group Name**: `mobile_manipulator`
+   - **Kinematic Solver**: `kdl_kinematics_plugin/KDLKinematicsPlugin`
+3. Click **"Add Subgroup"**
+4. Select `mobile_base`, then click **"Add"**
+5. Click **"Add Subgroup"** again
+6. Select `piper_arm`, then click **"Add"**
+7. Click **"Save"**
+
+**Hybrid Nav2 + MoveIt workflow:** Use Nav2 to get close to the object, then plan with the `mobile_manipulator` group for the final base + arm alignment. The base portion of the plan still needs to be executed by Nav2 or a custom bridge/controller (see Step 10 note).
 
 ---
 
@@ -232,14 +271,14 @@ This is useful for navigation - keeps the arm folded and out of the way.
    - **Planning Group**: `piper_arm`
 3. Set joint values to fold the arm vertically:
    - `piper_joint1`: `0.0`
-   - `piper_joint2`: `-1.57` (fold shoulder down)
-   - `piper_joint3`: `1.57` (fold elbow up)
+   - `piper_joint2`: `1.57` (fold shoulder down, within limits)
+   - `piper_joint3`: `-1.57` (fold elbow up, within limits)
    - `piper_joint4`: `0.0`
    - `piper_joint5`: `0.0`
    - `piper_joint6`: `0.0`
 4. Click **"Save"**
 
-**Note:** Adjust these values as needed for your specific robot configuration. You can test poses later in RViz.
+**Note:** Keep `piper_joint2` in `[0, 3.14]` and `piper_joint3` in `[-2.967, 0]` per the URDF limits. You can test poses later in RViz.
 
 #### Pose 3: Gripper Open
 
@@ -299,9 +338,12 @@ Mark joints that MoveIt should ignore during motion planning (like wheels and ca
    - `rl_steering_joint`
    - `rr_steering_joint`
 
+   **Gripper mirror joint**:
+   - `piper_joint8`
+
 3. Select each joint from the dropdown and click **"Save"**
 
-**What this does:** Tells MoveIt these joints are not part of the manipulator and should be ignored during arm motion planning.
+**What this does:** Tells MoveIt these joints are not part of the manipulator and should be ignored during arm motion planning. `piper_joint8` mirrors `piper_joint7` in hardware/sim and should not be independently planned.
 
 ---
 
@@ -316,6 +358,8 @@ This will automatically create:
 - `piper_arm_controller` for the arm
 - `piper_gripper_controller` for the gripper
 
+If you created `mobile_base` or `mobile_manipulator`, **do not** keep their auto-generated controllers unless you have a dedicated base controller plugin that can execute planar base joints.
+
 3. Review the auto-generated controllers:
    - **Controller Name**: `piper_arm_controller`
      - **Controller Type**: `FollowJointTrajectory`
@@ -327,7 +371,7 @@ This will automatically create:
 
 4. If they look correct, no changes needed
 
-**Note:** You'll need to ensure these controller names match your actual ros2_control configuration in your robot driver.
+**Note:** Ensure the gripper controller only includes `piper_joint7`; `piper_joint8` should remain passive/mirrored by the driver or sim. For hybrid Nav2 + MoveIt, execution of base motion is handled outside MoveIt (Nav2 or a custom bridge), so leave only arm/gripper controllers enabled.
 
 ---
 
@@ -350,8 +394,10 @@ This information goes into the package.xml file.
 1. Click **"Configuration Files"** in the left sidebar
 2. Set the package save location:
    - Click **"Browse"** next to "Configuration Package Save Path"
-   - Navigate to: `/home/robofi/codes/ranger-garden-assistant/src/`
+   - Navigate to: `/workspace/src/` *(inside the dev container)*
    - Select the `src` folder
+
+This ensures the generated package is in the MoveIt workspace so you can copy it back to `ranger-garden-assistant` in Step 6.
 
 3. Set package name:
    - **New Package Name**: `ranger_piper_moveit`
@@ -412,6 +458,7 @@ ros2 launch ranger_piper_moveit demo.launch.py
 
 **In RViz:**
 1. In the "MotionPlanning" panel, select planning group `piper_arm`
+   - If you created it, use `mobile_manipulator` to plan base + arm together
 2. Drag the interactive marker to set a goal pose
 3. Click **"Plan"** to compute a trajectory
 4. Click **"Execute"** to visualize the motion
@@ -487,7 +534,7 @@ After successfully creating the MoveIt config:
 - [MoveIt 2 Documentation](https://moveit.picknik.ai/humble/index.html)
 - [MoveIt Setup Assistant Tutorial](https://moveit.picknik.ai/humble/doc/examples/setup_assistant/setup_assistant_tutorial.html)
 - [MoveIt 2 Tutorials](https://moveit.picknik.ai/humble/doc/tutorials/tutorials.html)
-- [MoveIt2 Docker Documentation](https://moveit.picknik.ai/main/doc/how_to_guides/how_to_setup_docker_containers_in_ubuntu.html)
+- [MoveIt2 Docker Documentation](https://moveit.picknik.ai/humble/doc/how_to_guides/how_to_setup_docker_containers_in_ubuntu.html)
 - [gui-docker script source](https://github.com/moveit/moveit2_tutorials/tree/main/.docker)
 - [ros2_control Documentation](https://control.ros.org/humble/index.html)
 
