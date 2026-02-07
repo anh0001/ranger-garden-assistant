@@ -6,29 +6,11 @@ Step-by-step guide to create a MoveIt 2 configuration for the Ranger Garden Assi
 
 **Repository**: https://github.com/anh0001/ros2-moveit-workspace
 
-This containerized development environment solves MoveIt Setup Assistant crashes on Jetson/ARM platforms and provides a reproducible setup with patched RViz components.
+This containerized development environment solves MoveIt Setup Assistant crashes and provides a reproducible setup with patched RViz components.
 
 ---
 
-## Prerequisites
-
-### 1. Install Docker and VSCode
-
-Ensure Docker and Visual Studio Code with the Dev Containers extension are installed on your system.
-
-### 2. Clone the MoveIt Workspace
-
-```bash
-cd ~/codes
-git clone --recurse-submodules https://github.com/anh0001/ros2-moveit-workspace.git
-cd ros2-moveit-workspace
-```
-
-The `--recurse-submodules` flag initializes the patched RViz directory that fixes segmentation faults in the Setup Assistant.
-
----
-
-## Step-by-Step Setup
+## Setup Steps
 
 ### Step 1: Copy Robot Description Packages
 
@@ -72,51 +54,7 @@ In the Setup Assistant GUI:
 
 ### Step 5: Configure in Setup Assistant
 
-Follow these configuration steps in the GUI:
-
-#### 1. Self-Collisions
-- Set **Sampling Density**: `10000`
-- Click **"Generate Collision Matrix"**
-
-#### 2. Virtual Joints
-- **Virtual Joint Name**: `virtual_joint`
-- **Child Link**: `base_footprint`
-- **Parent Frame**: `world`
-- **Joint Type**: `fixed`
-
-#### 3. Planning Groups
-
-**Arm Group:**
-- **Group Name**: `piper_arm`
-- **Kinematic Solver**: `kdl_kinematics_plugin/KDLKinematicsPlugin`
-- Add kinematic chain from `piper_world` to `piper_link6`
-
-**Gripper Group:**
-- **Group Name**: `piper_gripper`
-- **Kinematic Solver**: `None`
-- Add joint: `piper_joint7`
-
-#### 4. Robot Poses
-Define preset poses (home, stowed, open, closed) for arm and gripper.
-
-#### 5. End Effectors
-- **End Effector Name**: `piper_gripper`
-- **Parent Link**: `piper_link6`
-- **Parent Group**: `piper_arm`
-
-#### 6. Passive Joints
-Mark wheel joints (`fl_wheel`, `fr_wheel`, `rl_wheel`, `rr_wheel`) and steering joints as passive.
-
-#### 7. ROS 2 Controllers
-Click **"Auto Add FollowJointsTrajectory Controllers"** for automatic setup.
-
-#### 8. Author Information
-Fill in your name and email.
-
-#### 9. Generate Configuration Files
-- **Save Path**: `/workspace/src/`
-- **Package Name**: `ranger_piper_moveit`
-- Click **"Generate Package"**
+See **"Detailed Configuration Steps"** section below for complete GUI configuration instructions.
 
 ### Step 6: Copy Configuration to Main Workspace
 
