@@ -1,0 +1,11 @@
+# Default initial positions for ranger_mini_complete's ros2_control fake system
+
+initial_positions:
+  piper_joint1: 0
+  piper_joint2: 0
+  piper_joint3: 0
+  piper_joint4: 0
+  piper_joint5: 0
+  piper_joint6: 0
+  piper_joint7: 0
+  virtual_joint: 0

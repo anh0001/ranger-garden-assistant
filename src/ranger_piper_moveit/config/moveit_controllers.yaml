@@ -1,0 +1,23 @@
+moveit_simple_controller_manager:
+  controller_names:
+    - piper_arm_controller
+    - piper_gripper_controller
+
+  piper_arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - piper_joint1
+      - piper_joint2
+      - piper_joint3
+      - piper_joint4
+      - piper_joint5
+      - piper_joint6
+
+  piper_gripper_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+    default: true
+    joints:
+      - piper_joint7

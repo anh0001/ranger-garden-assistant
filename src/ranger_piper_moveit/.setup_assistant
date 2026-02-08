@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: ranger_description
+    relative_path: urdf/ranger_complete.urdf.xacro
+  srdf:
+    relative_path: config/ranger_mini_complete.srdf
+  package_settings:
+    author_name: Anhar Risnumawan
+    author_email: anhrisn@gmail.com
+    generated_timestamp: 1770542863
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
