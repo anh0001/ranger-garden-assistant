@@ -350,8 +350,8 @@ ros2 launch piper_moveit piper_moveit.launch.py
 Send joint trajectory commands directly via action server:
 
 ```bash
-# Control arm joints (example: move joint1 to 0.0873 rad)
-ros2 action send_goal /piper_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
+# Control arm joints with feedback (recommended - shows execution progress)
+ros2 action send_goal --feedback /piper_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
   trajectory: {
     joint_names: ['piper_joint1','piper_joint2','piper_joint3','piper_joint4','piper_joint5','piper_joint6'],
     points: [
@@ -360,8 +360,8 @@ ros2 action send_goal /piper_arm_controller/follow_joint_trajectory control_msgs
   }
 }"
 
-# Control gripper (open/close)
-ros2 action send_goal /piper_gripper_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
+# Control gripper (open/close) with feedback
+ros2 action send_goal --feedback /piper_gripper_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
   trajectory: {
     joint_names: ['piper_joint7'],
     points: [
@@ -370,6 +370,8 @@ ros2 action send_goal /piper_gripper_controller/follow_joint_trajectory control_
   }
 }"
 ```
+
+Note: The `--feedback` flag shows real-time execution progress. Use Ctrl+C to cancel goals early.
 
 ### Creating MoveIt Configuration for Complete Robot
 
