@@ -20,6 +20,7 @@ from launch.substitutions import (
     FindExecutable,
     LaunchConfiguration,
     PathJoinSubstitution,
+    PythonExpression,
     TextSubstitution,
 )
 from launch_ros.actions import Node
@@ -357,6 +358,78 @@ def generate_launch_description():
 
     declared_arguments.append(
         DeclareLaunchArgument(
+            "piper_joint_states_topic",
+            default_value="/joint_states",
+            description="JointState feedback topic from the PiPER driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_joint_command_topic",
+            default_value="/piper/joint_cmd",
+            description="JointState command topic consumed by the PiPER driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_joint_name_prefix",
+            default_value="piper_",
+            description="Prefix applied to PiPER joint names (e.g., piper_joint1).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_piper_bridge",
+            default_value="true",
+            description="Launch the FollowJointTrajectory bridge for the PiPER arm.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "use_piper_joint_states",
+            default_value="true",
+            description="Use PiPER joint states as /joint_states and disable joint_state_publisher.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_arm_action_name",
+            default_value="/piper_arm_controller/follow_joint_trajectory",
+            description="FollowJointTrajectory action name for the PiPER arm controller.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_gripper_action_name",
+            default_value="/piper_gripper_controller/follow_joint_trajectory",
+            description="FollowJointTrajectory action name for the PiPER gripper controller.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_bridge_publish_rate",
+            default_value="50.0",
+            description="Publish rate (Hz) for PiPER joint command streaming.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_bridge_speed",
+            default_value="30",
+            description="Default speed (1-100) forwarded via PiPER joint command velocity[6].",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
             "launch_moveit",
             default_value="true",
             description="Launch MoveIt 2 move_group for arm motion planning.",
@@ -411,6 +484,15 @@ def generate_launch_description():
     wrist_camera_depth_profile = LaunchConfiguration("wrist_camera_depth_profile")
     wrist_camera_publish_tf = LaunchConfiguration("wrist_camera_publish_tf")
     piper_log_level = LaunchConfiguration("piper_log_level")
+    piper_joint_states_topic = LaunchConfiguration("piper_joint_states_topic")
+    piper_joint_command_topic = LaunchConfiguration("piper_joint_command_topic")
+    piper_joint_name_prefix = LaunchConfiguration("piper_joint_name_prefix")
+    launch_piper_bridge = LaunchConfiguration("launch_piper_bridge")
+    use_piper_joint_states = LaunchConfiguration("use_piper_joint_states")
+    piper_arm_action_name = LaunchConfiguration("piper_arm_action_name")
+    piper_gripper_action_name = LaunchConfiguration("piper_gripper_action_name")
+    piper_bridge_publish_rate = LaunchConfiguration("piper_bridge_publish_rate")
+    piper_bridge_speed = LaunchConfiguration("piper_bridge_speed")
     launch_moveit = LaunchConfiguration("launch_moveit")
     moveit_delay = LaunchConfiguration("moveit_delay")
 
@@ -451,7 +533,9 @@ def generate_launch_description():
         package="joint_state_publisher",
         executable="joint_state_publisher",
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
-        condition=IfCondition(publish_joint_states),
+        condition=IfCondition(
+            PythonExpression(["'", publish_joint_states, "' == 'true' and not '", use_piper_joint_states, "' == 'true'"])
+        ),
     )
 
     # Ranger base driver launch (disabled by default; uncomment when chassis is present)
@@ -484,20 +568,44 @@ def generate_launch_description():
         }.items(),
     )
 
-    # PiPER arm driver
+    # PiPER arm controller
     piper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare("piper"),
                 "launch",
-                "start_single_piper.launch.py"
+                "start_single_controller.launch.py"
             ])
         ),
         launch_arguments={
             "can_port": arm_can_port,
             "auto_enable": "true",
             "log_level": piper_log_level,
+            "joint_states_topic": piper_joint_states_topic,
+            "joint_cmd_topic": piper_joint_command_topic,
+            "joint_name_prefix": piper_joint_name_prefix,
         }.items(),
+    )
+
+    piper_bridge_node = Node(
+        package="piper",
+        executable="piper_follow_joint_trajectory_bridge",
+        name="piper_follow_joint_trajectory_bridge",
+        output="both",
+        parameters=[
+            {
+                "arm_action_name": piper_arm_action_name,
+                "gripper_action_name": piper_gripper_action_name,
+                "command_topic": piper_joint_command_topic,
+                "state_topic": piper_joint_states_topic,
+                "joint_name_prefix": piper_joint_name_prefix,
+                "publish_rate_hz": ParameterValue(
+                    piper_bridge_publish_rate, value_type=float
+                ),
+                "default_speed": ParameterValue(piper_bridge_speed, value_type=int),
+            }
+        ],
+        condition=IfCondition(launch_piper_bridge),
     )
 
     camera_info_url = ParameterValue(
@@ -639,6 +747,7 @@ def generate_launch_description():
             # static_tf_lidar,
             ranger_base_launch,
             piper_launch,
+            piper_bridge_node,
             moveit_move_group_launch,
         ]
     )

@@ -56,12 +56,39 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "joint_states_topic",
+            default_value="/joint_states",
+            description="JointState feedback topic from the PiPER driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "joint_cmd_topic",
+            default_value="/piper/joint_cmd",
+            description="JointState command topic consumed by the PiPER driver.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "joint_name_prefix",
+            default_value="piper_",
+            description="Prefix applied to published joint names (e.g., piper_joint1).",
+        )
+    )
+
     # Initialize arguments
     can_port = LaunchConfiguration("can_port")
     auto_enable = LaunchConfiguration("auto_enable")
     gripper_exist = LaunchConfiguration("gripper_exist")
     gripper_val_mutiple = LaunchConfiguration("gripper_val_mutiple")
     log_level = LaunchConfiguration("log_level")
+    joint_states_topic = LaunchConfiguration("joint_states_topic")
+    joint_cmd_topic = LaunchConfiguration("joint_cmd_topic")
+    joint_name_prefix = LaunchConfiguration("joint_name_prefix")
 
     # Include the PiPER controller launch file (uses start_single_controller.launch.py for hardware control)
     piper_launch = IncludeLaunchDescription(
@@ -78,6 +105,9 @@ def generate_launch_description():
             "gripper_exist": gripper_exist,
             "gripper_val_mutiple": gripper_val_mutiple,
             "log_level": log_level,
+            "joint_states_topic": joint_states_topic,
+            "joint_cmd_topic": joint_cmd_topic,
+            "joint_name_prefix": joint_name_prefix,
         }.items(),
     )
 
