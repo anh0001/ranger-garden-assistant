@@ -456,17 +456,17 @@ def generate_launch_description():
         }.items(),
     )
 
-    # PiPER arm driver (commented out by default, uncomment when ready)
-    # piper_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         PathJoinSubstitution([
-    #             FindPackageShare("piper_ros"),
-    #             "launch",
-    #             "start_single_piper.launch.py"
-    #         ])
-    #     ),
-    #     launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
-    # )
+    # PiPER arm driver
+    piper_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare("piper"),
+                "launch",
+                "start_single_piper.launch.py"
+            ])
+        ),
+        launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
+    )
 
     camera_info_url = ParameterValue(
         [TextSubstitution(text="file://"), camera_calibration_file],
@@ -585,6 +585,6 @@ def generate_launch_description():
             rviz_node,
             # static_tf_lidar,
             ranger_base_launch,
-            # piper_launch,
+            piper_launch,
         ]
     )

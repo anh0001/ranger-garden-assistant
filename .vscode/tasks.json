@@ -130,6 +130,26 @@
       "isBackground": false
     },
     {
+      "label": "Launch: PiPER Arm Only",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup piper_arm.launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches PiPER 6-DOF arm controller only (CAN: can_piper). Publishes joint states to /joint_states. Use for testing arm independently without base or sensors.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
       "label": "Display: Robot Model with GUI",
       "type": "shell",
       "command": "bash",
@@ -241,6 +261,26 @@
         "clear": false
       },
       "detail": "Runs scripts/save_maps.sh to call /pgo/save_maps (FASTLIO2 global map) and map_saver_cli on /projected_map, storing outputs under ${workspaceFolder}/maps/. Run after the FASTLIO2 Mapping Stack is producing data."
+    },
+    {
+      "label": "Launch: PiPER MoveIt Demo",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_piper_moveit demo.launch.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches PiPER arm MoveIt 2 demo with RViz on DISPLAY :77 for interactive motion planning and visualization",
+      "problemMatcher": [],
+      "isBackground": false
     }
   ]
 }
