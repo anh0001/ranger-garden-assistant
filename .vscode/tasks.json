@@ -145,7 +145,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches PiPER 6-DOF arm controller only (CAN: can_piper). Publishes joint states to /joint_states. Use for testing arm independently without base or sensors.",
+      "detail": "Launches PiPER 6-DOF arm hardware driver (CAN: can_piper). Subscribes to /joint_states for control commands. Compatible with MoveIt planning.",
       "problemMatcher": [],
       "isBackground": false
     },

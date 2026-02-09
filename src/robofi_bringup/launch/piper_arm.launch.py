@@ -63,13 +63,13 @@ def generate_launch_description():
     gripper_val_mutiple = LaunchConfiguration("gripper_val_mutiple")
     log_level = LaunchConfiguration("log_level")
 
-    # Include the PiPER launch file
+    # Include the PiPER controller launch file (uses start_single_controller.launch.py for hardware control)
     piper_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare("piper"),
                 "launch",
-                "start_single_piper.launch.py"
+                "start_single_controller.launch.py"
             ])
         ),
         launch_arguments={
