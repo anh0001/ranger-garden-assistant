@@ -135,7 +135,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch robofi_bringup piper_arm.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch piper start_single_controller.launch.py can_port:=can_piper"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -145,7 +145,27 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches PiPER 6-DOF arm hardware driver (CAN: can_piper). Subscribes to /joint_states for control commands. Compatible with MoveIt planning.",
+      "detail": "Launches PiPER 6-DOF arm ros2_control controller stack via piper package (CAN: can_piper). Loads hardware interface, spawns joint_state_broadcaster and piper_arm_controller. Provides /piper_arm_controller/follow_joint_trajectory action interface for motion planning.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Run: PiPER Initializer (CAN Control Mode)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run piper piper_initializer"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Runs the PiPER initializer node to recover CAN command control mode if the arm is stuck. Requires the PiPER driver to be running.",
       "problemMatcher": [],
       "isBackground": false
     },

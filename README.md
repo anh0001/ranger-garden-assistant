@@ -335,10 +335,40 @@ ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 ros2 launch piper_ros start_single_piper.launch.py can_port:=can_piper
 ```
 
+Test arm movement with a simple joint command:
+
+```bash
+ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.5, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+```
+
 Use MoveIt for motion planning:
 
 ```bash
 ros2 launch piper_moveit piper_moveit.launch.py
+```
+
+Send joint trajectory commands directly via action server:
+
+```bash
+# Control arm joints (example: move joint1 to 0.0873 rad)
+ros2 action send_goal /piper_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
+  trajectory: {
+    joint_names: ['piper_joint1','piper_joint2','piper_joint3','piper_joint4','piper_joint5','piper_joint6'],
+    points: [
+      { positions: [0.0873, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 2} }
+    ]
+  }
+}"
+
+# Control gripper (open/close)
+ros2 action send_goal /piper_gripper_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
+  trajectory: {
+    joint_names: ['piper_joint7'],
+    points: [
+      { positions: [0.02], time_from_start: {sec: 1} }
+    ]
+  }
+}"
 ```
 
 ### Creating MoveIt Configuration for Complete Robot
