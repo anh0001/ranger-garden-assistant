@@ -8,10 +8,11 @@ Complete system bringup for Ranger Mini 3.0 with:
 - RealSense D405 (PiPER wrist camera)
 - PiPER 6-DOF arm
 - Robot description and TF
+- MoveIt 2 move_group (optional)
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
@@ -346,6 +347,30 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "piper_log_level",
+            default_value="warn",
+            description="Log level for PiPER arm controller (debug, info, warn, error, fatal).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_moveit",
+            default_value="true",
+            description="Launch MoveIt 2 move_group for arm motion planning.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "moveit_delay",
+            default_value="5.0",
+            description="Delay (seconds) before launching MoveIt move_group to allow robot model setup.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -385,6 +410,9 @@ def generate_launch_description():
     wrist_camera_color_profile = LaunchConfiguration("wrist_camera_color_profile")
     wrist_camera_depth_profile = LaunchConfiguration("wrist_camera_depth_profile")
     wrist_camera_publish_tf = LaunchConfiguration("wrist_camera_publish_tf")
+    piper_log_level = LaunchConfiguration("piper_log_level")
+    launch_moveit = LaunchConfiguration("launch_moveit")
+    moveit_delay = LaunchConfiguration("moveit_delay")
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -465,7 +493,11 @@ def generate_launch_description():
                 "start_single_piper.launch.py"
             ])
         ),
-        launch_arguments={"can_port": arm_can_port, "auto_enable": "true"}.items(),
+        launch_arguments={
+            "can_port": arm_can_port,
+            "auto_enable": "true",
+            "log_level": piper_log_level,
+        }.items(),
     )
 
     camera_info_url = ParameterValue(
@@ -574,6 +606,27 @@ def generate_launch_description():
         condition=IfCondition(use_rviz),
     )
 
+    # MoveIt move_group (delayed to allow robot model and arm driver to initialize)
+    moveit_move_group_launch = TimerAction(
+        period=moveit_delay,
+        actions=[
+            GroupAction(
+                condition=IfCondition(launch_moveit),
+                actions=[
+                    IncludeLaunchDescription(
+                        PythonLaunchDescriptionSource(
+                            PathJoinSubstitution([
+                                FindPackageShare("ranger_piper_moveit"),
+                                "launch",
+                                "move_group.launch.py",
+                            ])
+                        ),
+                    ),
+                ],
+            ),
+        ],
+    )
+
     return LaunchDescription(
         declared_arguments
         + [
@@ -586,5 +639,6 @@ def generate_launch_description():
             # static_tf_lidar,
             ranger_base_launch,
             piper_launch,
+            moveit_move_group_launch,
         ]
     )

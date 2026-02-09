@@ -185,7 +185,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches the complete Ranger system: base controller, LiDAR, Tier IV C2-176 camera, robot state publisher, and TF tree on DISPLAY :77",
+      "detail": "Launches the complete Ranger system: base controller, LiDAR, Tier IV C2-176 camera, robot state publisher, TF tree, and MoveIt move_group on DISPLAY :77",
       "problemMatcher": [],
       "isBackground": false
     },
