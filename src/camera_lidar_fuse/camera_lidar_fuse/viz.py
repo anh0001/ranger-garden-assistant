@@ -47,17 +47,27 @@ class ProjectedCloudVisualizer(Node):
         self.declare_parameter("slop", 0.1)
         self.declare_parameter("max_points", 120000)
         self.declare_parameter("point_radius", 2)
+        self.declare_parameter("image_encoding", "bgr8")
+        self.declare_parameter("force_yuv422", False)
+        self.declare_parameter("yuv422_layout", "uyvy")
         self.image_topic = self.get_parameter("image_topic").get_parameter_value().string_value
         self.projected_topic = self.get_parameter("projected_topic").get_parameter_value().string_value
         self.output_image_topic = self.get_parameter("output_image_topic").get_parameter_value().string_value
         self.slop = float(self.get_parameter("slop").get_parameter_value().double_value)
         self.max_points = max(1, int(self.get_parameter("max_points").get_parameter_value().integer_value))
         self.point_radius = max(1, int(self.get_parameter("point_radius").get_parameter_value().integer_value))
+        self.image_encoding = self.get_parameter("image_encoding").get_parameter_value().string_value
+        self.force_yuv422 = self.get_parameter("force_yuv422").get_parameter_value().bool_value
+        self.yuv422_layout = self.get_parameter("yuv422_layout").get_parameter_value().string_value
         self.get_logger().info(f"Image topic: {self.image_topic}")
         self.get_logger().info(f"Projected cloud topic: {self.projected_topic}")
         self.get_logger().info(f"Overlay topic: {self.output_image_topic}")
         self.get_logger().info(
             f"Sync slop: {self.slop}s  Max points: {self.max_points}  Radius: {self.point_radius}"
+        )
+        self.get_logger().info(
+            f"Image encoding: {self.image_encoding}  Force YUV422: {self.force_yuv422}  "
+            f"YUV422 layout: {self.yuv422_layout}"
         )
 
         self.bridge = CvBridge()
@@ -89,7 +99,11 @@ class ProjectedCloudVisualizer(Node):
         if cloud.size == 0:
             return
 
-        cv_image = self.bridge.imgmsg_to_cv2(image_msg, desired_encoding="bgr8")
+        try:
+            cv_image = self._decode_image(image_msg)
+        except Exception as exc:
+            self.get_logger().error(f"Failed to decode image: {exc}")
+            return
         h, w = cv_image.shape[:2]
 
         u = cloud["u"].astype(np.float64)
@@ -174,6 +188,46 @@ class ProjectedCloudVisualizer(Node):
         out_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
         out_msg.header = image_msg.header
         self.pub_overlay.publish(out_msg)
+
+    def _decode_image(self, image_msg: Image) -> np.ndarray:
+        encoding = (image_msg.encoding or "").lower()
+        if self.force_yuv422 or encoding in ("yuv422", "uyvy", "uyvy422", "yuyv", "yuy2"):
+            return self._decode_yuv422(image_msg, encoding)
+        return self.bridge.imgmsg_to_cv2(image_msg, desired_encoding=self.image_encoding)
+
+    def _decode_yuv422(self, image_msg: Image, encoding: str) -> np.ndarray:
+        layout = (self.yuv422_layout or "uyvy").strip().lower()
+        if encoding in ("uyvy", "uyvy422"):
+            layout = "uyvy"
+        elif encoding in ("yuyv", "yuy2"):
+            layout = "yuyv"
+
+        height = int(image_msg.height)
+        width = int(image_msg.width)
+        if height <= 0 or width <= 0:
+            raise ValueError("Image size is invalid for YUV422 decoding.")
+
+        row_stride = int(image_msg.step) if image_msg.step else width * 2
+        expected_stride = width * 2
+        if row_stride < expected_stride:
+            raise ValueError(
+                f"Image step ({row_stride}) is smaller than expected ({expected_stride}) for YUV422."
+            )
+
+        data = np.frombuffer(image_msg.data, dtype=np.uint8)
+        required = row_stride * height
+        if data.size < required:
+            raise ValueError(f"Image data is too small ({data.size} bytes) for YUV422 decoding.")
+
+        data = data[:required].reshape((height, row_stride))[:, :expected_stride]
+        yuv = np.ascontiguousarray(data.reshape((height, width, 2)))
+
+        if layout == "uyvy":
+            return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_UYVY)
+        if layout == "yuyv":
+            return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_YUY2)
+
+        raise ValueError(f"Unsupported YUV422 layout '{layout}'. Use 'uyvy' or 'yuyv'.")
 
     def _extract_range(self, cloud: np.ndarray) -> np.ndarray:
         if self._has_range:
