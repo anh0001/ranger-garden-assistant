@@ -500,14 +500,6 @@ Adjust the Tier IV C2-176 camera position in `ranger_description/urdf/ranger_com
 <xacro:property name="camera_z" value="0.55"/>
 ```
 
-#### Camera Calibration
-
-The Tier IV C2-176 camera calibration files are located in:
-- **Intrinsic**: `src/robofi_bringup/config/tier4_c2_176_2880x1860_intrinsic.yaml`
-- **Extrinsic**: `src/robofi_bringup/config/tier4_c2_176_2880x1860_extrinsic.yaml`
-
-To recalibrate the camera, use ROS camera calibration tools and update these files.
-
 ### CAN Interface Names
 
 If your CAN devices have different names, edit launch files:
@@ -762,24 +754,6 @@ from cv_bridge import CvBridge
 
 # Load camera calibration from /camera/camera_info
 # Use cv2.fisheye.undistortImage() to rectify images
-```
-
-## Development
-
-### Adding New Sensors
-
-1. Add sensor URDF to `ranger_description/urdf/`
-2. Create launch file in `robofi_bringup/launch/`
-3. Add static transform or update URDF
-4. Update `ranger_complete_bringup.launch.py`
-
-### Custom Packages
-
-Create new packages in `src/`:
-
-```bash
-cd src
-ros2 pkg create --build-type ament_cmake my_custom_package
 ```
 
 ## Acknowledgments
