@@ -332,7 +332,7 @@ Launch the PiPER arm:
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Or launch arm separately
-ros2 launch piper_ros start_single_piper.launch.py can_port:=can_piper
+ros2 launch piper_ros start_single_controller.launch.py can_port:=can_piper
 ```
 
 Test arm movement with a simple joint command:
@@ -341,37 +341,59 @@ Test arm movement with a simple joint command:
 ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]}"
 ```
 
-Use MoveIt for motion planning:
+Launch the PiPER driver and MoveIt move_group:
 
 ```bash
-ros2 launch piper_moveit piper_moveit.launch.py
+# Terminal 1: Start the PiPER driver
+ros2 launch piper start_single_controller.launch.py can_port:=can_piper
+
+# Terminal 2: Launch the Ranger + PiPER MoveIt move_group
+ros2 launch ranger_piper_moveit move_group.launch.py
 ```
 
-Send joint trajectory commands directly via action server:
+**VSCode Task Available**: Use "Launch: PiPER Arm Only" from the task menu to start the driver.
+
+Send Cartesian end-effector pose commands to MoveIt:
+
+MoveIt will plan the motion and generate a `FollowJointTrajectory` action that is sent to the PiPER driver. You can use the action API to send Cartesian poses:
 
 ```bash
-# Control arm joints with feedback (recommended - shows execution progress)
-ros2 action send_goal --feedback /piper_arm_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
-  trajectory: {
-    joint_names: ['piper_joint1','piper_joint2','piper_joint3','piper_joint4','piper_joint5','piper_joint6'],
-    points: [
-      { positions: [0.0873, 0.0, 0.0, 0.0, 0.0, 0.0], time_from_start: {sec: 2} }
-    ]
-  }
-}"
-
-# Control gripper (open/close) with feedback
-ros2 action send_goal --feedback /piper_gripper_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
-  trajectory: {
-    joint_names: ['piper_joint7'],
-    points: [
-      { positions: [0.02], time_from_start: {sec: 1} }
-    ]
+# Send a Cartesian pose goal to MoveIt's move_group action server
+ros2 action send_goal /piper_arm/move_action moveit_msgs/action/MoveGroup "{
+  request: {
+    group_name: 'piper_arm',
+    goal_constraints: [{
+      position_constraints: [{
+        header: {frame_id: 'base_link'},
+        link_name: 'piper_link6',
+        target_point_offset: {x: 0.0, y: 0.0, z: 0.0},
+        constraint_region: {
+          primitives: [{type: 1, dimensions: [0.001]}],
+          primitive_poses: [{position: {x: 0.3, y: 0.0, z: 0.4}}]
+        },
+        weight: 1.0
+      }],
+      orientation_constraints: [{
+        header: {frame_id: 'base_link'},
+        link_name: 'piper_link6',
+        orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707},
+        absolute_x_axis_tolerance: 0.1,
+        absolute_y_axis_tolerance: 0.1,
+        absolute_z_axis_tolerance: 0.1,
+        weight: 1.0
+      }]
+    }]
   }
 }"
 ```
 
-Note: The `--feedback` flag shows real-time execution progress. Use Ctrl+C to cancel goals early.
+**Recommended**: Use the provided Python script for easier Cartesian pose control:
+
+```bash
+./scripts/piper_pose_commander.py
+```
+
+This script provides an interactive interface to send end-effector poses to MoveIt. MoveIt performs motion planning and sends the resulting joint trajectory to the PiPER driver via the `/piper_arm_controller/follow_joint_trajectory` action interface.
 
 ### Creating MoveIt Configuration for Complete Robot
 
