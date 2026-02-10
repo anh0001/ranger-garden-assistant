@@ -338,7 +338,7 @@ ros2 launch piper_ros start_single_piper.launch.py can_port:=can_piper
 Test arm movement with a simple joint command:
 
 ```bash
-ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.5, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]}"
 ```
 
 Use MoveIt for motion planning:

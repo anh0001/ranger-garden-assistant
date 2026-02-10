@@ -298,7 +298,7 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches PiPER arm MoveIt 2 demo with RViz on DISPLAY :77 for interactive motion planning and visualization",
+      "detail": "MoveIt 2 demo with RViz on DISPLAY :77 for motion planning visualization (does not control physical arm)",
       "problemMatcher": [],
       "isBackground": false
     }
