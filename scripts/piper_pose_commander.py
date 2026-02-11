@@ -23,7 +23,13 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import Constraints, PositionConstraint, OrientationConstraint, BoundingVolume
+from moveit_msgs.msg import (
+    Constraints,
+    PositionConstraint,
+    OrientationConstraint,
+    BoundingVolume,
+    JointConstraint,
+)
 from shape_msgs.msg import SolidPrimitive
 from sensor_msgs.msg import JointState
 import time
@@ -35,6 +41,39 @@ class PiperPoseCommander(Node):
 
         # Create action client for MoveGroup
         self._action_client = ActionClient(self, MoveGroup, '/move_action')
+
+        # Parameters for MoveIt groups and gripper control
+        self.declare_parameter("arm_group_name", "piper_arm")
+        self.declare_parameter("gripper_group_name", "piper_gripper")
+        self.declare_parameter("gripper_joint_name", "piper_joint7")
+        self.declare_parameter("gripper_open_position", 0.035)
+        self.declare_parameter("gripper_closed_position", 0.0)
+        self.declare_parameter("joint_goal_tolerance", 0.005)
+        self.declare_parameter("planning_time", 5.0)
+        self.declare_parameter("planning_attempts", 10)
+        self.declare_parameter("max_velocity_scaling", 0.3)
+        self.declare_parameter("max_acceleration_scaling", 0.3)
+
+        self._arm_group_name = self.get_parameter("arm_group_name").value
+        self._gripper_group_name = self.get_parameter("gripper_group_name").value
+        self._gripper_joint_name = self.get_parameter("gripper_joint_name").value
+        self._gripper_open_position = float(
+            self.get_parameter("gripper_open_position").value
+        )
+        self._gripper_closed_position = float(
+            self.get_parameter("gripper_closed_position").value
+        )
+        self._joint_goal_tolerance = float(
+            self.get_parameter("joint_goal_tolerance").value
+        )
+        self._planning_time = float(self.get_parameter("planning_time").value)
+        self._planning_attempts = int(self.get_parameter("planning_attempts").value)
+        self._max_velocity_scaling = float(
+            self.get_parameter("max_velocity_scaling").value
+        )
+        self._max_acceleration_scaling = float(
+            self.get_parameter("max_acceleration_scaling").value
+        )
 
         # Subscribe to joint states
         self._joint_state_sub = self.create_subscription(
@@ -82,36 +121,20 @@ class PiperPoseCommander(Node):
             if 'piper' in name.lower() or 'link' in name.lower():
                 self.get_logger().info(f"  {name}: {position:.3f} rad")
 
-    def go_to_joint_goal(self, joint_positions: dict):
-        """
-        Move to target joint positions
-
-        Args:
-            joint_positions: Dictionary mapping joint names to target positions (radians)
-        """
-        self.get_logger().info(f"Moving to joint goal: {joint_positions}")
-
-        # Create goal message
+    def _build_move_group_goal(self, group_name: str) -> MoveGroup.Goal:
         goal_msg = MoveGroup.Goal()
-        goal_msg.request.group_name = "piper_arm"
-        goal_msg.request.num_planning_attempts = 10
-        goal_msg.request.allowed_planning_time = 5.0
-        goal_msg.request.max_velocity_scaling_factor = 0.3
-        goal_msg.request.max_acceleration_scaling_factor = 0.3
+        goal_msg.request.group_name = group_name
+        goal_msg.request.num_planning_attempts = self._planning_attempts
+        goal_msg.request.allowed_planning_time = self._planning_time
+        goal_msg.request.max_velocity_scaling_factor = self._max_velocity_scaling
+        goal_msg.request.max_acceleration_scaling_factor = self._max_acceleration_scaling
+        return goal_msg
 
-        # Set joint constraints
-        joint_constraint_list = []
-        for joint_name, target_pos in joint_positions.items():
-            constraint = Constraints()
-            # Note: In MoveIt 2, we typically set the target via start_state and goal_constraints
-            # For simplicity, this is a basic implementation
-            goal_msg.request.goal_constraints.append(constraint)
-
-        # Send goal
+    def _send_move_group_goal(self, goal_msg: MoveGroup.Goal) -> bool:
         self.get_logger().info("Sending goal to MoveGroup...")
         send_goal_future = self._action_client.send_goal_async(goal_msg)
         rclpy.spin_until_future_complete(self, send_goal_future)
-        
+
         goal_handle = send_goal_future.result()
         if not goal_handle.accepted:
             self.get_logger().error("Goal rejected by MoveGroup")
@@ -120,14 +143,45 @@ class PiperPoseCommander(Node):
         self.get_logger().info("Goal accepted, waiting for result...")
         result_future = goal_handle.get_result_async()
         rclpy.spin_until_future_complete(self, result_future)
-        
+
         result = result_future.result().result
         if result.error_code.val == 1:  # SUCCESS
             self.get_logger().info("Motion execution succeeded!")
             return True
-        else:
-            self.get_logger().error(f"Motion failed with error code: {result.error_code.val}")
-            return False
+
+        self.get_logger().error(f"Motion failed with error code: {result.error_code.val}")
+        return False
+
+    def go_to_joint_goal(self, joint_positions: dict, group_name: str | None = None):
+        """
+        Move to target joint positions
+
+        Args:
+            joint_positions: Dictionary mapping joint names to target positions (radians)
+            group_name: MoveIt group name (defaults to arm group)
+        """
+        if group_name is None:
+            group_name = self._arm_group_name
+
+        self.get_logger().info(
+            f"Moving {group_name} to joint goal: {joint_positions}"
+        )
+
+        goal_msg = self._build_move_group_goal(group_name)
+
+        # Set joint constraints
+        constraints = Constraints()
+        for joint_name, target_pos in joint_positions.items():
+            joint_constraint = JointConstraint()
+            joint_constraint.joint_name = joint_name
+            joint_constraint.position = float(target_pos)
+            joint_constraint.tolerance_above = self._joint_goal_tolerance
+            joint_constraint.tolerance_below = self._joint_goal_tolerance
+            joint_constraint.weight = 1.0
+            constraints.joint_constraints.append(joint_constraint)
+
+        goal_msg.request.goal_constraints.append(constraints)
+        return self._send_move_group_goal(goal_msg)
 
     def go_to_pose_goal(self, pose: Pose, frame_id: str = "base_link"):
         """
@@ -147,13 +201,7 @@ class PiperPoseCommander(Node):
                               f"z={pose.orientation.z:.3f}, "
                               f"w={pose.orientation.w:.3f}")
 
-        # Create goal message
-        goal_msg = MoveGroup.Goal()
-        goal_msg.request.group_name = "piper_arm"
-        goal_msg.request.num_planning_attempts = 10
-        goal_msg.request.allowed_planning_time = 5.0
-        goal_msg.request.max_velocity_scaling_factor = 0.3
-        goal_msg.request.max_acceleration_scaling_factor = 0.3
+        goal_msg = self._build_move_group_goal(self._arm_group_name)
 
         # Set pose goal as constraints
         constraints = Constraints()
@@ -196,27 +244,21 @@ class PiperPoseCommander(Node):
         
         goal_msg.request.goal_constraints.append(constraints)
 
-        # Send goal
-        self.get_logger().info("Sending goal to MoveGroup...")
-        send_goal_future = self._action_client.send_goal_async(goal_msg)
-        rclpy.spin_until_future_complete(self, send_goal_future)
-        
-        goal_handle = send_goal_future.result()
-        if not goal_handle.accepted:
-            self.get_logger().error("Goal rejected by MoveGroup")
-            return False
+        return self._send_move_group_goal(goal_msg)
 
-        self.get_logger().info("Goal accepted, waiting for result...")
-        result_future = goal_handle.get_result_async()
-        rclpy.spin_until_future_complete(self, result_future)
-        
-        result = result_future.result().result
-        if result.error_code.val == 1:  # SUCCESS
-            self.get_logger().info("Motion execution succeeded!")
-            return True
-        else:
-            self.get_logger().error(f"Motion failed with error code: {result.error_code.val}")
-            return False
+    def open_gripper(self):
+        """Open the gripper to the configured open position."""
+        return self.go_to_joint_goal(
+            {self._gripper_joint_name: self._gripper_open_position},
+            group_name=self._gripper_group_name,
+        )
+
+    def close_gripper(self):
+        """Close the gripper to the configured closed position."""
+        return self.go_to_joint_goal(
+            {self._gripper_joint_name: self._gripper_closed_position},
+            group_name=self._gripper_group_name,
+        )
 
     def go_to_position(self, x: float, y: float, z: float, frame_id: str = "base_link"):
         """
@@ -260,9 +302,17 @@ def main():
         target_pose.orientation.w = 0.707
         commander.go_to_pose_goal(target_pose)
 
+        # Example 1b: Open the gripper
+        input("\nPress Enter to open gripper...")
+        commander.open_gripper()
+
         # Example 2: Move to position (downward orientation)
         input("\nPress Enter to move to position (0.25, 0.1, 0.35)...")
         commander.go_to_position(0.25, 0.1, 0.35)
+
+        # Example 2b: Close the gripper
+        input("\nPress Enter to close gripper...")
+        commander.close_gripper()
 
         # Example 3: Move to another position
         input("\nPress Enter to move to position (0.30, -0.1, 0.40)...")
