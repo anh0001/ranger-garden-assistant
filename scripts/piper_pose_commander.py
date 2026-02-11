@@ -46,6 +46,17 @@ class PiperPoseCommander(Node):
         self.declare_parameter("arm_group_name", "piper_arm")
         self.declare_parameter("gripper_group_name", "piper_gripper")
         self.declare_parameter("gripper_joint_name", "piper_joint7")
+        self.declare_parameter(
+            "arm_joint_names",
+            [
+                "piper_joint1",
+                "piper_joint2",
+                "piper_joint3",
+                "piper_joint4",
+                "piper_joint5",
+                "piper_joint6",
+            ],
+        )
         self.declare_parameter("gripper_open_position", 0.035)
         self.declare_parameter("gripper_closed_position", 0.0)
         self.declare_parameter("joint_goal_tolerance", 0.005)
@@ -57,6 +68,7 @@ class PiperPoseCommander(Node):
         self._arm_group_name = self.get_parameter("arm_group_name").value
         self._gripper_group_name = self.get_parameter("gripper_group_name").value
         self._gripper_joint_name = self.get_parameter("gripper_joint_name").value
+        self._arm_joint_names = list(self.get_parameter("arm_joint_names").value)
         self._gripper_open_position = float(
             self.get_parameter("gripper_open_position").value
         )
@@ -281,6 +293,11 @@ class PiperPoseCommander(Node):
 
         return self.go_to_pose_goal(target_pose, frame_id)
 
+    def return_arm_to_zero(self):
+        """Return the arm joints to zero using joint constraints."""
+        joint_positions = {name: 0.0 for name in self._arm_joint_names}
+        return self.go_to_joint_goal(joint_positions, group_name=self._arm_group_name)
+
 
 def main():
     # Initialize ROS
@@ -317,6 +334,10 @@ def main():
         # Example 3: Move to another position
         input("\nPress Enter to move to position (0.30, -0.1, 0.40)...")
         commander.go_to_position(0.30, -0.1, 0.40)
+
+        # Return arm to zero joint pose
+        input("\nPress Enter to return arm to zero joint pose...")
+        commander.return_arm_to_zero()
 
         commander.get_logger().info("\nDemo completed successfully!")
 
