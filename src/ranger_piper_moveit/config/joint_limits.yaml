@@ -41,5 +41,7 @@ joint_limits:
   piper_joint7:
     has_velocity_limits: true
     max_velocity: 1.0
+    min_position: 0.0
+    max_position: 0.75
     has_acceleration_limits: false
     max_acceleration: 0.0

@@ -287,7 +287,7 @@ This is useful for navigation - keeps the arm folded and out of the way.
    - **Pose Name**: `open`
    - **Planning Group**: `piper_gripper`
 3. Set gripper joint to max open value:
-   - `piper_joint7`: `0.035` (adjust based on your gripper's range)
+   - `piper_joint7`: `0.75` (adjust based on your gripper's range)
 4. Click **"Save"**
 
 #### Pose 4: Gripper Closed

@@ -57,7 +57,7 @@ class PiperPoseCommander(Node):
                 "piper_joint6",
             ],
         )
-        self.declare_parameter("gripper_open_position", 0.035)
+        self.declare_parameter("gripper_open_position", 0.75)
         self.declare_parameter("gripper_closed_position", 0.0)
         self.declare_parameter("joint_goal_tolerance", 0.005)
         self.declare_parameter("planning_time", 5.0)

@@ -40,7 +40,7 @@
         <joint name="piper_joint6" value="0"/>
     </group_state>
     <group_state name="open" group="piper_gripper">
-        <joint name="piper_joint7" value="0.035"/>
+        <joint name="piper_joint7" value="0.75"/>
     </group_state>
     <group_state name="closed" group="piper_gripper">
         <joint name="piper_joint7" value="0"/>
