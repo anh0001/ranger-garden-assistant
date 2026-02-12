@@ -37,8 +37,19 @@ Design notes / debugging history
    (e.g. after go_to_ready_pose already used it for send_goal + get_result).
    Fix: a single SingleThreadedExecutor is created in __init__ and reused for
    all spin_until_future_complete / spin_once calls throughout the node's life.
+
+4. start_servo service call uses fire-and-forget subprocess (Popen)
+   The ros2 CLI takes 10+ seconds for DDS peer discovery on Jetson before it
+   can send the Trigger request.  Blocking on that call (subprocess.run or a
+   ROS service client future) stalls the script and prints a spurious timeout
+   warning.  The servo node itself accepts the call almost instantly once DDS
+   discovery completes in the background, so jogging works correctly regardless.
+   Fix: subprocess.Popen with stdout/stderr=DEVNULL — returns immediately.
+   The background process is terminated/waited in the finally block to avoid
+   zombie processes.
 """
 
+import subprocess
 import time
 from typing import Tuple
 
@@ -46,7 +57,6 @@ import rclpy
 import rclpy.action
 from rclpy.node import Node
 from geometry_msgs.msg import TwistStamped
-from std_srvs.srv import Trigger
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
     MotionPlanRequest,
@@ -78,9 +88,9 @@ class PiperServoCommander(Node):
         self.declare_parameter("servo_twist_topic", "/servo_node/delta_twist_cmds")
         self.declare_parameter("command_frame", "piper_base_link")
         self.declare_parameter("publish_rate_hz", 30.0)
-        self.declare_parameter("default_duration_sec", 0.8)
-        self.declare_parameter("linear_speed", 0.04)
-        self.declare_parameter("angular_speed", 0.4)
+        self.declare_parameter("default_duration_sec", 2.0)
+        self.declare_parameter("linear_speed", 0.05)
+        self.declare_parameter("angular_speed", 0.5)
 
         self._servo_start_service = self.get_parameter("servo_start_service").value
         self._servo_twist_topic = self.get_parameter("servo_twist_topic").value
@@ -115,29 +125,20 @@ class PiperServoCommander(Node):
             f"Command frame: {self._command_frame}"
         )
 
-    def _call_trigger_service(self, service_name: str, timeout_sec: float = 5.0) -> bool:
-        client = self.create_client(Trigger, service_name)
-        if not client.wait_for_service(timeout_sec=timeout_sec):
-            self.get_logger().warn(
-                f"Service {service_name} not available after {timeout_sec}s"
-            )
-            return False
-        future = client.call_async(Trigger.Request())
-        self._executor.spin_until_future_complete(future, timeout_sec=timeout_sec)
-        if future.result() is None:
-            self.get_logger().warn(f"Service call to {service_name} timed out")
-            return False
-        if not future.result().success:
-            self.get_logger().warn(
-                f"Service {service_name} returned failure: {future.result().message}"
-            )
-        return future.result().success
-
     def start_servo(self) -> None:
-        if self._call_trigger_service(self._servo_start_service):
-            self.get_logger().info("MoveIt Servo started")
-        else:
-            self.get_logger().warn("Could not start MoveIt Servo; continuing anyway")
+        """Call the start_servo Trigger service.
+
+        Fire-and-forget via subprocess so we don't block on DDS discovery.
+        The servo node accepts the call in the background; jogging works
+        even before the CLI process finishes.
+        """
+        self.get_logger().info("Starting MoveIt Servo (background)...")
+        self._servo_proc = subprocess.Popen(
+            ["ros2", "service", "call",
+             self._servo_start_service,
+             "std_srvs/srv/Trigger", "{}"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
 
     def go_to_ready_pose(self, timeout_sec: float = 15.0) -> bool:
         """Move arm to a non-singular pose before starting servo jogging."""
@@ -329,6 +330,10 @@ def main() -> None:
         commander.get_logger().info("Interrupted by user")
     finally:
         commander.publish_zero()
+        # Clean up the background service-call process (if still running).
+        if hasattr(commander, "_servo_proc") and commander._servo_proc.poll() is None:
+            commander._servo_proc.terminate()
+            commander._servo_proc.wait(timeout=3)
         commander._executor.remove_node(commander)
         commander._executor.shutdown()
         commander.destroy_node()
