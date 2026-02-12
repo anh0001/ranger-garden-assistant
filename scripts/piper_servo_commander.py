@@ -72,10 +72,10 @@ from action_msgs.msg import GoalStatus
 # (joint4=0 + joint5~0 makes joints 4 & 6 collinear).
 READY_JOINT_POSITIONS = {
     "piper_joint1": 0.0,
-    "piper_joint2": 0.5,
-    "piper_joint3": -1.0,
-    "piper_joint4": 0.3,
-    "piper_joint5": -0.8,
+    "piper_joint2": 0.3,
+    "piper_joint3": -0.7,
+    "piper_joint4": 0.0,
+    "piper_joint5": 0.8,
     "piper_joint6": 0.0,
 }
 
