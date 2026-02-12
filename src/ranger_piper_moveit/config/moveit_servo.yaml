@@ -23,8 +23,11 @@ servo_node:
       publish_joint_accelerations: false
 
       # Singularity and joint-limit handling.
-      lower_singularity_threshold: 17.0
-      hard_stop_singularity_threshold: 30.0
+      # PiPER's small link lengths produce a naturally high Jacobian
+      # condition number.  The defaults (17/30) cause HALT_FOR_SINGULARITY
+      # at almost every reachable configuration.
+      lower_singularity_threshold: 100.0
+      hard_stop_singularity_threshold: 200.0
       joint_limit_margin: 0.1
 
       # Collision checking.
