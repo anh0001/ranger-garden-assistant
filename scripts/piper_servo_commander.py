@@ -53,8 +53,6 @@ class PiperServoCommander(Node):
         self._twist_pub = self.create_publisher(
             TwistStamped, self._servo_twist_topic, 10
         )
-        self._start_client = self.create_client(Trigger, self._servo_start_service)
-
         self.get_logger().info(
             f"Servo twist topic: {self._servo_twist_topic}"
         )
@@ -65,21 +63,44 @@ class PiperServoCommander(Node):
             f"Command frame: {self._command_frame}"
         )
 
-    def start_servo(self) -> None:
-        if not self._start_client.wait_for_service(timeout_sec=5.0):
+    def _call_start_servo_service(
+        self,
+        timeout_sec: float = 5.0,
+    ) -> Trigger.Response | None:
+        helper_name = f"{self.get_name()}_start_client_{int(time.monotonic() * 1000)}"
+        helper_node = rclpy.create_node(helper_name, context=self.context)
+        client = helper_node.create_client(Trigger, self._servo_start_service)
+
+        if not client.wait_for_service(timeout_sec=timeout_sec):
             self.get_logger().warn(
                 "Servo start service not available; continuing without explicit start"
             )
-            return
+            helper_node.destroy_node()
+            return None
 
         request = Trigger.Request()
-        future = self._start_client.call_async(request)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        future = client.call_async(request)
+
+        executor = rclpy.executors.SingleThreadedExecutor(context=self.context)
+        executor.add_node(helper_node)
+        try:
+            executor.spin_until_future_complete(future, timeout_sec=timeout_sec)
+        finally:
+            executor.remove_node(helper_node)
+            executor.shutdown()
+            helper_node.destroy_node()
+
         if future.result() is None:
             self.get_logger().warn("Servo start call failed or timed out")
+            return None
+
+        return future.result()
+
+    def start_servo(self) -> None:
+        response = self._call_start_servo_service(timeout_sec=5.0)
+        if response is None:
             return
 
-        response = future.result()
         if response.success:
             self.get_logger().info("MoveIt Servo started")
         else:
