@@ -382,6 +382,14 @@ def generate_launch_description():
 
     declared_arguments.append(
         DeclareLaunchArgument(
+            "launch_piper",
+            default_value="true",
+            description="Launch the PiPER arm driver (disable if the arm CAN device is unavailable).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
             "launch_piper_bridge",
             default_value="true",
             description="Launch the FollowJointTrajectory bridge for the PiPER arm.",
@@ -519,6 +527,7 @@ def generate_launch_description():
     piper_joint_states_topic = LaunchConfiguration("piper_joint_states_topic")
     piper_joint_command_topic = LaunchConfiguration("piper_joint_command_topic")
     piper_joint_name_prefix = LaunchConfiguration("piper_joint_name_prefix")
+    launch_piper = LaunchConfiguration("launch_piper")
     launch_piper_bridge = LaunchConfiguration("launch_piper_bridge")
     use_piper_joint_states = LaunchConfiguration("use_piper_joint_states")
     piper_arm_action_name = LaunchConfiguration("piper_arm_action_name")
@@ -570,7 +579,17 @@ def generate_launch_description():
         executable="joint_state_publisher",
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
         condition=IfCondition(
-            PythonExpression(["'", publish_joint_states, "' == 'true' and not '", use_piper_joint_states, "' == 'true'"])
+            PythonExpression(
+                [
+                    "'",
+                    publish_joint_states,
+                    "' == 'true' and (not '",
+                    use_piper_joint_states,
+                    "' == 'true' or not '",
+                    launch_piper,
+                    "' == 'true')",
+                ]
+            )
         ),
     )
 
@@ -621,6 +640,7 @@ def generate_launch_description():
             "joint_cmd_topic": piper_joint_command_topic,
             "joint_name_prefix": piper_joint_name_prefix,
         }.items(),
+        condition=IfCondition(launch_piper),
     )
 
     piper_bridge_node = Node(
@@ -641,7 +661,17 @@ def generate_launch_description():
                 "default_speed": ParameterValue(piper_bridge_speed, value_type=int),
             }
         ],
-        condition=IfCondition(launch_piper_bridge),
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    launch_piper_bridge,
+                    "' == 'true' and '",
+                    launch_piper,
+                    "' == 'true'",
+                ]
+            )
+        ),
     )
 
     servo_command_bridge_node = Node(
@@ -664,6 +694,8 @@ def generate_launch_description():
                     launch_servo_command_bridge,
                     "' == 'true' and '",
                     launch_moveit_servo,
+                    "' == 'true' and '",
+                    launch_piper,
                     "' == 'true'",
                 ]
             )
