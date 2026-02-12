@@ -444,6 +444,38 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_moveit_servo",
+            default_value="true",
+            description="Launch MoveIt Servo for real-time Cartesian arm control.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "moveit_servo_delay",
+            default_value="7.0",
+            description="Delay (seconds) before launching MoveIt Servo (should be after move_group).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_servo_command_bridge",
+            default_value="true",
+            description="Launch bridge from Servo joint arrays to PiPER /piper/joint_cmd.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_command_out_topic",
+            default_value="/moveit_servo/piper_arm_joint_targets",
+            description="MoveIt Servo command_out topic consumed by the PiPER servo bridge.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -495,6 +527,10 @@ def generate_launch_description():
     piper_bridge_speed = LaunchConfiguration("piper_bridge_speed")
     launch_moveit = LaunchConfiguration("launch_moveit")
     moveit_delay = LaunchConfiguration("moveit_delay")
+    launch_moveit_servo = LaunchConfiguration("launch_moveit_servo")
+    moveit_servo_delay = LaunchConfiguration("moveit_servo_delay")
+    launch_servo_command_bridge = LaunchConfiguration("launch_servo_command_bridge")
+    servo_command_out_topic = LaunchConfiguration("servo_command_out_topic")
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -606,6 +642,32 @@ def generate_launch_description():
             }
         ],
         condition=IfCondition(launch_piper_bridge),
+    )
+
+    servo_command_bridge_node = Node(
+        package="robofi_bringup",
+        executable="servo_array_to_piper_joint_cmd.py",
+        name="servo_array_to_piper_joint_cmd",
+        output="both",
+        parameters=[
+            {
+                "input_topic": servo_command_out_topic,
+                "joint_states_topic": piper_joint_states_topic,
+                "output_topic": piper_joint_command_topic,
+                "joint_prefix": piper_joint_name_prefix,
+            }
+        ],
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    launch_servo_command_bridge,
+                    "' == 'true' and '",
+                    launch_moveit_servo,
+                    "' == 'true'",
+                ]
+            )
+        ),
     )
 
     camera_info_url = ParameterValue(
@@ -735,6 +797,29 @@ def generate_launch_description():
         ],
     )
 
+    moveit_servo_launch = TimerAction(
+        period=moveit_servo_delay,
+        actions=[
+            GroupAction(
+                condition=IfCondition(launch_moveit_servo),
+                actions=[
+                    IncludeLaunchDescription(
+                        PythonLaunchDescriptionSource(
+                            PathJoinSubstitution([
+                                FindPackageShare("ranger_piper_moveit"),
+                                "launch",
+                                "moveit_servo.launch.py",
+                            ])
+                        ),
+                        launch_arguments={
+                            "use_sim_time": use_sim_time,
+                        }.items(),
+                    ),
+                ],
+            ),
+        ],
+    )
+
     return LaunchDescription(
         declared_arguments
         + [
@@ -748,6 +833,8 @@ def generate_launch_description():
             ranger_base_launch,
             piper_launch,
             piper_bridge_node,
+            servo_command_bridge_node,
             moveit_move_group_launch,
+            moveit_servo_launch,
         ]
     )

@@ -54,6 +54,7 @@ This workspace provides a fully integrated mobile manipulation platform suitable
 - **Additional packages** (installed via rosdep):
   - Navigation2
   - MoveIt 2
+  - MoveIt Servo (`ros-humble-moveit-servo`)
   - slam_toolbox
   - v4l2_camera
   - realsense2_camera (for D405)
@@ -328,7 +329,6 @@ If you have only one RealSense connected, you can omit `serial_no`. Use `rs-enum
 Launch the PiPER arm:
 
 ```bash
-# Note: Uncomment piper_launch in ranger_complete_bringup.launch.py first
 ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 
 # Or launch arm separately
@@ -352,6 +352,29 @@ ros2 launch ranger_piper_moveit move_group.launch.py
 ```
 
 **VSCode Task Available**: Use "Launch: PiPER Arm Only" from the task menu to start the driver.
+
+By default, `ranger_complete_bringup.launch.py` also starts MoveIt Servo and the
+`servo_array_to_piper_joint_cmd.py` bridge:
+
+```bash
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py \
+  launch_moveit:=true \
+  launch_moveit_servo:=true \
+  launch_servo_command_bridge:=true
+```
+
+Disable Servo when running MoveGroup-only workflows:
+
+```bash
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py launch_moveit_servo:=false
+```
+
+Quick Servo sanity check:
+
+```bash
+ros2 service call /servo_node/start_servo std_srvs/srv/Trigger "{}"
+ros2 topic pub --once /servo_node/delta_twist_cmds geometry_msgs/msg/TwistStamped "{header: {frame_id: 'piper_base_link'}, twist: {linear: {x: 0.01, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}}"
+```
 
 Send Cartesian end-effector pose commands to MoveIt:
 
@@ -547,6 +570,33 @@ sudo usermod -a -G dialout $USER
 
 # Verify group membership
 groups | grep dialout
+```
+
+### MoveIt Servo Issues
+
+**Problem**: `/servo_node/start_servo` service or `/servo_node/delta_twist_cmds` topic is missing.
+
+**Solution**:
+```bash
+# Verify Servo package exists
+ros2 pkg list | grep moveit_servo
+
+# If missing, install and rebuild
+sudo apt install ros-humble-moveit-servo -y
+cd /home/robofi/codes/ranger-garden-assistant
+colcon build --symlink-install
+source install/setup.bash
+```
+
+**Problem**: Servo command arrays are published but arm does not move.
+
+**Solution**:
+```bash
+# Check Servo output and bridge input
+ros2 topic echo /moveit_servo/piper_arm_joint_targets
+
+# Check bridged PiPER command stream
+ros2 topic echo /piper/joint_cmd
 ```
 
 ### LiDAR Connection Issues

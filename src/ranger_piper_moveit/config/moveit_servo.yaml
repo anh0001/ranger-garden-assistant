@@ -1,0 +1,36 @@
+moveit_servo:
+  ros__parameters:
+    command_in_type: speed_units
+    cartesian_command_in_topic: ~/delta_twist_cmds
+    joint_command_in_topic: ~/delta_joint_cmds
+    command_out_type: std_msgs/Float64MultiArray
+    command_out_topic: /moveit_servo/piper_arm_joint_targets
+
+    move_group_name: piper_arm
+    planning_frame: piper_base_link
+    ee_frame_name: piper_link6
+    robot_link_command_frame: piper_base_link
+
+    publish_period: 0.034
+    low_latency_mode: true
+    incoming_command_timeout: 0.1
+    num_outgoing_halt_msgs_to_publish: 4
+
+    # Use direct positional setpoints on the arm joints.
+    publish_joint_positions: true
+    publish_joint_velocities: false
+    publish_joint_accelerations: false
+
+    # Singularity and joint-limit handling.
+    lower_singularity_threshold: 17.0
+    hard_stop_singularity_threshold: 30.0
+    joint_limit_margin: 0.1
+
+    # Collision checking.
+    check_collisions: true
+    collision_check_rate: 10.0
+    self_collision_proximity_threshold: 0.01
+    scene_collision_proximity_threshold: 0.02
+
+    # Servo state inputs.
+    joint_topic: /joint_states
