@@ -70,10 +70,10 @@ MOTION_BINDINGS: Dict[str, MotionBinding] = {
 
 READY_JOINT_POSITIONS = {
     "piper_joint1": 0.0,
-    "piper_joint2": 0.3,
-    "piper_joint3": -0.7,
+    "piper_joint2": 1.2,
+    "piper_joint3": -0.2,
     "piper_joint4": 0.0,
-    "piper_joint5": 0.8,
+    "piper_joint5": -0.8,
     "piper_joint6": 0.0,
 }
 
@@ -168,7 +168,7 @@ class PiperServoTeleop(Node):
         self.declare_parameter("command_frame", "piper_base_link")
         self.declare_parameter("publish_rate_hz", 30.0)
         self.declare_parameter("command_hold_sec", 0.15)
-        self.declare_parameter("linear_speed", 0.05)
+        self.declare_parameter("linear_speed", 0.1)
         self.declare_parameter("angular_speed", 0.5)
         self.declare_parameter("auto_start_servo", True)
         self.declare_parameter("start_servo_timeout_sec", 2.0)

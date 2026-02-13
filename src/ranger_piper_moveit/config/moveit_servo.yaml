@@ -28,7 +28,7 @@ servo_node:
       # at almost every reachable configuration.
       lower_singularity_threshold: 100.0
       hard_stop_singularity_threshold: 200.0
-      joint_limit_margin: 0.1
+      joint_limit_margin: 0.05
 
       # Collision checking.
       check_collisions: true
