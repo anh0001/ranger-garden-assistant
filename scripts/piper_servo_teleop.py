@@ -157,6 +157,7 @@ class PiperServoTeleop(Node):
         self.declare_parameter("servo_twist_topic", "/servo_node/delta_twist_cmds")
         self.declare_parameter("servo_start_service", "/servo_node/start_servo")
         self.declare_parameter("move_group_action", "/move_action")
+        self.declare_parameter("move_group_wait_timeout_sec", 20.0)
         self.declare_parameter("ready_pose_group_name", "piper_arm")
         self.declare_parameter("move_to_ready_pose", True)
         self.declare_parameter("ready_pose_timeout_sec", 15.0)
@@ -164,7 +165,7 @@ class PiperServoTeleop(Node):
         self.declare_parameter("gripper_joint_name", "piper_joint7")
         self.declare_parameter("gripper_open_position", 0.75)
         self.declare_parameter("gripper_closed_position", 0.0)
-        self.declare_parameter("gripper_goal_timeout_sec", 8.0)
+        self.declare_parameter("gripper_goal_timeout_sec", 15.0)
         self.declare_parameter("command_frame", "piper_base_link")
         self.declare_parameter("publish_rate_hz", 30.0)
         self.declare_parameter("command_hold_sec", 0.15)
@@ -176,6 +177,9 @@ class PiperServoTeleop(Node):
         self._twist_topic = str(self.get_parameter("servo_twist_topic").value)
         self._start_service = str(self.get_parameter("servo_start_service").value)
         self._move_group_action = str(self.get_parameter("move_group_action").value)
+        self._move_group_wait_timeout_sec = max(
+            0.5, float(self.get_parameter("move_group_wait_timeout_sec").value)
+        )
         self._ready_pose_group_name = str(
             self.get_parameter("ready_pose_group_name").value
         )
@@ -218,6 +222,9 @@ class PiperServoTeleop(Node):
 
         self._twist_pub = self.create_publisher(TwistStamped, self._twist_topic, 10)
         self._start_client = self.create_client(Trigger, self._start_service)
+        self._move_group_client = rclpy.action.ActionClient(
+            self, MoveGroup, self._move_group_action
+        )
         self._publish_timer = self.create_timer(
             1.0 / self._publish_rate_hz, self._on_publish
         )
@@ -225,13 +232,24 @@ class PiperServoTeleop(Node):
         self.get_logger().info(f"Twist topic: {self._twist_topic}")
         self.get_logger().info(f"Start service: {self._start_service}")
         self.get_logger().info(f"MoveGroup action: {self._move_group_action}")
+        self.get_logger().info(
+            f"MoveGroup wait timeout: {self._move_group_wait_timeout_sec:.1f}s"
+        )
         self.get_logger().info(f"Command frame: {self._command_frame}")
         self.get_logger().info(
             f"Gripper group/joint: {self._gripper_group_name}/{self._gripper_joint_name}"
         )
         self.get_logger().info(
+            f"Gripper goal timeout: {self._gripper_goal_timeout_sec:.1f}s"
+        )
+        self.get_logger().info(
             f"Speeds linear={self._linear_speed:.3f} m/s angular={self._angular_speed:.3f} rad/s"
         )
+        if self._gripper_goal_timeout_sec < 10.0:
+            self.get_logger().warn(
+                "gripper_goal_timeout_sec is below 10s; this may timeout before "
+                "the gripper trajectory bridge reports completion."
+            )
 
     @property
     def auto_start_servo(self) -> bool:
@@ -329,15 +347,28 @@ class PiperServoTeleop(Node):
         finally:
             self._publish_timer.reset()
 
+    def _wait_for_move_group_server(self, timeout_sec: float | None = None) -> bool:
+        timeout = (
+            self._move_group_wait_timeout_sec
+            if timeout_sec is None
+            else max(0.1, timeout_sec)
+        )
+        if self._move_group_client.wait_for_server(timeout_sec=timeout):
+            return True
+
+        self.get_logger().error(
+            f"MoveGroup action server {self._move_group_action} not available "
+            f"(timeout={timeout:.1f}s). Is move_group fully started?"
+        )
+        return False
+
     def _execute_joint_goal(
         self,
         joint_targets: Dict[str, float],
         group_name: str,
         timeout_sec: float,
     ) -> bool:
-        client = rclpy.action.ActionClient(self, MoveGroup, self._move_group_action)
-        if not client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().error("MoveGroup action server not available")
+        if not self._wait_for_move_group_server():
             return False
 
         joint_constraints = [
@@ -374,28 +405,54 @@ class PiperServoTeleop(Node):
         goal.planning_options.replan = True
         goal.planning_options.replan_attempts = 3
 
-        send_future = client.send_goal_async(goal)
-        self._executor.spin_until_future_complete(send_future, timeout_sec=10.0)
-        if send_future.result() is None:
-            self.get_logger().error("Failed to send MoveGroup goal")
+        send_future = self._move_group_client.send_goal_async(goal)
+        self._executor.spin_until_future_complete(
+            send_future, timeout_sec=self._move_group_wait_timeout_sec
+        )
+        if not send_future.done():
+            self.get_logger().error(
+                "Timed out waiting for MoveGroup goal acknowledgement"
+            )
+            return False
+        send_error = send_future.exception()
+        if send_error is not None:
+            self.get_logger().error(f"Failed to send MoveGroup goal: {send_error}")
+            return False
+        goal_handle = send_future.result()
+        if goal_handle is None:
+            self.get_logger().error("MoveGroup goal handle was not returned")
             return False
 
-        goal_handle = send_future.result()
         if not goal_handle.accepted:
             self.get_logger().error("MoveGroup goal rejected")
             return False
 
         result_future = goal_handle.get_result_async()
-        self._executor.spin_until_future_complete(result_future, timeout_sec=timeout_sec)
-        if result_future.result() is None:
-            self.get_logger().error("MoveGroup execution timed out")
+        execution_timeout = max(0.1, timeout_sec)
+        self._executor.spin_until_future_complete(
+            result_future, timeout_sec=execution_timeout
+        )
+        if not result_future.done():
+            self.get_logger().error(
+                f"MoveGroup execution timed out (timeout={execution_timeout:.1f}s)"
+            )
+            return False
+        result_error = result_future.exception()
+        if result_error is not None:
+            self.get_logger().error(
+                f"MoveGroup execution future raised an exception: {result_error}"
+            )
+            return False
+        result_response = result_future.result()
+        if result_response is None:
+            self.get_logger().error("MoveGroup execution result was empty")
             return False
 
-        status = result_future.result().status
+        status = result_response.status
         if status == GoalStatus.STATUS_SUCCEEDED:
             return True
 
-        error_code = result_future.result().result.error_code.val
+        error_code = result_response.result.error_code.val
         self.get_logger().error(
             f"MoveGroup failed: status={status}, error_code={error_code}"
         )
