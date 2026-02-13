@@ -376,6 +376,21 @@ ros2 service call /servo_node/start_servo std_srvs/srv/Trigger "{}"
 ros2 topic pub --once /servo_node/delta_twist_cmds geometry_msgs/msg/TwistStamped "{header: {frame_id: 'piper_base_link'}, twist: {linear: {x: 0.01, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}}"
 ```
 
+Keyboard teleop for MoveIt Servo:
+
+```bash
+python3 scripts/piper_servo_teleop.py
+```
+
+Optional tuning with ROS parameters:
+
+```bash
+python3 scripts/piper_servo_teleop.py --ros-args \
+  -p linear_speed:=0.03 \
+  -p angular_speed:=0.4 \
+  -p command_frame:=piper_base_link
+```
+
 Send Cartesian end-effector pose commands to MoveIt:
 
 MoveIt will plan the motion and generate a `FollowJointTrajectory` action that is sent to the PiPER driver. You can use the action API to send Cartesian poses:
