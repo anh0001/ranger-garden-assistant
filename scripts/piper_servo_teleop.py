@@ -13,6 +13,21 @@ Usage:
     # Terminal 2: run keyboard teleop
     source /opt/ros/humble/setup.bash && source install/setup.bash
     python3 scripts/piper_servo_teleop.py
+
+CRITICAL: Timer Priority and MoveGroup Actions
+-----------------------------------------------
+This script's 30 Hz publish timer causes MoveGroup actions (go_to_ready_pose,
+gripper operations) to timeout when using SingleThreadedExecutor.
+
+Root cause: rclpy's executor dispatches timers before subscriptions. During
+spin_until_future_complete(), the timer fires every ~33ms and starves the
+action client's goal-response/result callbacks, eventually timing out.
+
+piper_servo_commander.py works because it has no timer — only the action
+callbacks are processed during go_to_ready_pose().
+
+Fix: _send_joint_goal() cancels the timer before MoveGroup operations and
+restores it via try/finally to prevent callback starvation.
 """
 
 import select
@@ -296,6 +311,25 @@ class PiperServoTeleop(Node):
         self._start_future = None
 
     def _send_joint_goal(
+        self,
+        joint_targets: Dict[str, float],
+        group_name: str,
+        timeout_sec: float,
+    ) -> bool:
+        # Suspend the 30 Hz twist-publish timer while MoveGroup is active.
+        # The timer's callbacks compete with action-client subscriptions inside
+        # SingleThreadedExecutor.spin_until_future_complete (timers have higher
+        # priority), which can starve or delay the goal-response / result
+        # callbacks and cause spurious timeouts.  The commander script works
+        # because it has no timer at all during go_to_ready_pose().
+        self._publish_timer.cancel()
+
+        try:
+            return self._execute_joint_goal(joint_targets, group_name, timeout_sec)
+        finally:
+            self._publish_timer.reset()
+
+    def _execute_joint_goal(
         self,
         joint_targets: Dict[str, float],
         group_name: str,
