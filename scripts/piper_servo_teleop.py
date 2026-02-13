@@ -77,6 +77,20 @@ READY_JOINT_POSITIONS = {
     "piper_joint6": 0.0,
 }
 
+STOWED_JOINT_POSITIONS = {
+    "piper_joint1": 0.0,
+    "piper_joint2": 0.0,
+    "piper_joint3": 0.0,
+    "piper_joint4": 0.0,
+    "piper_joint5": 0.0,
+    "piper_joint6": 0.0,
+}
+
+ARM_NAMED_POSES: Dict[str, Dict[str, float]] = {
+    "home": READY_JOINT_POSITIONS,
+    "stowed": STOWED_JOINT_POSITIONS,
+}
+
 
 ARROW_TO_KEY = {
     "\x1b[A": "w",  # up
@@ -101,6 +115,8 @@ Rotate:
 
 Other:
   Arrow keys : XY move (same as w/a/s/d)
+  1/2 : move arm to home/stowed pose
+        (pose move keeps servo twist publishing paused)
   x/z : increase/decrease linear speed
   v/c : increase/decrease angular speed
   b/n : open/close gripper
@@ -219,6 +235,7 @@ class PiperServoTeleop(Node):
         self._cmd_angular: Vector3 = (0.0, 0.0, 0.0)
         self._last_cmd_time = 0.0
         self._start_future = None
+        self._publish_enabled = True
 
         self._twist_pub = self.create_publisher(TwistStamped, self._twist_topic, 10)
         self._start_client = self.create_client(Trigger, self._start_service)
@@ -260,6 +277,9 @@ class PiperServoTeleop(Node):
         return self._move_to_ready_pose
 
     def _on_publish(self) -> None:
+        if not self._publish_enabled:
+            return
+
         now = time.monotonic()
         active = (now - self._last_cmd_time) <= self._command_hold_sec
 
@@ -282,6 +302,7 @@ class PiperServoTeleop(Node):
         self._twist_pub.publish(msg)
 
     def set_motion(self, linear: Vector3, angular: Vector3) -> None:
+        self._resume_twist_publish()
         self._cmd_linear = linear
         self._cmd_angular = angular
         self._last_cmd_time = time.monotonic()
@@ -333,6 +354,7 @@ class PiperServoTeleop(Node):
         joint_targets: Dict[str, float],
         group_name: str,
         timeout_sec: float,
+        resume_twist_publish: bool = True,
     ) -> bool:
         # Suspend the 30 Hz twist-publish timer while MoveGroup is active.
         # The timer's callbacks compete with action-client subscriptions inside
@@ -340,12 +362,13 @@ class PiperServoTeleop(Node):
         # priority), which can starve or delay the goal-response / result
         # callbacks and cause spurious timeouts.  The commander script works
         # because it has no timer at all during go_to_ready_pose().
-        self._publish_timer.cancel()
+        self._pause_twist_publish()
 
         try:
             return self._execute_joint_goal(joint_targets, group_name, timeout_sec)
         finally:
-            self._publish_timer.reset()
+            if resume_twist_publish:
+                self._resume_twist_publish()
 
     def _wait_for_move_group_server(self, timeout_sec: float | None = None) -> bool:
         timeout = (
@@ -470,6 +493,45 @@ class PiperServoTeleop(Node):
         self.get_logger().error("Failed to move arm to ready pose")
         return False
 
+    def go_to_named_arm_pose(self, pose_name: str, timeout_sec: float | None = None) -> bool:
+        targets = ARM_NAMED_POSES.get(pose_name)
+        if targets is None:
+            self.get_logger().error(f"Unknown arm pose '{pose_name}'")
+            return False
+
+        timeout = timeout_sec if timeout_sec is not None else self._ready_pose_timeout_sec
+        self.get_logger().info(f"Moving arm to '{pose_name}' pose...")
+        keep_twist_paused = True
+        if keep_twist_paused:
+            self.stop()
+        success = self._send_joint_goal(
+            targets,
+            self._ready_pose_group_name,
+            timeout,
+            resume_twist_publish=not keep_twist_paused,
+        )
+        if success:
+            self.get_logger().info(f"Arm moved to '{pose_name}' pose")
+            if keep_twist_paused:
+                self.get_logger().info(
+                    "Twist publishing paused after pose move. Press any motion key to resume."
+                )
+        else:
+            self.get_logger().error(f"Failed to move arm to '{pose_name}' pose")
+        return success
+
+    def _pause_twist_publish(self) -> None:
+        if not self._publish_enabled:
+            return
+        self._publish_enabled = False
+        self._publish_timer.cancel()
+
+    def _resume_twist_publish(self) -> None:
+        if self._publish_enabled:
+            return
+        self._publish_enabled = True
+        self._publish_timer.reset()
+
     def open_gripper(self) -> bool:
         self.get_logger().info("Opening gripper...")
         success = self._send_joint_goal(
@@ -497,7 +559,8 @@ class PiperServoTeleop(Node):
         return success
 
     def spin_once(self, timeout_sec: float = 0.0) -> None:
-        self._executor.spin_once(timeout_sec=timeout_sec)
+        if rclpy.ok():
+            self._executor.spin_once(timeout_sec=timeout_sec)
 
     def shutdown(self) -> None:
         self.stop()
@@ -542,6 +605,13 @@ def main() -> None:
                     print(HELP_TEXT)
                     continue
 
+                if key == "1":
+                    node.go_to_named_arm_pose("home")
+                    continue
+                if key == "2":
+                    node.go_to_named_arm_pose("stowed")
+                    continue
+
                 if key == "x":
                     node.scale_linear_speed(1.1)
                     continue
@@ -579,7 +649,8 @@ def main() -> None:
         for _ in range(3):
             node.spin_once(timeout_sec=0.05)
         node.shutdown()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
