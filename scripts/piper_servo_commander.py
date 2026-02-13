@@ -38,18 +38,12 @@ Design notes / debugging history
    Fix: a single SingleThreadedExecutor is created in __init__ and reused for
    all spin_until_future_complete / spin_once calls throughout the node's life.
 
-4. start_servo service call uses fire-and-forget subprocess (Popen)
-   The ros2 CLI takes 10+ seconds for DDS peer discovery on Jetson before it
-   can send the Trigger request.  Blocking on that call (subprocess.run or a
-   ROS service client future) stalls the script and prints a spurious timeout
-   warning.  The servo node itself accepts the call almost instantly once DDS
-   discovery completes in the background, so jogging works correctly regardless.
-   Fix: subprocess.Popen with stdout/stderr=DEVNULL — returns immediately.
-   The background process is terminated/waited in the finally block to avoid
-   zombie processes.
+4. start_servo now waits for service readiness (teleop-style)
+   start_servo uses a Trigger client and checks wait_for_service() before
+   sending the request, matching piper_servo_teleop.py behavior so startup is
+   not attempted before /servo_node/start_servo is available.
 """
 
-import subprocess
 import time
 from typing import Tuple
 
@@ -65,6 +59,7 @@ from moveit_msgs.msg import (
     WorkspaceParameters,
 )
 from action_msgs.msg import GoalStatus
+from std_srvs.srv import Trigger
 
 
 # A non-singular "ready" pose for Cartesian jogging (radians).
@@ -91,6 +86,7 @@ class PiperServoCommander(Node):
         self.declare_parameter("default_duration_sec", 2.0)
         self.declare_parameter("linear_speed", 0.05)
         self.declare_parameter("angular_speed", 0.5)
+        self.declare_parameter("start_servo_timeout_sec", 12.0)
 
         self._servo_start_service = self.get_parameter("servo_start_service").value
         self._servo_twist_topic = self.get_parameter("servo_twist_topic").value
@@ -101,6 +97,9 @@ class PiperServoCommander(Node):
         )
         self._linear_speed = float(self.get_parameter("linear_speed").value)
         self._angular_speed = float(self.get_parameter("angular_speed").value)
+        self._start_servo_timeout_sec = max(
+            0.1, float(self.get_parameter("start_servo_timeout_sec").value)
+        )
 
         if self._publish_rate_hz <= 0.0:
             self._publish_rate_hz = 30.0
@@ -115,6 +114,7 @@ class PiperServoCommander(Node):
         self._twist_pub = self.create_publisher(
             TwistStamped, self._servo_twist_topic, 10
         )
+        self._start_client = self.create_client(Trigger, self._servo_start_service)
         self.get_logger().info(
             f"Servo twist topic: {self._servo_twist_topic}"
         )
@@ -125,20 +125,46 @@ class PiperServoCommander(Node):
             f"Command frame: {self._command_frame}"
         )
 
-    def start_servo(self) -> None:
-        """Call the start_servo Trigger service.
+    def start_servo(self) -> bool:
+        """Call /start_servo after confirming the service is available."""
+        if not self._start_client.wait_for_service(
+            timeout_sec=self._start_servo_timeout_sec
+        ):
+            self.get_logger().warn(
+                f"Service {self._servo_start_service} not available "
+                f"(timeout={self._start_servo_timeout_sec:.1f}s)"
+            )
+            return False
 
-        Fire-and-forget via subprocess so we don't block on DDS discovery.
-        The servo node accepts the call in the background; jogging works
-        even before the CLI process finishes.
-        """
-        self.get_logger().info("Starting MoveIt Servo (background)...")
-        self._servo_proc = subprocess.Popen(
-            ["ros2", "service", "call",
-             self._servo_start_service,
-             "std_srvs/srv/Trigger", "{}"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        self.get_logger().info("Requesting MoveIt Servo start...")
+        start_future = self._start_client.call_async(Trigger.Request())
+        self._executor.spin_until_future_complete(
+            start_future, timeout_sec=self._start_servo_timeout_sec
         )
+
+        if not start_future.done():
+            self.get_logger().warn(
+                f"Timed out waiting for start_servo response "
+                f"(timeout={self._start_servo_timeout_sec:.1f}s)"
+            )
+            return False
+
+        try:
+            result = start_future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error(f"start_servo call failed: {exc}")
+            return False
+
+        if result is None:
+            self.get_logger().warn("start_servo returned no response")
+            return False
+
+        if result.success:
+            self.get_logger().info(f"Servo started: {result.message}")
+            return True
+
+        self.get_logger().warn(f"Servo start rejected: {result.message}")
+        return False
 
     def go_to_ready_pose(self, timeout_sec: float = 15.0) -> bool:
         """Move arm to a non-singular pose before starting servo jogging."""
@@ -298,7 +324,8 @@ def main() -> None:
             print("WARNING: Could not move to ready pose. Servo may not work correctly.")
         # Start servo immediately after moving to avoid the arm drifting
         # back to the all-zeros singularity.
-        commander.start_servo()
+        if not commander.start_servo():
+            print("WARNING: Servo start request failed. Jog commands may be ignored.")
 
         input("\nPress Enter to jog +X...")
         commander.jog_linear("x")
@@ -330,10 +357,6 @@ def main() -> None:
         commander.get_logger().info("Interrupted by user")
     finally:
         commander.publish_zero()
-        # Clean up the background service-call process (if still running).
-        if hasattr(commander, "_servo_proc") and commander._servo_proc.poll() is None:
-            commander._servo_proc.terminate()
-            commander._servo_proc.wait(timeout=3)
         commander._executor.remove_node(commander)
         commander._executor.shutdown()
         commander.destroy_node()

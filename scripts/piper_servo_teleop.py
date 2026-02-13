@@ -171,7 +171,7 @@ class PiperServoTeleop(Node):
         self.declare_parameter("linear_speed", 0.1)
         self.declare_parameter("angular_speed", 0.5)
         self.declare_parameter("auto_start_servo", True)
-        self.declare_parameter("start_servo_timeout_sec", 2.0)
+        self.declare_parameter("start_servo_timeout_sec", 12.0)
 
         self._twist_topic = str(self.get_parameter("servo_twist_topic").value)
         self._start_service = str(self.get_parameter("servo_start_service").value)
