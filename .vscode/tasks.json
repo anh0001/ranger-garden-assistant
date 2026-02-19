@@ -110,6 +110,26 @@
       "isBackground": false
     },
     {
+      "label": "Launch: RealSense D435i",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch realsense2_camera rs_launch.py camera_name:=d435i device_type:=d435i usb_port_id:=2-3.4.1 enable_color:=true enable_depth:=true"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches Intel RealSense D435i camera (USB port 3-3.4.1). Publishes RGB to /d435i/color/image_raw and depth to /d435i/depth/image_rect_raw. View with RQT Image View task.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
       "label": "Launch: Camera-LiDAR Fuse",
       "type": "shell",
       "command": "bash",

@@ -1,0 +1,23 @@
+# udev rules for Intel RealSense D435i (depth + IMU camera)
+# Ensures consistent permissions for USB, video, and HID (IMU) interfaces.
+#
+# Installation: sudo cp 99-realsense-d435i.rules /etc/udev/rules.d/
+# Then run: sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Camera Information:
+#   Vendor ID: 8086 (Intel Corp.)
+#   Product ID: 0b3a (RealSense D435i)
+
+# USB device rule for D435i
+SUBSYSTEM=="usb", ATTR{idVendor}=="8086", ATTR{idProduct}=="0b3a", \
+    GROUP="video", MODE="0664", \
+    TAG+="uaccess", TAG+="systemd"
+
+# Set group ownership to 'video' for all D435i video4linux nodes
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b3a", \
+    GROUP="video", MODE="0664"
+
+# HID (IMU) device rule for D435i
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="8086", ATTRS{idProduct}=="0b3a", \
+    GROUP="video", MODE="0664", \
+    TAG+="uaccess"
