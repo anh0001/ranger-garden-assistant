@@ -321,6 +321,26 @@
       "detail": "MoveIt 2 demo with RViz on DISPLAY :77 for motion planning visualization (does not control physical arm)",
       "problemMatcher": [],
       "isBackground": false
+    },
+    {
+      "label": "Build: Clean and Recompile",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && rm -rf build install log && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "detail": "Removes build/install/log directories and performs a full clean rebuild with symlink install",
+      "problemMatcher": [],
+      "isBackground": false
     }
   ]
 }

@@ -359,8 +359,8 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "piper_joint_states_topic",
-            default_value="/joint_states",
-            description="JointState feedback topic from the PiPER driver.",
+            default_value="/piper/joint_states",
+            description="Raw JointState feedback topic from the PiPER driver.",
         )
     )
 
@@ -400,7 +400,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "use_piper_joint_states",
             default_value="true",
-            description="Use PiPER joint states as /joint_states and disable joint_state_publisher.",
+            description="Fuse PiPER joint states into /joint_states via joint_state_publisher source_list.",
         )
     )
 
@@ -572,8 +572,59 @@ def generate_launch_description():
         parameters=[robot_description, {"use_sim_time": use_sim_time}],
     )
 
-    # Optional joint state publisher keeps wheel/steering transforms available when
-    # the hardware base controller is not running.
+    # Joint state publisher keeps wheel/steering/passive joints available.
+    # When PiPER is enabled, merge its raw state topic into /joint_states.
+    piper_joint_state_sanitizer_node = Node(
+        package="robofi_bringup",
+        executable="piper_joint_state_sanitizer.py",
+        name="piper_joint_state_sanitizer",
+        output="both",
+        parameters=[
+            {
+                "input_topic": piper_joint_states_topic,
+                "output_topic": "/piper/joint_states_sanitized",
+            }
+        ],
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    publish_joint_states,
+                    "' == 'true' and '",
+                    use_piper_joint_states,
+                    "' == 'true' and '",
+                    launch_piper,
+                    "' == 'true'",
+                ]
+            )
+        ),
+    )
+
+    joint_state_publisher_with_piper_node = Node(
+        package="joint_state_publisher",
+        executable="joint_state_publisher",
+        parameters=[
+            robot_description,
+            {
+                "use_sim_time": use_sim_time,
+                "source_list": ["/piper/joint_states_sanitized"],
+            },
+        ],
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    publish_joint_states,
+                    "' == 'true' and '",
+                    use_piper_joint_states,
+                    "' == 'true' and '",
+                    launch_piper,
+                    "' == 'true'",
+                ]
+            )
+        ),
+    )
+
     joint_state_publisher_node = Node(
         package="joint_state_publisher",
         executable="joint_state_publisher",
@@ -856,6 +907,8 @@ def generate_launch_description():
         declared_arguments
         + [
             robot_state_publisher_node,
+            piper_joint_state_sanitizer_node,
+            joint_state_publisher_with_piper_node,
             joint_state_publisher_node,
             livox_launch,
             camera_group,
