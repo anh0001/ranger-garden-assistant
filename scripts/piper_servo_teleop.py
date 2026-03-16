@@ -115,8 +115,9 @@ Rotate:
 
 Other:
   Arrow keys : XY move (same as w/a/s/d)
-  1/2 : move arm to home/stowed pose
+  1/2 : move arm to home(stable)/stowed pose
         (pose move keeps servo twist publishing paused)
+  3   : recover to the servo-ready pose after singularity slowdown
   x/z : increase/decrease linear speed
   v/c : increase/decrease angular speed
   b/n : open/close gripper
@@ -484,14 +485,35 @@ class PiperServoTeleop(Node):
     def go_to_ready_pose(self, timeout_sec: float | None = None) -> bool:
         """Move arm to a non-singular pose before servo teleoperation."""
         timeout = timeout_sec if timeout_sec is not None else self._ready_pose_timeout_sec
-        self.get_logger().info("Moving arm to ready pose before teleop...")
+        self.get_logger().info("Moving arm to servo-ready pose before teleop...")
         if self._send_joint_goal(
             READY_JOINT_POSITIONS, self._ready_pose_group_name, timeout
         ):
-            self.get_logger().info("Arm moved to ready pose")
+            self.get_logger().info("Arm moved to servo-ready pose")
             return True
-        self.get_logger().error("Failed to move arm to ready pose")
+        self.get_logger().error("Failed to move arm to servo-ready pose")
         return False
+
+    def recover_to_ready_pose(self, timeout_sec: float | None = None) -> bool:
+        """Recover from a Servo slowdown/stop by planning back to the ready pose."""
+        timeout = timeout_sec if timeout_sec is not None else self._ready_pose_timeout_sec
+        self.get_logger().info(
+            "Recovering to the servo-ready pose after singularity slowdown..."
+        )
+        self.stop()
+        success = self._send_joint_goal(
+            READY_JOINT_POSITIONS,
+            self._ready_pose_group_name,
+            timeout,
+            resume_twist_publish=False,
+        )
+        if success:
+            self.get_logger().info(
+                "Recovery complete. Press any motion key to resume Servo jogging."
+            )
+        else:
+            self.get_logger().error("Failed to recover to the servo-ready pose")
+        return success
 
     def go_to_named_arm_pose(self, pose_name: str, timeout_sec: float | None = None) -> bool:
         targets = ARM_NAMED_POSES.get(pose_name)
@@ -610,6 +632,9 @@ def main() -> None:
                     continue
                 if key == "2":
                     node.go_to_named_arm_pose("stowed")
+                    continue
+                if key == "3":
+                    node.recover_to_ready_pose()
                     continue
 
                 if key == "x":

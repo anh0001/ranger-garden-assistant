@@ -240,6 +240,14 @@ class PiperServoCommander(Node):
             )
             return False
 
+    def recover_to_ready_pose(self, timeout_sec: float = 15.0) -> bool:
+        """Recover from singularity slowdown by planning back to the ready pose."""
+        self.get_logger().info(
+            "Recovering to the ready pose after singularity slowdown..."
+        )
+        self.publish_zero()
+        return self.go_to_ready_pose(timeout_sec=timeout_sec)
+
     def _publish_twist(self, linear: Tuple[float, float, float],
                         angular: Tuple[float, float, float],
                         duration_sec: float) -> None:
@@ -350,6 +358,13 @@ def main() -> None:
 
         input("\nPress Enter to yaw -... ")
         commander.jog_angular("-yaw")
+
+        input(
+            "\nPress Enter to recover to the servo-ready pose "
+            "(use this after singularity slowdown)..."
+        )
+        if not commander.recover_to_ready_pose():
+            print("WARNING: Recovery to servo-ready pose failed.")
 
         commander.get_logger().info("\nServo jog demo completed")
 

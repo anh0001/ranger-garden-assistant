@@ -335,7 +335,7 @@ ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 ros2 launch piper_ros start_single_controller.launch.py can_port:=can_piper
 ```
 
-Test arm movement with a simple joint command (This is ready pose avoiding singularity):
+Test arm movement with a simple joint command (this is the Servo-ready recovery pose that avoids the common wrist singularity):
 
 ```bash
 ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.0, 1.2, -0.2, 0.0, -0.8, 0.0]}"
@@ -363,6 +363,19 @@ ros2 launch robofi_bringup ranger_complete_bringup.launch.py \
   launch_servo_command_bridge:=true
 ```
 
+Automatic singularity recovery is available but disabled by default. Enable it with:
+
+```bash
+ros2 launch robofi_bringup ranger_complete_bringup.launch.py \
+  launch_servo_singularity_recovery:=true
+```
+
+When enabled, the recovery supervisor monitors MoveIt Servo status. If Servo
+reports sustained singularity slowdown or a singularity stop, the supervisor
+temporarily blocks incoming Servo jog commands and sends the arm back to the
+Servo-ready `home` pose through MoveGroup. This recovery is intentionally
+predictable: it returns to the ready pose, not to the last requested Cartesian target.
+
 Disable Servo when running MoveGroup-only workflows:
 
 ```bash
@@ -382,6 +395,11 @@ Keyboard teleop for MoveIt Servo:
 python3 scripts/piper_servo_teleop.py
 ```
 
+The teleop script treats the named `home` pose as the Servo-ready recovery pose.
+Use `3` to recover back to that pose if Servo reports singularity deceleration.
+Use `2` only for the more compact `stowed` pose; do not treat an all-zeros or
+stowed-like posture as the preferred starting point for Cartesian Servo.
+
 Optional tuning with ROS parameters:
 
 ```bash
@@ -390,6 +408,14 @@ python3 scripts/piper_servo_teleop.py --ros-args \
   -p angular_speed:=0.4 \
   -p command_frame:=piper_base_link
 ```
+
+Singularity workflow:
+
+- Start Servo after moving to the `home` pose, which is the Servo-ready recovery pose.
+- If Servo logs `Moving closer to a singularity, decelerating`, stop pushing the same Cartesian command.
+- If `launch_servo_singularity_recovery:=true` is enabled in `ranger_complete_bringup`, sustained singularity slowdown or a singularity stop will automatically trigger a planned recovery back to the `home` pose.
+- Trigger the recovery pose from teleop with `3`, or use a planned joint-space move back to the ready pose.
+- For coarse wrist reorientation, use a planned joint move first and resume Cartesian Servo after the arm is back in a non-singular posture.
 
 Send Cartesian end-effector pose commands to MoveIt:
 

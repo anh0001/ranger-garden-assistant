@@ -484,6 +484,78 @@ def generate_launch_description():
         )
     )
 
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "launch_servo_singularity_recovery",
+            default_value="false",
+            description="Launch automatic singularity recovery supervisor for MoveIt Servo.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_status_topic",
+            default_value="/servo_node/status",
+            description="MoveIt Servo status topic used for singularity recovery.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_twist_command_topic",
+            default_value="/servo_node/delta_twist_cmds",
+            description="Public Cartesian command topic for MoveIt Servo publishers.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_joint_command_topic",
+            default_value="/servo_node/delta_joint_cmds",
+            description="Public JointJog command topic for MoveIt Servo publishers.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_twist_internal_topic",
+            default_value="/servo_node/delta_twist_cmds_internal",
+            description="Internal gated Cartesian command topic consumed by MoveIt Servo.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_joint_internal_topic",
+            default_value="/servo_node/delta_joint_cmds_internal",
+            description="Internal gated JointJog command topic consumed by MoveIt Servo.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_recovery_timeout_sec",
+            default_value="15.0",
+            description="Timeout for automatic singularity recovery MoveGroup execution.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_recovery_cooldown_sec",
+            default_value="2.0",
+            description="Time to keep Servo commands blocked after automatic recovery completes.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "servo_recovery_deceleration_persist_sec",
+            default_value="0.5",
+            description="How long Servo must report singularity deceleration before automatic recovery triggers.",
+        )
+    )
+
     # Initialize arguments
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
@@ -540,6 +612,19 @@ def generate_launch_description():
     moveit_servo_delay = LaunchConfiguration("moveit_servo_delay")
     launch_servo_command_bridge = LaunchConfiguration("launch_servo_command_bridge")
     servo_command_out_topic = LaunchConfiguration("servo_command_out_topic")
+    launch_servo_singularity_recovery = LaunchConfiguration(
+        "launch_servo_singularity_recovery"
+    )
+    servo_status_topic = LaunchConfiguration("servo_status_topic")
+    servo_twist_command_topic = LaunchConfiguration("servo_twist_command_topic")
+    servo_joint_command_topic = LaunchConfiguration("servo_joint_command_topic")
+    servo_twist_internal_topic = LaunchConfiguration("servo_twist_internal_topic")
+    servo_joint_internal_topic = LaunchConfiguration("servo_joint_internal_topic")
+    servo_recovery_timeout_sec = LaunchConfiguration("servo_recovery_timeout_sec")
+    servo_recovery_cooldown_sec = LaunchConfiguration("servo_recovery_cooldown_sec")
+    servo_recovery_deceleration_persist_sec = LaunchConfiguration(
+        "servo_recovery_deceleration_persist_sec"
+    )
 
     # Get URDF via xacro with mesh_dir argument
     robot_description_content = Command(
@@ -753,6 +838,48 @@ def generate_launch_description():
         ),
     )
 
+    servo_singularity_recovery_supervisor_node = Node(
+        package="robofi_bringup",
+        executable="servo_singularity_recovery_supervisor.py",
+        name="servo_singularity_recovery_supervisor",
+        output="both",
+        parameters=[
+            {
+                "twist_input_topic": servo_twist_command_topic,
+                "twist_output_topic": servo_twist_internal_topic,
+                "joint_input_topic": servo_joint_command_topic,
+                "joint_output_topic": servo_joint_internal_topic,
+                "status_topic": servo_status_topic,
+                "move_group_action": "/move_action",
+                "recovery_group_name": "piper_arm",
+                "command_frame": "piper_base_link",
+                "joint_prefix": piper_joint_name_prefix,
+                "recovery_timeout_sec": ParameterValue(
+                    servo_recovery_timeout_sec, value_type=float
+                ),
+                "recovery_cooldown_sec": ParameterValue(
+                    servo_recovery_cooldown_sec, value_type=float
+                ),
+                "deceleration_persist_sec": ParameterValue(
+                    servo_recovery_deceleration_persist_sec, value_type=float
+                ),
+            }
+        ],
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'",
+                    launch_servo_singularity_recovery,
+                    "' == 'true' and '",
+                    launch_moveit,
+                    "' == 'true' and '",
+                    launch_moveit_servo,
+                    "' == 'true'",
+                ]
+            )
+        ),
+    )
+
     camera_info_url = ParameterValue(
         [TextSubstitution(text="file://"), camera_calibration_file],
         value_type=str,
@@ -896,6 +1023,28 @@ def generate_launch_description():
                         ),
                         launch_arguments={
                             "use_sim_time": use_sim_time,
+                            "cartesian_command_in_topic": PythonExpression(
+                                [
+                                    "'",
+                                    launch_servo_singularity_recovery,
+                                    "' == 'true' and '",
+                                    servo_twist_internal_topic,
+                                    "' or '",
+                                    servo_twist_command_topic,
+                                    "'",
+                                ]
+                            ),
+                            "joint_command_in_topic": PythonExpression(
+                                [
+                                    "'",
+                                    launch_servo_singularity_recovery,
+                                    "' == 'true' and '",
+                                    servo_joint_internal_topic,
+                                    "' or '",
+                                    servo_joint_command_topic,
+                                    "'",
+                                ]
+                            ),
                         }.items(),
                     ),
                 ],
@@ -919,6 +1068,7 @@ def generate_launch_description():
             piper_launch,
             piper_bridge_node,
             servo_command_bridge_node,
+            servo_singularity_recovery_supervisor_node,
             moveit_move_group_launch,
             moveit_servo_launch,
         ]

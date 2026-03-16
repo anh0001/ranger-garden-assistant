@@ -20,6 +20,7 @@ install(PROGRAMS
   scripts/fastlio2_auto_relocalize.py
   scripts/camera_info_frame_id_fixer.py
   scripts/servo_array_to_piper_joint_cmd.py
+  scripts/servo_singularity_recovery_supervisor.py
   scripts/piper_joint_state_sanitizer.py
   DESTINATION lib/${PROJECT_NAME}
 )

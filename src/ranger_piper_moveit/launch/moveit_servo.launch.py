@@ -13,6 +13,16 @@ def generate_launch_description():
         default_value="false",
         description="Use simulation clock for MoveIt Servo.",
     )
+    cartesian_command_in_topic_arg = DeclareLaunchArgument(
+        "cartesian_command_in_topic",
+        default_value="/servo_node/delta_twist_cmds",
+        description="Cartesian command topic consumed by MoveIt Servo.",
+    )
+    joint_command_in_topic_arg = DeclareLaunchArgument(
+        "joint_command_in_topic",
+        default_value="/servo_node/delta_joint_cmds",
+        description="JointJog command topic consumed by MoveIt Servo.",
+    )
 
     moveit_config = MoveItConfigsBuilder(
         "ranger_mini_complete",
@@ -35,6 +45,12 @@ def generate_launch_description():
             moveit_config.robot_description_kinematics,
             moveit_config.joint_limits,
             {
+                "moveit_servo.cartesian_command_in_topic": ParameterValue(
+                    LaunchConfiguration("cartesian_command_in_topic"), value_type=str
+                ),
+                "moveit_servo.joint_command_in_topic": ParameterValue(
+                    LaunchConfiguration("joint_command_in_topic"), value_type=str
+                ),
                 "use_sim_time": ParameterValue(
                     LaunchConfiguration("use_sim_time"), value_type=bool
                 )
@@ -44,5 +60,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         use_sim_time_arg,
+        cartesian_command_in_topic_arg,
+        joint_command_in_topic_arg,
         servo_node,
     ])
