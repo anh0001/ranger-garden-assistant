@@ -29,6 +29,8 @@ servo_node:
       lower_singularity_threshold: 100.0
       hard_stop_singularity_threshold: 200.0
       joint_limit_margin: 0.05
+      halt_all_joints_in_cartesian_mode: false
+      halt_all_joints_in_joint_mode: false
 
       # Collision checking.
       check_collisions: true
