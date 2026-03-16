@@ -335,10 +335,10 @@ ros2 launch robofi_bringup ranger_complete_bringup.launch.py
 ros2 launch piper_ros start_single_controller.launch.py can_port:=can_piper
 ```
 
-Test arm movement with a simple joint command:
+Test arm movement with a simple joint command (This is ready pose avoiding singularity):
 
 ```bash
-ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0]}"
+ros2 topic pub --once /piper/joint_cmd sensor_msgs/msg/JointState "{name: ['piper_joint1', 'piper_joint2', 'piper_joint3', 'piper_joint4', 'piper_joint5', 'piper_joint6'], position: [0.0, 1.2, -0.2, 0.0, -0.8, 0.0]}"
 ```
 
 Launch the PiPER driver and MoveIt move_group:
