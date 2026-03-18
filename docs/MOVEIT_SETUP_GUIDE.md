@@ -177,8 +177,8 @@ Define how the robot connects to the world frame.
 5. In the kinematic chain dialog:
    - **Base Link**: Select `piper_base_link`
      *(First actuated joint `piper_joint1` is attached here; `piper_world` is a fixed mount link)*
-   - **Tip Link**: Select `piper_link6`
-     *(This is the wrist link, before the gripper)*
+   - **Tip Link**: Select `piper_tcp`
+     *(Synthetic TCP frame 14 cm in front of `piper_link6`, aligned with the wrist orientation)*
 
 6. Click **"Save"** (in the kinematic chain dialog)
 7. Click **"Save"** (in the main group dialog)
@@ -205,7 +205,7 @@ Define how the robot connects to the world frame.
 5. Click **"Save"** (in the kinematic chain dialog)
 6. Click **"Save"** (in the main group dialog)
 
-**Note:** The frame tree is `piper_link6 → piper_gripper_base → piper_link7/piper_link8`. `piper_link7` is the right tip and `piper_link8` is the left tip. The URDF includes `piper_joint8` for the mirrored finger, so keep it passive (Step 9) and only include `piper_joint7` in the gripper group.
+**Note:** The frame tree is `piper_link6 → piper_tcp` and `piper_link6 → piper_gripper_base → piper_link7/piper_link8`. `piper_tcp` is the synthetic grasp/TCP frame used for arm planning, while `piper_link7` is the right fingertip and `piper_link8` is the left tip. The URDF includes `piper_joint8` for the mirrored finger, so keep it passive (Step 9) and only include `piper_joint7` in the gripper group.
 
 ---
 
@@ -316,6 +316,7 @@ Define the gripper as an end effector attached to the arm.
 4. Click **"Save"**
 
 **What this does:** Links the gripper group to the arm, enabling coordinated manipulation planning.
+The arm planning tip can still be `piper_tcp` while the gripper assembly remains attached to the physical wrist link `piper_link6`.
 
 ---
 

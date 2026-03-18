@@ -5,14 +5,17 @@
   <xacro:include filename="$(find ranger_description)/urdf/piper_description_prefixed.xacro" />
 
   <!-- Wrapper macro to mount the PiPER arm to an arbitrary parent link. -->
-  <xacro:macro name="piper_arm" params="parent_link xyz:='0 0 0' rpy:='0 0 0' prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0'">
+  <xacro:macro name="piper_arm" params="parent_link xyz:='0 0 0' rpy:='0 0 0' prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14'">
 
     <xacro:piper_with_gripper
       prefix="${prefix}"
       camera_xyz="${camera_xyz}"
       camera_roll="${camera_roll}"
       camera_pitch="${camera_pitch}"
-      camera_yaw="${camera_yaw}"/>
+      camera_yaw="${camera_yaw}"
+      tcp_x="${tcp_x}"
+      tcp_y="${tcp_y}"
+      tcp_z="${tcp_z}"/>
 
     <!--
       Mount PiPER's world link to the requested parent.

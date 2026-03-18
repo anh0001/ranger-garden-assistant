@@ -46,6 +46,7 @@ class PiperPoseCommander(Node):
         self.declare_parameter("arm_group_name", "piper_arm")
         self.declare_parameter("gripper_group_name", "piper_gripper")
         self.declare_parameter("gripper_joint_name", "piper_joint7")
+        self.declare_parameter("ee_link", "piper_tcp")
         self.declare_parameter(
             "arm_joint_names",
             [
@@ -68,6 +69,7 @@ class PiperPoseCommander(Node):
         self._arm_group_name = self.get_parameter("arm_group_name").value
         self._gripper_group_name = self.get_parameter("gripper_group_name").value
         self._gripper_joint_name = self.get_parameter("gripper_joint_name").value
+        self._ee_link = self.get_parameter("ee_link").value
         self._arm_joint_names = list(self.get_parameter("arm_joint_names").value)
         self._gripper_open_position = float(
             self.get_parameter("gripper_open_position").value
@@ -103,6 +105,7 @@ class PiperPoseCommander(Node):
             raise RuntimeError("MoveGroup action server (/move_action) not available")
 
         self.get_logger().info("Connected to /move_action action server")
+        self.get_logger().info(f"Using end-effector link: {self._ee_link}")
         
         # Wait for joint states
         self.get_logger().info("Waiting for joint states...")
@@ -221,7 +224,7 @@ class PiperPoseCommander(Node):
         # Position constraint
         pos_constraint = PositionConstraint()
         pos_constraint.header.frame_id = frame_id
-        pos_constraint.link_name = "piper_link6"  # End-effector link
+        pos_constraint.link_name = self._ee_link
         pos_constraint.target_point_offset.x = 0.0
         pos_constraint.target_point_offset.y = 0.0
         pos_constraint.target_point_offset.z = 0.0
@@ -246,7 +249,7 @@ class PiperPoseCommander(Node):
         # Orientation constraint
         orient_constraint = OrientationConstraint()
         orient_constraint.header.frame_id = frame_id
-        orient_constraint.link_name = "piper_link6"
+        orient_constraint.link_name = self._ee_link
         orient_constraint.orientation = pose.orientation
         orient_constraint.absolute_x_axis_tolerance = 0.1
         orient_constraint.absolute_y_axis_tolerance = 0.1

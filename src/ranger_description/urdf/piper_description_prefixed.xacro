@@ -16,7 +16,7 @@
     </transmission>
   </xacro:macro>
 
-  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0'">
+  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14'">
 
   <!-- world -->
     <link name="${prefix}world"/>
@@ -402,6 +402,12 @@
         link="${prefix}link6" />
       <child
         link="${prefix}gripper_base" />
+    </joint>
+    <link name="${prefix}tcp"/>
+    <joint name="${prefix}joint6_to_tcp" type="fixed">
+      <origin xyz="${tcp_x} ${tcp_y} ${tcp_z}" rpy="0 0 0" />
+      <parent link="${prefix}link6" />
+      <child link="${prefix}tcp" />
     </joint>
     <!-- PiPER wrist camera (RealSense D405) -->
     <link name="${prefix}camera_link">

@@ -403,7 +403,7 @@ ros2 action send_goal /piper_arm/move_action moveit_msgs/action/MoveGroup "{
     goal_constraints: [{
       position_constraints: [{
         header: {frame_id: 'base_link'},
-        link_name: 'piper_link6',
+        link_name: 'piper_tcp',
         target_point_offset: {x: 0.0, y: 0.0, z: 0.0},
         constraint_region: {
           primitives: [{type: 1, dimensions: [0.001]}],
@@ -413,7 +413,7 @@ ros2 action send_goal /piper_arm/move_action moveit_msgs/action/MoveGroup "{
       }],
       orientation_constraints: [{
         header: {frame_id: 'base_link'},
-        link_name: 'piper_link6',
+        link_name: 'piper_tcp',
         orientation: {x: 0.0, y: 0.707, z: 0.0, w: 0.707},
         absolute_x_axis_tolerance: 0.1,
         absolute_y_axis_tolerance: 0.1,

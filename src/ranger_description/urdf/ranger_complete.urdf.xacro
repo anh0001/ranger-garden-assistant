@@ -21,6 +21,9 @@
   <xacro:property name="piper_camera_roll" value="0.0"/>
   <xacro:property name="piper_camera_pitch" value="0.3491"/>  <!-- 20 degrees -->
   <xacro:property name="piper_camera_yaw" value="0.0"/>
+  <xacro:property name="piper_tcp_x" value="0.0"/>
+  <xacro:property name="piper_tcp_y" value="0.0"/>
+  <xacro:property name="piper_tcp_z" value="0.14"/>
   <xacro:property name="mesh_dir" value="$(arg mesh_dir)"/>
 
   <!-- PiPER arm wrapper -->
@@ -567,6 +570,9 @@
     camera_xyz="${piper_camera_x} ${piper_camera_y} ${piper_camera_z}"
     camera_roll="${piper_camera_roll}"
     camera_pitch="${piper_camera_pitch}"
-    camera_yaw="${piper_camera_yaw}"/>
+    camera_yaw="${piper_camera_yaw}"
+    tcp_x="${piper_tcp_x}"
+    tcp_y="${piper_tcp_y}"
+    tcp_z="${piper_tcp_z}"/>
 
 </robot>
