@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-PiPER MoveIt Servo Commander (Twist-based jog)
+PiPER MoveIt Servo Commander (Twist-based jog + gripper demo)
 
 This script publishes TwistStamped commands to MoveIt Servo for quick, manual
-validation of realtime Cartesian control on the PiPER arm.
+validation of realtime Cartesian control on the PiPER arm. It also uses
+MoveIt's MoveGroup action for discrete ready-pose and gripper open/close
+commands.
 
 Usage:
     # Terminal 1: Launch MoveIt + Servo
@@ -81,6 +83,14 @@ class PiperServoCommander(Node):
 
         self.declare_parameter("servo_start_service", "/servo_node/start_servo")
         self.declare_parameter("servo_twist_topic", "/servo_node/delta_twist_cmds")
+        self.declare_parameter("move_group_action", "/move_action")
+        self.declare_parameter("move_group_wait_timeout_sec", 20.0)
+        self.declare_parameter("ready_pose_group_name", "piper_arm")
+        self.declare_parameter("gripper_group_name", "piper_gripper")
+        self.declare_parameter("gripper_joint_name", "piper_joint7")
+        self.declare_parameter("gripper_open_position", 0.75)
+        self.declare_parameter("gripper_closed_position", 0.0)
+        self.declare_parameter("gripper_goal_timeout_sec", 15.0)
         self.declare_parameter("command_frame", "piper_base_link")
         self.declare_parameter("publish_rate_hz", 30.0)
         self.declare_parameter("default_duration_sec", 2.0)
@@ -90,6 +100,24 @@ class PiperServoCommander(Node):
 
         self._servo_start_service = self.get_parameter("servo_start_service").value
         self._servo_twist_topic = self.get_parameter("servo_twist_topic").value
+        self._move_group_action = str(self.get_parameter("move_group_action").value)
+        self._move_group_wait_timeout_sec = max(
+            0.5, float(self.get_parameter("move_group_wait_timeout_sec").value)
+        )
+        self._ready_pose_group_name = str(
+            self.get_parameter("ready_pose_group_name").value
+        )
+        self._gripper_group_name = str(self.get_parameter("gripper_group_name").value)
+        self._gripper_joint_name = str(self.get_parameter("gripper_joint_name").value)
+        self._gripper_open_position = float(
+            self.get_parameter("gripper_open_position").value
+        )
+        self._gripper_closed_position = float(
+            self.get_parameter("gripper_closed_position").value
+        )
+        self._gripper_goal_timeout_sec = max(
+            1.0, float(self.get_parameter("gripper_goal_timeout_sec").value)
+        )
         self._command_frame = self.get_parameter("command_frame").value
         self._publish_rate_hz = float(self.get_parameter("publish_rate_hz").value)
         self._default_duration_sec = float(
@@ -115,15 +143,29 @@ class PiperServoCommander(Node):
             TwistStamped, self._servo_twist_topic, 10
         )
         self._start_client = self.create_client(Trigger, self._servo_start_service)
+        self._move_group_client = rclpy.action.ActionClient(
+            self, MoveGroup, self._move_group_action
+        )
+        self.get_logger().info(f"Servo twist topic: {self._servo_twist_topic}")
+        self.get_logger().info(f"Servo start service: {self._servo_start_service}")
+        self.get_logger().info(f"MoveGroup action: {self._move_group_action}")
         self.get_logger().info(
-            f"Servo twist topic: {self._servo_twist_topic}"
+            f"MoveGroup wait timeout: {self._move_group_wait_timeout_sec:.1f}s"
         )
         self.get_logger().info(
-            f"Servo start service: {self._servo_start_service}"
+            f"Ready pose group: {self._ready_pose_group_name}"
         )
         self.get_logger().info(
-            f"Command frame: {self._command_frame}"
+            f"Gripper group/joint: {self._gripper_group_name}/{self._gripper_joint_name}"
         )
+        self.get_logger().info(
+            "Gripper positions open="
+            f"{self._gripper_open_position:.3f} closed={self._gripper_closed_position:.3f}"
+        )
+        self.get_logger().info(
+            f"Gripper goal timeout: {self._gripper_goal_timeout_sec:.1f}s"
+        )
+        self.get_logger().info(f"Command frame: {self._command_frame}")
 
     def start_servo(self) -> bool:
         """Call /start_servo after confirming the service is available."""
@@ -166,43 +208,56 @@ class PiperServoCommander(Node):
         self.get_logger().warn(f"Servo start rejected: {result.message}")
         return False
 
-    def go_to_ready_pose(self, timeout_sec: float = 15.0) -> bool:
-        """Move arm to a non-singular pose before starting servo jogging."""
-        self.get_logger().info("Moving arm to ready pose (away from singularity)...")
+    def _wait_for_move_group_server(self, timeout_sec: float | None = None) -> bool:
+        timeout = (
+            self._move_group_wait_timeout_sec
+            if timeout_sec is None
+            else max(0.1, timeout_sec)
+        )
+        if self._move_group_client.wait_for_server(timeout_sec=timeout):
+            return True
 
-        client = rclpy.action.ActionClient(self, MoveGroup, "/move_action")
-        if not client.wait_for_server(timeout_sec=10.0):
-            self.get_logger().error("MoveGroup action server not available")
+        self.get_logger().error(
+            f"MoveGroup action server {self._move_group_action} not available "
+            f"(timeout={timeout:.1f}s)"
+        )
+        return False
+
+    def _execute_joint_goal(
+        self,
+        joint_targets: dict[str, float],
+        group_name: str,
+        timeout_sec: float,
+    ) -> bool:
+        if not self._wait_for_move_group_server():
             return False
 
         joint_constraints = [
             JointConstraint(
                 joint_name=name,
-                position=pos,
+                position=position,
                 tolerance_above=0.01,
                 tolerance_below=0.01,
                 weight=1.0,
             )
-            for name, pos in READY_JOINT_POSITIONS.items()
+            for name, position in joint_targets.items()
         ]
 
         request = MotionPlanRequest()
-        request.group_name = "piper_arm"
-        request.goal_constraints = [
-            Constraints(joint_constraints=joint_constraints)
-        ]
+        request.group_name = group_name
+        request.goal_constraints = [Constraints(joint_constraints=joint_constraints)]
         request.allowed_planning_time = 5.0
         request.num_planning_attempts = 3
         request.max_velocity_scaling_factor = 0.3
         request.max_acceleration_scaling_factor = 0.3
-        ws = WorkspaceParameters()
-        ws.min_corner.x = -2.0
-        ws.min_corner.y = -2.0
-        ws.min_corner.z = -2.0
-        ws.max_corner.x = 2.0
-        ws.max_corner.y = 2.0
-        ws.max_corner.z = 2.0
-        request.workspace_parameters = ws
+        workspace = WorkspaceParameters()
+        workspace.min_corner.x = -2.0
+        workspace.min_corner.y = -2.0
+        workspace.min_corner.z = -2.0
+        workspace.max_corner.x = 2.0
+        workspace.max_corner.y = 2.0
+        workspace.max_corner.z = 2.0
+        request.workspace_parameters = workspace
 
         goal = MoveGroup.Goal()
         goal.request = request
@@ -210,35 +265,95 @@ class PiperServoCommander(Node):
         goal.planning_options.replan = True
         goal.planning_options.replan_attempts = 3
 
-        future = client.send_goal_async(goal)
-        self._executor.spin_until_future_complete(future, timeout_sec=10.0)
-
-        if future.result() is None:
-            self.get_logger().error("Failed to send MoveGroup goal")
+        send_future = self._move_group_client.send_goal_async(goal)
+        self._executor.spin_until_future_complete(
+            send_future, timeout_sec=self._move_group_wait_timeout_sec
+        )
+        if not send_future.done():
+            self.get_logger().error(
+                "Timed out waiting for MoveGroup goal acknowledgement"
+            )
+            return False
+        send_error = send_future.exception()
+        if send_error is not None:
+            self.get_logger().error(f"Failed to send MoveGroup goal: {send_error}")
+            return False
+        goal_handle = send_future.result()
+        if goal_handle is None:
+            self.get_logger().error("MoveGroup goal handle was not returned")
             return False
 
-        goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().error("MoveGroup goal rejected")
             return False
 
         result_future = goal_handle.get_result_async()
-        self._executor.spin_until_future_complete(result_future, timeout_sec=timeout_sec)
-
-        if result_future.result() is None:
-            self.get_logger().error("MoveGroup execution timed out")
-            return False
-
-        status = result_future.result().status
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info("Arm moved to ready pose")
-            return True
-        else:
-            error_code = result_future.result().result.error_code.val
+        execution_timeout = max(0.1, timeout_sec)
+        self._executor.spin_until_future_complete(
+            result_future, timeout_sec=execution_timeout
+        )
+        if not result_future.done():
             self.get_logger().error(
-                f"MoveGroup failed: status={status}, error_code={error_code}"
+                f"MoveGroup execution timed out (timeout={execution_timeout:.1f}s)"
             )
             return False
+        result_error = result_future.exception()
+        if result_error is not None:
+            self.get_logger().error(
+                f"MoveGroup execution future raised an exception: {result_error}"
+            )
+            return False
+        result_response = result_future.result()
+        if result_response is None:
+            self.get_logger().error("MoveGroup execution result was empty")
+            return False
+
+        status = result_response.status
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            return True
+
+        error_code = result_response.result.error_code.val
+        self.get_logger().error(
+            f"MoveGroup failed: status={status}, error_code={error_code}"
+        )
+        return False
+
+    def go_to_ready_pose(self, timeout_sec: float = 15.0) -> bool:
+        """Move arm to a non-singular pose before starting servo jogging."""
+        self.get_logger().info("Moving arm to ready pose (away from singularity)...")
+        if self._execute_joint_goal(
+            READY_JOINT_POSITIONS, self._ready_pose_group_name, timeout_sec
+        ):
+            self.get_logger().info("Arm moved to ready pose")
+            return True
+        self.get_logger().error("Failed to move arm to ready pose")
+        return False
+
+    def open_gripper(self) -> bool:
+        """Open the gripper to the configured open position."""
+        self.get_logger().info("Opening gripper...")
+        if self._execute_joint_goal(
+            {self._gripper_joint_name: self._gripper_open_position},
+            self._gripper_group_name,
+            self._gripper_goal_timeout_sec,
+        ):
+            self.get_logger().info("Gripper opened")
+            return True
+        self.get_logger().error("Failed to open gripper")
+        return False
+
+    def close_gripper(self) -> bool:
+        """Close the gripper to the configured closed position."""
+        self.get_logger().info("Closing gripper...")
+        if self._execute_joint_goal(
+            {self._gripper_joint_name: self._gripper_closed_position},
+            self._gripper_group_name,
+            self._gripper_goal_timeout_sec,
+        ):
+            self.get_logger().info("Gripper closed")
+            return True
+        self.get_logger().error("Failed to close gripper")
+        return False
 
     def _publish_twist(self, linear: Tuple[float, float, float],
                         angular: Tuple[float, float, float],
@@ -350,6 +465,12 @@ def main() -> None:
 
         input("\nPress Enter to yaw -... ")
         commander.jog_angular("-yaw")
+
+        input("\nPress Enter to open gripper fully...")
+        commander.open_gripper()
+
+        input("\nPress Enter to close gripper fully...")
+        commander.close_gripper()
 
         commander.get_logger().info("\nServo jog demo completed")
 
