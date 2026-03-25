@@ -90,7 +90,7 @@ class PiperServoCommander(Node):
         self.declare_parameter("ready_pose_group_name", "piper_arm")
         self.declare_parameter("gripper_group_name", "piper_gripper")
         self.declare_parameter("gripper_joint_name", "piper_joint7")
-        self.declare_parameter("gripper_open_position", 0.75)
+        self.declare_parameter("gripper_open_position", 0.065)
         self.declare_parameter("gripper_closed_position", 0.0)
         self.declare_parameter("gripper_cmd_action", "/piper_gripper_controller/gripper_cmd")
         self.declare_parameter("gripper_goal_timeout_sec", 15.0)
