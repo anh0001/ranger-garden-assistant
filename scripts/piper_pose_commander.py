@@ -21,6 +21,7 @@ Usage:
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import Pose, PoseStamped
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import (
@@ -30,6 +31,8 @@ from moveit_msgs.msg import (
     BoundingVolume,
     JointConstraint,
 )
+from control_msgs.action import GripperCommand
+from control_msgs.msg import GripperCommand as GripperCommandMsg
 from shape_msgs.msg import SolidPrimitive
 from sensor_msgs.msg import JointState
 import time
@@ -60,6 +63,7 @@ class PiperPoseCommander(Node):
         )
         self.declare_parameter("gripper_open_position", 0.75)
         self.declare_parameter("gripper_closed_position", 0.0)
+        self.declare_parameter("gripper_cmd_action", "/piper_gripper_controller/gripper_cmd")
         self.declare_parameter("joint_goal_tolerance", 0.005)
         self.declare_parameter("planning_time", 5.0)
         self.declare_parameter("planning_attempts", 10)
@@ -76,6 +80,9 @@ class PiperPoseCommander(Node):
         )
         self._gripper_closed_position = float(
             self.get_parameter("gripper_closed_position").value
+        )
+        self._gripper_cmd_action = str(
+            self.get_parameter("gripper_cmd_action").value
         )
         self._joint_goal_tolerance = float(
             self.get_parameter("joint_goal_tolerance").value
@@ -106,6 +113,11 @@ class PiperPoseCommander(Node):
 
         self.get_logger().info("Connected to /move_action action server")
         self.get_logger().info(f"Using end-effector link: {self._ee_link}")
+
+        # GripperCommand action client (bypasses MoveIt planning for gripper)
+        self._gripper_cmd_client = ActionClient(
+            self, GripperCommand, self._gripper_cmd_action
+        )
         
         # Wait for joint states
         self.get_logger().info("Waiting for joint states...")
@@ -261,19 +273,76 @@ class PiperPoseCommander(Node):
 
         return self._send_move_group_goal(goal_msg)
 
-    def open_gripper(self):
-        """Open the gripper to the configured open position."""
-        return self.go_to_joint_goal(
-            {self._gripper_joint_name: self._gripper_open_position},
-            group_name=self._gripper_group_name,
+    def _send_gripper_cmd(self, position: float) -> bool:
+        """Send a GripperCommand directly to the bridge, bypassing MoveIt planning."""
+        t0 = time.monotonic()
+
+        if not self._gripper_cmd_client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error(
+                f"GripperCommand action {self._gripper_cmd_action} not available"
+            )
+            return False
+        t_server = time.monotonic()
+        self.get_logger().info(f"[TIMING] wait_for_server: {t_server - t0:.3f}s")
+
+        goal = GripperCommand.Goal()
+        goal.command = GripperCommandMsg(position=position, max_effort=0.0)
+
+        send_future = self._gripper_cmd_client.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, send_future)
+
+        goal_handle = send_future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error("GripperCommand goal rejected")
+            return False
+        t_sent = time.monotonic()
+        self.get_logger().info(f"[TIMING] send_goal: {t_sent - t_server:.3f}s")
+
+        result_future = goal_handle.get_result_async()
+        rclpy.spin_until_future_complete(self, result_future)
+        t_result = time.monotonic()
+        self.get_logger().info(f"[TIMING] execution: {t_result - t_sent:.3f}s")
+
+        result_response = result_future.result()
+        if result_response is None:
+            self.get_logger().error("GripperCommand result was empty")
+            return False
+
+        result = result_response.result
+        stalled = bool(getattr(result, "stalled", False))
+        self.get_logger().info(
+            f"GripperCommand done: position={result.position:.4f}, "
+            f"stalled={stalled}, reached_goal={result.reached_goal}"
         )
+        self.get_logger().info(f"[TIMING] total gripper cmd: {t_result - t0:.3f}s")
+
+        if result_response.status != GoalStatus.STATUS_SUCCEEDED:
+            self.get_logger().error(
+                "GripperCommand failed with "
+                f"status={result_response.status}, "
+                f"position={result.position:.4f}, "
+                f"stalled={stalled}, reached_goal={result.reached_goal}"
+            )
+            return False
+
+        if stalled and not result.reached_goal:
+            self.get_logger().warn(
+                "GripperCommand reached a mechanical limit before the model target: "
+                f"position={result.position:.4f}, "
+                f"stalled={stalled}, reached_goal={result.reached_goal}"
+            )
+
+        return True
+
+    def open_gripper(self):
+        """Open the gripper via GripperCommand action (no MoveIt planning)."""
+        self.get_logger().info("Opening gripper...")
+        return self._send_gripper_cmd(self._gripper_open_position)
 
     def close_gripper(self):
-        """Close the gripper to the configured closed position."""
-        return self.go_to_joint_goal(
-            {self._gripper_joint_name: self._gripper_closed_position},
-            group_name=self._gripper_group_name,
-        )
+        """Close the gripper via GripperCommand action (no MoveIt planning)."""
+        self.get_logger().info("Closing gripper...")
+        return self._send_gripper_cmd(self._gripper_closed_position)
 
     def go_to_position(self, x: float, y: float, z: float, frame_id: str = "base_link"):
         """
