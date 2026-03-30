@@ -16,7 +16,7 @@
     </transmission>
   </xacro:macro>
 
-  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14'">
+  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14' sim_gazebo_classic:='true'">
 
   <!-- world -->
     <link name="${prefix}world"/>
@@ -572,7 +572,8 @@
     <xacro:transmission_block tran_name="${prefix}tran6" joint_name="${prefix}joint6" motor_name="${prefix}motor6"/>
     <xacro:transmission_block tran_name="${prefix}tran7" joint_name="${prefix}joint7" motor_name="${prefix}motor7"/>
     <xacro:transmission_block tran_name="${prefix}tran8" joint_name="${prefix}joint8" motor_name="${prefix}motor8"/>
-  <!-- gazebo -->
+  <!-- Gazebo Classic ros2_control plugin (skipped when sim_gazebo_classic is false) -->
+    <xacro:if value="${sim_gazebo_classic}">
     <gazebo>
       <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
           <robotNamespace>/piper</robotNamespace>
@@ -580,6 +581,7 @@
           <legacyModeNS>true</legacyModeNS>
       </plugin>
     </gazebo>
+    </xacro:if>
  
     <!-- <gazebo reference="${prefix}base_link">
       <material>Gazebo/Black</material>

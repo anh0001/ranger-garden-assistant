@@ -23,7 +23,6 @@ setup(
     maintainer_email='anhrisn@gmail.com',
     description='Project LiDAR point clouds into camera images using saved calibration results.',
     license='MIT',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'projection_node = camera_lidar_fuse.camera_lidar_fuse:main',

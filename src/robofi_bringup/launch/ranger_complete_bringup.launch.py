@@ -9,6 +9,11 @@ Complete system bringup for Ranger Mini 3.0 with:
 - PiPER 6-DOF arm
 - Robot description and TF
 - MoveIt 2 move_group (optional)
+
+Supports three backends:
+  backend:=real   - Real hardware (CAN drivers, physical sensors)
+  backend:=mock   - MoveIt-only with mock_components/GenericSystem (no Gazebo)
+  backend:=gazebo - Full Gazebo Fortress simulation (delegates to ranger_sim)
 """
 
 from launch import LaunchDescription
@@ -23,7 +28,7 @@ from launch.substitutions import (
     PythonExpression,
     TextSubstitution,
 )
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -31,6 +36,22 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     # Declare arguments
     declared_arguments = []
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "backend",
+            default_value="real",
+            description="Execution backend: 'real' (hardware), 'mock' (MoveIt-only), or 'gazebo' (Gazebo Fortress).",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "world",
+            default_value="",
+            description="Gazebo world file (only used when backend:=gazebo).",
+        )
+    )
 
     declared_arguments.append(
         DeclareLaunchArgument(
@@ -446,6 +467,14 @@ def generate_launch_description():
 
     declared_arguments.append(
         DeclareLaunchArgument(
+            "launch_nav",
+            default_value="false",
+            description="Launch Nav2 when backend:=gazebo.",
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
             "moveit_delay",
             default_value="5.0",
             description="Delay (seconds) before launching MoveIt move_group to allow robot model setup.",
@@ -485,6 +514,8 @@ def generate_launch_description():
     )
 
     # Initialize arguments
+    backend = LaunchConfiguration("backend")
+    world = LaunchConfiguration("world")
     can_device = LaunchConfiguration("can_device")
     arm_can_port = LaunchConfiguration("arm_can_port")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -535,6 +566,7 @@ def generate_launch_description():
     piper_bridge_publish_rate = LaunchConfiguration("piper_bridge_publish_rate")
     piper_bridge_speed = LaunchConfiguration("piper_bridge_speed")
     launch_moveit = LaunchConfiguration("launch_moveit")
+    launch_nav = LaunchConfiguration("launch_nav")
     moveit_delay = LaunchConfiguration("moveit_delay")
     launch_moveit_servo = LaunchConfiguration("launch_moveit_servo")
     moveit_servo_delay = LaunchConfiguration("moveit_servo_delay")
@@ -903,9 +935,55 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription(
-        declared_arguments
-        + [
+    # -----------------------------------------------------------------
+    # Backend-conditional helpers
+    # -----------------------------------------------------------------
+    is_real = PythonExpression(["'", backend, "' == 'real'"])
+    is_mock = PythonExpression(["'", backend, "' == 'mock'"])
+    is_gazebo = PythonExpression(["'", backend, "' == 'gazebo'"])
+
+    # When backend:=gazebo, delegate entirely to ranger_sim's sim_bringup
+    gazebo_bringup = GroupAction(
+        condition=IfCondition(is_gazebo),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution([
+                        FindPackageShare("ranger_sim"),
+                        "launch", "sim_bringup.launch.py",
+                    ])
+                ),
+                launch_arguments={
+                    "use_sim_time": "true",
+                    "world": world,
+                    "launch_moveit": launch_moveit,
+                    "launch_nav": launch_nav,
+                    "use_rviz": use_rviz,
+                }.items(),
+            ),
+        ],
+    )
+
+    # When backend:=mock, launch MoveIt demo (mock_components) directly
+    mock_bringup = GroupAction(
+        condition=IfCondition(is_mock),
+        actions=[
+            SetParameter(name="use_sim_time", value="false"),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution([
+                        FindPackageShare("ranger_piper_moveit"),
+                        "launch", "demo.launch.py",
+                    ])
+                ),
+            ),
+        ],
+    )
+
+    # When backend:=real, launch the full hardware stack
+    real_bringup = GroupAction(
+        condition=IfCondition(is_real),
+        actions=[
             robot_state_publisher_node,
             piper_joint_state_sanitizer_node,
             joint_state_publisher_with_piper_node,
@@ -914,12 +992,20 @@ def generate_launch_description():
             camera_group,
             wrist_camera_launch,
             rviz_node,
-            # static_tf_lidar,
             ranger_base_launch,
             piper_launch,
             piper_bridge_node,
             servo_command_bridge_node,
             moveit_move_group_launch,
             moveit_servo_launch,
+        ],
+    )
+
+    return LaunchDescription(
+        declared_arguments
+        + [
+            real_bringup,
+            mock_bringup,
+            gazebo_bringup,
         ]
     )

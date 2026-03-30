@@ -1,0 +1,53 @@
+# ros2_control controller configuration for Gazebo Fortress simulation.
+# Matches the real-hardware controller interface so MoveIt configs work unchanged.
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    piper_arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    piper_gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    # Mirror controller for the second gripper finger
+    piper_gripper8_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+piper_arm_controller:
+  ros__parameters:
+    joints:
+      - piper_joint1
+      - piper_joint2
+      - piper_joint3
+      - piper_joint4
+      - piper_joint5
+      - piper_joint6
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+piper_gripper_controller:
+  ros__parameters:
+    joints:
+      - piper_joint7
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+piper_gripper8_controller:
+  ros__parameters:
+    joints:
+      - piper_joint8
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity

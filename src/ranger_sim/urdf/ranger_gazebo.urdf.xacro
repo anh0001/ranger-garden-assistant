@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gazebo Fortress wrapper for the Ranger Mini 3.0 + PiPER arm.
+
+  Includes the real robot description (with Gazebo Classic plugin disabled)
+  and adds:
+    - Gazebo Fortress ros2_control plugin (ign_ros2_control) for the arm
+    - DiffDrive plugin for base mobility (holonomic approximation for v1)
+    - Simulated Livox-style lidar
+    - Simulated front camera (fisheye approximation)
+    - Simulated wrist RGBD camera
+    - Simulated IMU
+-->
+<robot name="ranger_mini_complete" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:arg name="mesh_dir" default="package://ranger_description/meshes"/>
+  <xacro:arg name="sim_gazebo_classic" default="false"/>
+  <xacro:arg name="gz_controller_config" default="$(find ranger_sim)/config/ros2_controllers_sim.yaml"/>
+
+  <!-- Include the real robot URDF with Gazebo Classic plugin disabled.
+       The sim_gazebo_classic arg above (default=false) overrides the
+       default=true in ranger_complete so the Classic plugin is omitted. -->
+  <xacro:include filename="$(find ranger_description)/urdf/ranger_complete.urdf.xacro"/>
+
+  <!-- ================================================================== -->
+  <!-- ros2_control: Gazebo Fortress hardware interface for the PiPER arm -->
+  <!-- ================================================================== -->
+  <ros2_control name="GazeboFortressSystem" type="system">
+    <hardware>
+      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+    </hardware>
+    <!-- Arm joints 1-6 -->
+    <joint name="piper_joint1">
+      <command_interface name="position"><param name="min">-2.618</param><param name="max">2.618</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint2">
+      <command_interface name="position"><param name="min">0.0</param><param name="max">3.14</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint3">
+      <command_interface name="position"><param name="min">-2.967</param><param name="max">0.0</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint4">
+      <command_interface name="position"><param name="min">-1.745</param><param name="max">1.745</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint5">
+      <command_interface name="position"><param name="min">-1.22</param><param name="max">1.22</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint6">
+      <command_interface name="position"><param name="min">-2.0944</param><param name="max">2.0944</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <!-- Gripper -->
+    <joint name="piper_joint7">
+      <command_interface name="position"><param name="min">0.0</param><param name="max">0.75</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="piper_joint8">
+      <command_interface name="position"><param name="min">-0.75</param><param name="max">0.0</param></command_interface>
+      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Gazebo Fortress system plugin to load the ros2_control hardware -->
+  <gazebo>
+    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+      <parameters>$(arg gz_controller_config)</parameters>
+    </plugin>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Base mobility: DiffDrive approximation (v1, holonomic deferred)    -->
+  <!-- Uses front-left/right wheels for differential drive.               -->
+  <!-- Steering/wheel joints are present for visuals but not actively     -->
+  <!-- controlled by this plugin.                                         -->
+  <!-- ================================================================== -->
+  <gazebo>
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <left_joint>fl_wheel</left_joint>
+      <right_joint>fr_wheel</right_joint>
+      <wheel_separation>0.38</wheel_separation>
+      <wheel_radius>0.09</wheel_radius>
+      <max_linear_acceleration>1.0</max_linear_acceleration>
+      <max_angular_acceleration>2.0</max_angular_acceleration>
+      <odom_publish_frequency>50</odom_publish_frequency>
+      <topic>cmd_vel</topic>
+      <odom_topic>odom</odom_topic>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+      <tf_topic>/tf</tf_topic>
+    </plugin>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Simulated LiDAR (Livox Mid-360 approximation)                     -->
+  <!-- 360 deg horizontal, ~59 deg vertical, ~200k pts/s                 -->
+  <!-- Published on the Gazebo side; bridged to /scan via ros_gz_bridge   -->
+  <!-- ================================================================== -->
+  <gazebo reference="lidar_link">
+    <sensor name="lidar" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <visualize>false</visualize>
+      <topic>lidar/points</topic>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>16</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.2618</min_angle>
+            <max_angle>0.2618</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.1</min>
+          <max>40.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </lidar>
+      <gz_frame_id>lidar_link</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Simulated IMU (co-located with LiDAR, as on real robot)            -->
+  <!-- ================================================================== -->
+  <gazebo reference="imu_link">
+    <sensor name="imu" type="imu">
+      <always_on>true</always_on>
+      <update_rate>200</update_rate>
+      <topic>imu/data</topic>
+      <imu>
+        <angular_velocity>
+          <x><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></x>
+          <y><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></y>
+          <z><noise type="gaussian"><mean>0</mean><stddev>0.017</stddev></noise></z>
+        </linear_acceleration>
+      </imu>
+      <gz_frame_id>imu_link</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Simulated front camera (Tier IV C2-176 fisheye approximation)      -->
+  <!-- Standard pinhole camera; fisheye distortion is not modeled in v1.  -->
+  <!-- ================================================================== -->
+  <gazebo reference="camera_link">
+    <sensor name="front_camera" type="camera">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <topic>camera/image_raw</topic>
+      <camera>
+        <horizontal_fov>2.79</horizontal_fov>
+        <image>
+          <width>720</width>
+          <height>465</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>50.0</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+      <gz_frame_id>camera_optical_frame</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Simulated wrist RGBD camera (RealSense D405 approximation)         -->
+  <!-- ================================================================== -->
+  <gazebo reference="piper_camera_link">
+    <sensor name="wrist_rgbd" type="rgbd_camera">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <topic>piper/wrist_camera</topic>
+      <camera>
+        <horizontal_fov>1.5009</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>10.0</far>
+        </clip>
+        <depth_camera>
+          <clip>
+            <near>0.02</near>
+            <far>10.0</far>
+          </clip>
+        </depth_camera>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.005</stddev>
+        </noise>
+      </camera>
+      <gz_frame_id>piper_camera_optical_frame</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+</robot>

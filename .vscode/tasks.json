@@ -210,12 +210,12 @@
       "isBackground": false
     },
     {
-      "label": "Launch: Ranger Complete Bringup",
+      "label": "Launch: Ranger Complete Bringup (Real)",
       "type": "shell",
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=real"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -225,7 +225,87 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches the complete Ranger system: base controller, LiDAR, Tier IV C2-176 camera, robot state publisher, TF tree, and MoveIt move_group on DISPLAY :77",
+      "detail": "Launches the complete Ranger system on real hardware: base controller, LiDAR, cameras, PiPER arm, MoveIt on DISPLAY :77",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Ranger Mock Bringup",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=mock"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches MoveIt demo with mock_components (no hardware, no Gazebo). Good for MoveIt planning/controller smoke tests on DISPLAY :77",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Ranger Gazebo Simulation",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=gazebo launch_moveit:=false"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches Gazebo Fortress simulation: garden world, robot spawn, ros2_control controllers, and sensor bridges on DISPLAY :77. MoveIt is disabled in this task because the current workspace environment does not provide moveit_configs_utils.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Gazebo Sim (Direct, with Nav2)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true use_rviz:=true"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches Gazebo Fortress sim directly via ranger_sim package with Nav2 and RViz enabled on DISPLAY :77",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Gazebo Sim (Headless CI)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 launch ranger_sim sim_bringup.launch.py headless:=true launch_moveit:=false"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Launches headless Gazebo Fortress sim (no GUI, no MoveIt) for CI smoke testing",
       "problemMatcher": [],
       "isBackground": false
     },

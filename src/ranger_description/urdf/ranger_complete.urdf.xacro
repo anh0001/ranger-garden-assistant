@@ -3,6 +3,8 @@
 
   <!-- Accept mesh directory as argument with default value -->
   <xacro:arg name="mesh_dir" default="package://ranger_description/meshes"/>
+  <!-- When false, the Gazebo Classic ros2_control plugin is omitted from the PiPER arm -->
+  <xacro:arg name="sim_gazebo_classic" default="true"/>
 
   <xacro:property name="M_PI" value="3.14159265359"/>
   <xacro:property name="base_to_footprint_z" value="0.33"/>
@@ -573,6 +575,7 @@
     camera_yaw="${piper_camera_yaw}"
     tcp_x="${piper_tcp_x}"
     tcp_y="${piper_tcp_y}"
-    tcp_z="${piper_tcp_z}"/>
+    tcp_z="${piper_tcp_z}"
+    sim_gazebo_classic="$(arg sim_gazebo_classic)"/>
 
 </robot>

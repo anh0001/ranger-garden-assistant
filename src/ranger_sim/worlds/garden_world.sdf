@@ -1,0 +1,316 @@
+<?xml version="1.0" ?>
+<!--
+  Garden assistance scenario for Ranger Mini 3.0 + PiPER arm.
+  Indoor/outdoor scene with graspable objects, planters, tables,
+  bins, a doorway, and simple human stand-in cylinders.
+
+  Designed for Gazebo Fortress (gz-sim7).
+-->
+<sdf version="1.8">
+  <world name="garden_world">
+
+    <!-- Physics -->
+    <physics name="default_physics" type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+
+    <!-- Required system plugins -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <!-- Lighting -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.85 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <light type="directional" name="fill_light">
+      <cast_shadows>false</cast_shadows>
+      <pose>0 0 8 0 0 0</pose>
+      <diffuse>0.3 0.3 0.35 1</diffuse>
+      <specular>0.05 0.05 0.05 1</specular>
+      <direction>0.5 -0.3 -0.7</direction>
+    </light>
+
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+          <material>
+            <ambient>0.35 0.45 0.25 1</ambient>
+            <diffuse>0.4 0.5 0.3 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Indoor area: concrete patio slab                             -->
+    <!-- ============================================================ -->
+    <model name="patio">
+      <static>true</static>
+      <pose>0 0 0.005 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>6 4 0.01</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>6 4 0.01</size></box></geometry>
+          <material>
+            <ambient>0.6 0.6 0.6 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Table (work surface for pick-place)                          -->
+    <!-- ============================================================ -->
+    <model name="table">
+      <static>true</static>
+      <pose>1.5 0 0 0 0 0</pose>
+      <link name="link">
+        <!-- Table top -->
+        <collision name="top_collision">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry><box><size>1.2 0.6 0.04</size></box></geometry>
+        </collision>
+        <visual name="top_visual">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry><box><size>1.2 0.6 0.04</size></box></geometry>
+          <material>
+            <ambient>0.5 0.35 0.2 1</ambient>
+            <diffuse>0.6 0.4 0.25 1</diffuse>
+          </material>
+        </visual>
+        <!-- Legs -->
+        <collision name="leg1"><pose>0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg1_v"><pose>0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg2"><pose>-0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg2_v"><pose>-0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg3"><pose>0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg3_v"><pose>0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg4"><pose>-0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg4_v"><pose>-0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Graspable objects on table                                   -->
+    <!-- ============================================================ -->
+    <!-- Small cup -->
+    <model name="cup">
+      <pose>1.3 0.1 0.78 0 0 0</pose>
+      <link name="link">
+        <inertial><mass>0.15</mass><inertia><ixx>0.0002</ixx><iyy>0.0002</iyy><izz>0.0001</izz></inertia></inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.035</radius><length>0.10</length></cylinder></geometry>
+          <material><ambient>0.8 0.2 0.2 1</ambient><diffuse>0.9 0.3 0.3 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Small box (medicine box size) -->
+    <model name="small_box">
+      <pose>1.6 -0.1 0.79 0 0 0.3</pose>
+      <link name="link">
+        <inertial><mass>0.2</mass><inertia><ixx>0.0002</ixx><iyy>0.0003</iyy><izz>0.0002</izz></inertia></inertial>
+        <collision name="collision"><geometry><box><size>0.08 0.05 0.06</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.08 0.05 0.06</size></box></geometry>
+          <material><ambient>0.2 0.3 0.7 1</ambient><diffuse>0.3 0.4 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Water bottle -->
+    <model name="bottle">
+      <pose>1.5 0.2 0.82 0 0 0</pose>
+      <link name="link">
+        <inertial><mass>0.35</mass><inertia><ixx>0.0005</ixx><iyy>0.0005</iyy><izz>0.0001</izz></inertia></inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.032</radius><length>0.20</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.032</radius><length>0.20</length></cylinder></geometry>
+          <material><ambient>0.3 0.6 0.8 1</ambient><diffuse>0.4 0.7 0.9 0.7</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Planters (garden context)                                    -->
+    <!-- ============================================================ -->
+    <model name="planter_1">
+      <static>true</static>
+      <pose>-1.0 1.5 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.5 0.5 0.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.5 0.5 0.4</size></box></geometry>
+          <material><ambient>0.55 0.35 0.2 1</ambient><diffuse>0.6 0.4 0.25 1</diffuse></material>
+        </visual>
+        <!-- Soil/plant on top -->
+        <visual name="soil"><pose>0 0 0.18 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>0.04</length></cylinder></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.35 0.25 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="planter_2">
+      <static>true</static>
+      <pose>0.0 1.5 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.5 0.5 0.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.5 0.5 0.4</size></box></geometry>
+          <material><ambient>0.55 0.35 0.2 1</ambient><diffuse>0.6 0.4 0.25 1</diffuse></material>
+        </visual>
+        <visual name="soil"><pose>0 0 0.18 0 0 0</pose><geometry><cylinder><radius>0.22</radius><length>0.04</length></cylinder></geometry>
+          <material><ambient>0.3 0.2 0.1 1</ambient><diffuse>0.35 0.25 0.15 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Collection bin                                               -->
+    <!-- ============================================================ -->
+    <model name="bin">
+      <static>true</static>
+      <pose>-1.5 -0.5 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.4 0.3 0.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.4 0.3 0.4</size></box></geometry>
+          <material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.4 0.4 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Doorway / wall section                                       -->
+    <!-- ============================================================ -->
+    <model name="wall_left">
+      <static>true</static>
+      <pose>-2.5 0 1.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.15 1.5 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.15 1.5 2.4</size></box></geometry>
+          <material><ambient>0.85 0.8 0.75 1</ambient><diffuse>0.9 0.85 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_right">
+      <static>true</static>
+      <pose>-2.5 -2.0 1.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.15 1.5 2.4</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.15 1.5 2.4</size></box></geometry>
+          <material><ambient>0.85 0.8 0.75 1</ambient><diffuse>0.9 0.85 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Door lintel -->
+    <model name="door_lintel">
+      <static>true</static>
+      <pose>-2.5 -1.0 2.15 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.15 1.0 0.3</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.15 1.0 0.3</size></box></geometry>
+          <material><ambient>0.85 0.8 0.75 1</ambient><diffuse>0.9 0.85 0.8 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Human stand-ins (simple cylinders for proximity testing)     -->
+    <!-- ============================================================ -->
+    <model name="human_standin_1">
+      <static>true</static>
+      <pose>2.5 1.0 0.85 0 0 0</pose>
+      <link name="link">
+        <!-- Torso -->
+        <collision name="torso"><geometry><cylinder><radius>0.2</radius><length>1.0</length></cylinder></geometry></collision>
+        <visual name="torso"><geometry><cylinder><radius>0.2</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.6 0.5 0.4 1</ambient><diffuse>0.7 0.6 0.5 1</diffuse></material>
+        </visual>
+        <!-- Head -->
+        <collision name="head"><pose>0 0 0.65 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry></collision>
+        <visual name="head"><pose>0 0 0.65 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry>
+          <material><ambient>0.7 0.6 0.5 1</ambient><diffuse>0.8 0.7 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="human_standin_2">
+      <static>true</static>
+      <pose>-0.5 -1.5 0.85 0 0 0.5</pose>
+      <link name="link">
+        <collision name="torso"><geometry><cylinder><radius>0.2</radius><length>1.0</length></cylinder></geometry></collision>
+        <visual name="torso"><geometry><cylinder><radius>0.2</radius><length>1.0</length></cylinder></geometry>
+          <material><ambient>0.4 0.4 0.6 1</ambient><diffuse>0.5 0.5 0.7 1</diffuse></material>
+        </visual>
+        <collision name="head"><pose>0 0 0.65 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry></collision>
+        <visual name="head"><pose>0 0 0.65 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry>
+          <material><ambient>0.7 0.6 0.5 1</ambient><diffuse>0.8 0.7 0.6 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Additional obstacles for Nav2 testing                        -->
+    <!-- ============================================================ -->
+    <model name="obstacle_barrel">
+      <static>true</static>
+      <pose>0.5 -1.0 0.4 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><cylinder><radius>0.25</radius><length>0.8</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.25</radius><length>0.8</length></cylinder></geometry>
+          <material><ambient>0.15 0.35 0.15 1</ambient><diffuse>0.2 0.45 0.2 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_crate">
+      <static>true</static>
+      <pose>-1.2 -1.8 0.25 0 0 0.2</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.5 0.4 0.5</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.5 0.4 0.5</size></box></geometry>
+          <material><ambient>0.5 0.4 0.2 1</ambient><diffuse>0.55 0.45 0.25 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Low garden wall / border -->
+    <model name="garden_border">
+      <static>true</static>
+      <pose>1.0 2.2 0.1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>4.0 0.15 0.2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>4.0 0.15 0.2</size></box></geometry>
+          <material><ambient>0.45 0.4 0.35 1</ambient><diffuse>0.5 0.45 0.4 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

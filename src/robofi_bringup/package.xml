@@ -45,6 +45,9 @@
   <exec_depend>ros2_control</exec_depend>
   <exec_depend>ros2_controllers</exec_depend>
 
+  <!-- Simulation (backend:=gazebo) -->
+  <exec_depend>ranger_sim</exec_depend>
+
   <!-- Camera support -->
   <exec_depend>v4l2_camera</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
