@@ -48,7 +48,9 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "world",
-            default_value="",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("ranger_sim"), "worlds", "garden_world.sdf"
+            ]),
             description="Gazebo world file (only used when backend:=gazebo).",
         )
     )
