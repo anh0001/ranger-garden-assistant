@@ -16,7 +16,7 @@
     </transmission>
   </xacro:macro>
 
-  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14' sim_gazebo_classic:='true'">
+  <xacro:macro name="piper_with_gripper" params="prefix:='piper_' camera_xyz:='0 0 0.05' camera_roll:='0' camera_pitch:='0' camera_yaw:='0' tcp_x:='0.0' tcp_y:='0.0' tcp_z:='0.14' sim_gazebo_classic:='true' mesh_dir:='package://piper_description/meshes'">
 
   <!-- world -->
     <link name="${prefix}world"/>
@@ -38,7 +38,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/base_link.STL" />
+            filename="${mesh_dir}/base_link.STL" />
         </geometry>
         <material
           name="">
@@ -52,7 +52,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/base_link.STL" />
+            filename="${mesh_dir}/base_link.STL" />
         </geometry>
       </collision>
     </link>
@@ -69,7 +69,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link1.STL" />
+            filename="${mesh_dir}/link1.STL" />
         </geometry>
         <material
           name="">
@@ -83,7 +83,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link1.STL" />
+            filename="${mesh_dir}/link1.STL" />
         </geometry>
       </collision>
     </link>
@@ -118,7 +118,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link2.STL" />
+            filename="${mesh_dir}/link2.STL" />
         </geometry>
         <material
           name="">
@@ -132,7 +132,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link2.STL" />
+            filename="${mesh_dir}/link2.STL" />
         </geometry>
       </collision>
     </link>
@@ -168,7 +168,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link3.STL" />
+            filename="${mesh_dir}/link3.STL" />
         </geometry>
         <material
           name="">
@@ -182,7 +182,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link3.STL" />
+            filename="${mesh_dir}/link3.STL" />
         </geometry>
       </collision>
     </link>
@@ -218,7 +218,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link4.STL" />
+            filename="${mesh_dir}/link4.STL" />
         </geometry>
         <material
           name="">
@@ -232,7 +232,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link4.STL" />
+            filename="${mesh_dir}/link4.STL" />
         </geometry>
       </collision>
     </link>
@@ -267,7 +267,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link5.STL" />
+            filename="${mesh_dir}/link5.STL" />
         </geometry>
         <material
           name="">
@@ -281,7 +281,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link5.STL" />
+            filename="${mesh_dir}/link5.STL" />
         </geometry>
       </collision>
     </link>
@@ -316,7 +316,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link6.STL" />
+            filename="${mesh_dir}/link6.STL" />
         </geometry>
         <material
           name="">
@@ -330,7 +330,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link6.STL" />
+            filename="${mesh_dir}/link6.STL" />
         </geometry>
       </collision>
     </link>
@@ -374,7 +374,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/gripper_base.STL" />
+            filename="${mesh_dir}/gripper_base.STL" />
         </geometry>
         <material
           name="">
@@ -388,7 +388,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/gripper_base.STL" />
+            filename="${mesh_dir}/gripper_base.STL" />
         </geometry>
       </collision>
     </link> 
@@ -468,7 +468,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link7.STL" />
+            filename="${mesh_dir}/link7.STL" />
         </geometry>
         <material
           name="">
@@ -482,7 +482,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link7.STL" />
+            filename="${mesh_dir}/link7.STL" />
         </geometry>
       </collision>
     </link>
@@ -526,7 +526,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link8.STL" />
+            filename="${mesh_dir}/link8.STL" />
         </geometry>
         <material
           name="">
@@ -540,7 +540,7 @@
           rpy="0 0 0" />
         <geometry>
           <mesh
-            filename="package://piper_description/meshes/link8.STL" />
+            filename="${mesh_dir}/link8.STL" />
         </geometry>
       </collision>
     </link>

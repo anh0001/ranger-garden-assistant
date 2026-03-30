@@ -7,10 +7,7 @@ start ros2_control controllers, and launch the ros_gz_bridge.
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
-    RegisterEventHandler,
 )
-from launch.event_handlers import OnProcessExit
 from launch.substitutions import (
     Command,
     FindExecutable,
@@ -46,6 +43,8 @@ def generate_launch_description():
         ]),
         " mesh_dir:=file://",
         PathJoinSubstitution([FindPackageShare("ranger_description"), "meshes"]),
+        " piper_mesh_dir:=file://",
+        PathJoinSubstitution([FindPackageShare("piper_description"), "meshes"]),
         " sim_gazebo_classic:=false",
         " gz_controller_config:=",
         PathJoinSubstitution([
@@ -89,59 +88,10 @@ def generate_launch_description():
         parameters=[{"use_sim_time": use_sim_time}],
     )
 
-    # Spawn ros2_control controllers sequentially
-    load_joint_state_broadcaster = ExecuteProcess(
-        cmd=["ros2", "control", "load_controller", "--set-state", "active",
-             "joint_state_broadcaster"],
-        output="screen",
-    )
-
-    load_arm_controller = ExecuteProcess(
-        cmd=["ros2", "control", "load_controller", "--set-state", "active",
-             "piper_arm_controller"],
-        output="screen",
-    )
-
-    load_gripper_controller = ExecuteProcess(
-        cmd=["ros2", "control", "load_controller", "--set-state", "active",
-             "piper_gripper_controller"],
-        output="screen",
-    )
-
-    load_gripper8_controller = ExecuteProcess(
-        cmd=["ros2", "control", "load_controller", "--set-state", "active",
-             "piper_gripper8_controller"],
-        output="screen",
-    )
-
-    # Chain controller loading: JSB -> arm -> gripper -> gripper8
-    chain_arm = RegisterEventHandler(
-        OnProcessExit(
-            target_action=load_joint_state_broadcaster,
-            on_exit=[load_arm_controller],
-        )
-    )
-    chain_gripper = RegisterEventHandler(
-        OnProcessExit(
-            target_action=load_arm_controller,
-            on_exit=[load_gripper_controller],
-        )
-    )
-    chain_gripper8 = RegisterEventHandler(
-        OnProcessExit(
-            target_action=load_gripper_controller,
-            on_exit=[load_gripper8_controller],
-        )
-    )
-
     return LaunchDescription(
         declared_arguments + [
             robot_state_publisher,
             spawn_robot,
             gz_bridge,
-            load_joint_state_broadcaster,
-            chain_arm,
-            chain_gripper,
-            chain_gripper8,
         ]
     )

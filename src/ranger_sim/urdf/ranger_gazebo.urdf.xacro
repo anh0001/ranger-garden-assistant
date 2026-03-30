@@ -4,7 +4,7 @@
 
   Includes the real robot description (with Gazebo Classic plugin disabled)
   and adds:
-    - Gazebo Fortress ros2_control plugin (ign_ros2_control) for the arm
+    - Gazebo Fortress ros2_control plugin (gz_ros2_control) for the arm
     - DiffDrive plugin for base mobility (holonomic approximation for v1)
     - Simulated Livox-style lidar
     - Simulated front camera (fisheye approximation)
@@ -14,6 +14,7 @@
 <robot name="ranger_mini_complete" xmlns:xacro="http://ros.org/wiki/xacro">
 
   <xacro:arg name="mesh_dir" default="package://ranger_description/meshes"/>
+  <xacro:arg name="piper_mesh_dir" default="package://piper_description/meshes"/>
   <xacro:arg name="sim_gazebo_classic" default="false"/>
   <xacro:arg name="gz_controller_config" default="$(find ranger_sim)/config/ros2_controllers_sim.yaml"/>
 
@@ -27,7 +28,7 @@
   <!-- ================================================================== -->
   <ros2_control name="GazeboFortressSystem" type="system">
     <hardware>
-      <plugin>ign_ros2_control/IgnitionSystem</plugin>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
     </hardware>
     <!-- Arm joints 1-6 -->
     <joint name="piper_joint1">
@@ -75,8 +76,11 @@
 
   <!-- Gazebo Fortress system plugin to load the ros2_control hardware -->
   <gazebo>
-    <plugin filename="ign_ros2_control-system" name="ign_ros2_control::IgnitionROS2ControlPlugin">
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
       <parameters>$(arg gz_controller_config)</parameters>
+      <controller_manager_name>controller_manager</controller_manager_name>
     </plugin>
   </gazebo>
 
