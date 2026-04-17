@@ -145,9 +145,39 @@
         "panel": "dedicated",
         "clear": false
       },
-      "detail": "Launches camera-LiDAR fusion projection node for projecting LiDAR points onto camera images",
+      "detail": "Launches camera-LiDAR fusion projection node for projecting LiDAR points onto camera images. Subscribes to /livox/lidar and publishes projected points (with u,v) on /lidar_points_projected. Run 'Launch: Camera-LiDAR Fuse Overlay' alongside to visualize.",
       "problemMatcher": [],
       "isBackground": false
+    },
+    {
+      "label": "Launch: Camera-LiDAR Fuse Overlay",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && export PYTHONPATH=/usr/lib/python3/dist-packages:$PYTHONPATH && ros2 run camera_lidar_fuse projection_visualizer --ros-args -p image_topic:=/camera/image_raw -p projected_topic:=/lidar_points_projected -p output_image_topic:=/camera/projected_overlay -p image_encoding:=yuv422 -p force_yuv422:=true -p yuv422_layout:=uyvy -p slop:=0.1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Overlays projected LiDAR points onto the Tier IV camera image. Subscribes to /camera/image_raw and /lidar_points_projected; publishes the fused overlay on /camera/projected_overlay. Requires 'Launch: Camera-LiDAR Fuse' and the Tier IV camera to be running. View output with RQT Image View.",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Launch: Camera-LiDAR Fuse (Full Pipeline)",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "Launch: Camera-LiDAR Fuse",
+        "Launch: Camera-LiDAR Fuse Overlay"
+      ],
+      "problemMatcher": [],
+      "detail": "Runs both the projection node and the overlay visualizer in parallel. Requires the Tier IV camera and Livox LiDAR to already be running (e.g. via 'Launch: Ranger Complete Bringup (Real)')."
     },
     {
       "label": "Launch: PiPER Arm Only",
