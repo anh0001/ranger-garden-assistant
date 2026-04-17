@@ -12,7 +12,7 @@ lidar:
   # PointCloud2 topic emitted by the LiDAR.
   lidar_topic: /livox/lidar
   # Frame id for the projected cloud (it should be your real LiDAR frame).
-  frame_id: livox_link
+  frame_id: lidar_link
 
 projection:
   # Topic published by the projection node (PointCloud2 with per-point u,v).
