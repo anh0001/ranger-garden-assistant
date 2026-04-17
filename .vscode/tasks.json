@@ -75,7 +75,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run v4l2_camera v4l2_camera_node --ros-args -r __ns:=/camera -p video_device:=/dev/tieriv_c2_video0 -p image_size:=\"[2880, 1860]\" -p pixel_format:=UYVY -p output_encoding:=bgr8 -p camera_frame_id:=camera_optical_frame -p camera_name:=tier4_c2_176 -p camera_info_url:=file://${workspaceFolder}/src/camera_lidar_fuse/config/tier4_c2_176_1440x930.yaml -p use_sensor_data_qos:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run v4l2_camera v4l2_camera_node --ros-args -r __ns:=/camera -p video_device:=/dev/tieriv_c2_video0 -p image_size:=\"[2880, 1860]\" -p pixel_format:=UYVY -p output_encoding:=bgr8 -p camera_frame_id:=camera_optical_frame -p camera_name:=tier4_c2_176 -p camera_info_url:=file://${workspaceFolder}/src/camera_lidar_fuse/config/tier4_c2_176_2880x1860.yaml -p use_sensor_data_qos:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

@@ -158,16 +158,16 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "camera_width",
-            default_value="1440",
-            description="Image width for the Tier IV camera (reduced from 2880 for USB bandwidth).",
+            default_value="2880",
+            description="Image width for the Tier IV camera (native C2-176 resolution; hardware only supports 2880x1860).",
         )
     )
 
     declared_arguments.append(
         DeclareLaunchArgument(
             "camera_height",
-            default_value="930",
-            description="Image height for the Tier IV camera (reduced from 1860 for USB bandwidth).",
+            default_value="1860",
+            description="Image height for the Tier IV camera (native C2-176 resolution; hardware only supports 2880x1860).",
         )
     )
 
@@ -202,7 +202,7 @@ def generate_launch_description():
                 [
                     FindPackageShare("camera_lidar_fuse"),
                     "config",
-                    "tier4_c2_176_1440x930.yaml",
+                    "tier4_c2_176_2880x1860.yaml",
                 ]
             ),
             description="Calibration YAML for the Tier IV C2-176 camera.",
@@ -792,7 +792,7 @@ def generate_launch_description():
 
     camera_parameters = {
         "video_device": camera_device,
-        "image_size": [1440, 930],  # Reduced from 2880x1860 for USB bandwidth
+        "image_size": [2880, 1860],  # Native C2-176 resolution (hardware supports only this size)
         "pixel_format": camera_pixel_format,
         "output_encoding": camera_output_encoding,
         "camera_frame_id": camera_frame_id,
