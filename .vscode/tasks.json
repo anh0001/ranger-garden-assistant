@@ -6,6 +6,12 @@
       "type": "promptString",
       "description": "Path to FASTLIO2 map.pcd file",
       "default": "${workspaceFolder}/maps/fastlio2/map_20251118_171609/map.pcd"
+    },
+    {
+      "id": "bagName",
+      "type": "promptString",
+      "description": "Rosbag name (will be suffixed with timestamp and saved under bags/)",
+      "default": "stcm_session"
     }
   ],
   "tasks": [
@@ -429,6 +435,26 @@
         "clear": false
       },
       "detail": "MoveIt 2 demo with RViz on DISPLAY :77 for motion planning visualization (does not control physical arm)",
+      "problemMatcher": [],
+      "isBackground": false
+    },
+    {
+      "label": "Record: Rosbag (STCM Topics)",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && mkdir -p ${workspaceFolder}/bags && cd ${workspaceFolder}/bags && ros2 bag record -s mcap -o ${input:bagName}_$(date +%Y%m%d_%H%M%S) /camera/image_raw /camera/camera_info /lidar_points_projected /livox/lidar /livox/imu /livox/imu_custom /fastlio2/lio_odom /tf /tf_static /robot_description"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "detail": "Records STCM-relevant topics (RGB + camera info, projected LiDAR, raw LiDAR, IMU, FASTLIO2 odom, TF, robot_description) to an MCAP bag (uncompressed) under ${workspaceFolder}/bags/. Stop with Ctrl+C. Prompts for a base name; a timestamp suffix is appended automatically. Reference: ~27.7 GiB / 2m55s uncompressed on a full session.",
       "problemMatcher": [],
       "isBackground": false
     },
