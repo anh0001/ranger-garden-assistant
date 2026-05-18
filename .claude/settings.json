@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(colcon list:*)",
+      "Bash(colcon test-result:*)",
+      "Bash(ros2 pkg list:*)",
+      "Bash(ros2 pkg prefix:*)",
+      "Bash(ros2 node list:*)",
+      "Bash(ros2 node info:*)",
+      "Bash(ros2 topic list:*)",
+      "Bash(ros2 topic info:*)",
+      "Bash(ros2 topic hz:*)",
+      "Bash(ros2 topic echo:*)",
+      "Bash(ros2 service list:*)",
+      "Bash(ros2 action list:*)",
+      "Bash(ros2 param list:*)",
+      "Bash(ros2 param get:*)",
+      "Bash(ros2 interface show:*)",
+      "Bash(ros2 doctor:*)",
+      "Bash(ros2 launch --show-args:*)",
+      "Bash(rosdep check:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git submodule status:*)",
+      "Bash(git branch:*)",
+      "Bash(ip link show:*)",
+      "Bash(candump:*)"
+    ],
+    "deny": [
+      "Bash(ros2 topic pub:*)",
+      "Bash(ros2 action send_goal:*)",
+      "Bash(cansend:*)",
+      "Bash(sudo ip link set can_base:*)",
+      "Bash(sudo ip link set can_piper:*)",
+      "Bash(python3 scripts/piper_pose_commander.py:*)",
+      "Bash(python3 scripts/piper_servo_commander.py:*)",
+      "Bash(python3 scripts/piper_servo_teleop.py:*)",
+      "Read(./**/.env)",
+      "Read(~/.ssh/**)"
+    ]
+  }
+}
