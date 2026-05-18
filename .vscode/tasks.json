@@ -12,6 +12,12 @@
       "type": "promptString",
       "description": "Rosbag name (will be suffixed with timestamp and saved under bags/)",
       "default": "stcm_session"
+    },
+    {
+      "id": "displayNumber",
+      "type": "promptString",
+      "description": "X display number for GUI tasks (press Enter for default)",
+      "default": "30540"
     }
   ],
   "tasks": [
@@ -41,7 +47,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch livox_ros_driver2 rviz_MID360_launch.py user_config_path:=${workspaceFolder}/src/livox_ros_driver2/config/MID360_config.json"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -61,7 +67,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 run rqt_image_view rqt_image_view"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -231,7 +237,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_description display.launch.py gui:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -251,7 +257,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=real"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=real"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -271,7 +277,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=mock"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=mock"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -291,7 +297,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=gazebo launch_moveit:=false"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup ranger_complete_bringup.launch.py backend:=gazebo launch_moveit:=false"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -311,7 +317,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true use_rviz:=true"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true use_rviz:=true"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -351,7 +357,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=false launch_localizer:=false launch_octomap:=true rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_mapping.rviz"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -369,7 +375,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_start_delay:=5.0 nav2_use_amcl:=false map_path:=${input:mapPath}"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_start_delay:=5.0 nav2_use_amcl:=false map_path:=${input:mapPath}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -387,7 +393,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name \"map.pcd\" -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_use_amcl:=false map_path:=$LATEST_MAP rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_navigation.rviz"
+        "LATEST_MAP=$(find ${workspaceFolder}/maps/fastlio2 -name \"map.pcd\" -type f | sort -r | head -n1); source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch robofi_bringup fastlio2_navigation.launch.py launch_nav2:=true launch_localizer:=true launch_pgo:=false nav2_use_amcl:=false map_path:=$LATEST_MAP rviz_config:=$(ros2 pkg prefix robofi_bringup)/share/robofi_bringup/rviz/fastlio2_navigation.rviz"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -424,7 +430,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:77 XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_piper_moveit demo.launch.py"
+        "source /opt/ros/humble/setup.bash && source install/setup.bash && DISPLAY=:${input:displayNumber} XAUTHORITY=$HOME/.Xauthority ros2 launch ranger_piper_moveit demo.launch.py"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
