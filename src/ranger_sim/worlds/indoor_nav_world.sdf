@@ -1,0 +1,170 @@
+<?xml version="1.0" ?>
+<!--
+  Indoor obstacle world for observing Nav2 obstacle avoidance.
+
+  Same <world name="garden_world"> as garden_world.sdf on purpose: the
+  gz_bridge config and grasp_magnet hardcode /world/garden_world/... topic
+  names, so the world name must not change.
+
+  Layout (robot spawns at origin facing +x; a goal at ~(6, 0) forces the
+  planner to weave around the furniture):
+
+      cabinet (4.5, 1.2)
+                                 +y
+    chairA            table        |
+    (1.2,-1.8)*  (2.5,0.0)#########|######  -> goal (6,0)
+        box (3.0,-1.5)   chairB (5.0,-0.8)
+
+  Every obstacle is modeled as a SOLID static box from the floor up to
+  its real height (no thin legs) so the 0.30 m nav_scan ring always
+  intersects it - conservative and reliable for navigation testing.
+  Gaps between obstacles are >= 1.2 m so the ~0.7x0.5 m robot footprint
+  plus 0.55 m inflation still has a feasible corridor.
+-->
+<sdf version="1.8">
+  <world name="garden_world">
+
+    <physics name="default_physics" type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.85 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+    <light type="directional" name="fill_light">
+      <cast_shadows>false</cast_shadows>
+      <pose>0 0 8 0 0 0</pose>
+      <diffuse>0.3 0.3 0.35 1</diffuse>
+      <specular>0.05 0.05 0.05 1</specular>
+      <direction>0.5 -0.3 -0.7</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+          <material>
+            <ambient>0.5 0.5 0.5 1</ambient>
+            <diffuse>0.6 0.6 0.6 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Table: 1.0 x 0.8 x 0.74, directly ahead of the robot -->
+    <model name="table">
+      <static>true</static>
+      <pose>2.5 0.0 0.37 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1.0 0.8 0.74</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1.0 0.8 0.74</size></box></geometry>
+          <material>
+            <ambient>0.55 0.35 0.18 1</ambient>
+            <diffuse>0.65 0.42 0.22 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Cabinet: 0.8 x 0.4 x 1.6 -->
+    <model name="cabinet">
+      <static>true</static>
+      <pose>4.5 1.2 0.8 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.8 0.4 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.8 0.4 1.6</size></box></geometry>
+          <material>
+            <ambient>0.25 0.28 0.35 1</ambient>
+            <diffuse>0.3 0.34 0.42 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Cardboard box: 0.4 x 0.4 x 0.4 -->
+    <model name="cardboard_box">
+      <static>true</static>
+      <pose>3.0 -1.5 0.2 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.4 0.4 0.4</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.4 0.4 0.4</size></box></geometry>
+          <material>
+            <ambient>0.62 0.47 0.28 1</ambient>
+            <diffuse>0.74 0.56 0.34 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Chair A: 0.45 x 0.45 x 0.9 -->
+    <model name="chair_a">
+      <static>true</static>
+      <pose>1.2 -1.8 0.45 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.45 0.45 0.9</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.45 0.45 0.9</size></box></geometry>
+          <material>
+            <ambient>0.15 0.4 0.2 1</ambient>
+            <diffuse>0.18 0.5 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Chair B: 0.45 x 0.45 x 0.9 -->
+    <model name="chair_b">
+      <static>true</static>
+      <pose>5.0 -0.8 0.45 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.45 0.45 0.9</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.45 0.45 0.9</size></box></geometry>
+          <material>
+            <ambient>0.15 0.4 0.2 1</ambient>
+            <diffuse>0.18 0.5 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+  </world>
+</sdf>

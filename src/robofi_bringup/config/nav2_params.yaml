@@ -129,8 +129,9 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       primary_controller: "nav2_mppi_controller::MPPIController"  # MPPI still does 100% of path tracking + omnidirectional strafing; shim only intercepts the final yaw alignment.
       # --- Shim behavior ---
       rotate_to_goal_heading: true  # KEY FIX: once inside xy_goal_tolerance the shim regains control and rotates in place to the goal yaw with a deterministic P+accel-limited primitive, instead of MPPI's slow sampling-based creep that caused the long wait at the goal.
-      angular_dist_threshold: 3.2  # > pi: fully disables the START-of-path in-place rotation (3.0 still fired above ~172 deg). This is an omni base that strafes onto the path; only the goal-heading rotation is active. Lower this (e.g. 0.785) if you also want start-of-path heading alignment.
-      forward_sampling_distance: 0.5  # Path sample distance for the start-rotation heading estimate (only relevant if angular_dist_threshold is lowered).
+      angular_dist_threshold: 1.05  # ~60deg: ENABLE start-of-path rotation so the robot turns to face the path before travelling — the obstacle lidar faces the robot front (+x), so it must point where it travels (driving sideways/backward is blind). NOTE the old 3.2 silently disabled this entirely (heading error <= pi). Sim (nav2_sim.yaml) validated at 0.785/45deg; this real file uses the more conservative 1.05 so FASTLIO2 replan jitter does not cause start-shim twitch (per Codex; lower toward 0.785 only if start alignment is too lazy on hardware).
+      angular_disengage_threshold: 0.35  # ~20deg: hand back to MPPI once roughly facing the path; MPPI still does 100% of travel as a full Omni controller (this is a forward-facing bias, not a nonholonomic lock).
+      forward_sampling_distance: 0.5  # Path sample distance for the start-rotation heading estimate.
       rotate_to_heading_angular_vel: 1.4  # In-place rotation speed (rad/s). RAISED from 0.9: the goal rotation was slow partly because it was throttled here AND clipped again by the velocity_smoother. Kept <= the new wz_max (1.5) and velocity_smoother max angular (1.5) so it is NOT clipped.
       max_angular_accel: 2.5  # rad/s^2. RAISED from 1.5 so the shim ramps to rotate_to_heading_angular_vel quickly instead of crawling. Matches the new velocity_smoother max_accel[2] (2.5) and MPPI az_max (2.5) so it is not clipped and still decelerates cleanly into yaw_goal_tolerance.
       simulate_ahead_time: 1.0  # Collision-check horizon (s) while the shim rotates in place.
@@ -154,7 +155,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
       transform_tolerance: 0.2  # TF tolerance (s); increase if transforms arrive late with FASTLIO2
       motion_model: "Omni"  # CRITICAL: Motion model for omnidirectional robot (Omni/DiffDrive/Ackermann)
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic"]  # REMOVED PreferForwardCritic: it is meant for non-holonomic robots that must drive forward. On this Omni (swerve) base it penalizes the in-place rotation and strafing needed to settle at the goal, which made MPPI creep instead of rotate. PathAngleCritic also intentionally absent (holonomic).
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # PathAngleCritic + PreferForwardCritic RE-ADDED for forward-facing travel bias: the obstacle lidar only faces +x, so the robot must travel facing forward (not strafe/reverse blind). Both shut off inside threshold_to_consider 1.0 so they DON'T fight GoalAngleCritic's final in-place yaw alignment near the goal (that was the original reason PreferForwardCritic was removed; coordinated thresholds resolve it). Omni base + full vy retained — soft bias, not a lock. Sim-validated in nav2_sim.yaml.
       ConstraintCritic:  # Enforces kinematic and safety constraints
         enabled: true
         cost_power: 1  # Power order for constraint cost (linear)
@@ -193,6 +194,19 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
         cost_weight: 4.0  # REDUCED from 5.0 - less aggressive near goal
         offset_from_furthest: 5  # Look-ahead offset (indices) for path proximity reference
         threshold_to_consider: 0.8  # INCREASED - disable path following EARLIER near goal to allow pure rotation
+      PathAngleCritic:  # Biases robot +x (chassis front + forward obstacle lidar) toward the path travel direction so it drives facing where it goes
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0  # Strong-but-soft forward-facing bias; MPPI may still strafe for fine corrections / obstacle avoidance
+        offset_from_furthest: 4  # Path index look-ahead for the heading reference point
+        threshold_to_consider: 1.0  # Off inside 1.0m of goal so GoalAngleCritic (also 1.0m) owns the final yaw — prevents the heading-vs-goal fight that caused the original removal
+        max_angle_to_furthest: 0.45  # rad (~26deg): tolerance band before the angle penalty engages
+        forward_preference: true  # Humble param name (NOT `mode:`, which is Iron+); penalize trajectories whose yaw is not pointed along the path
+      PreferForwardCritic:  # Penalizes reverse (-vx) so the forward-facing lidar leads; soft, omni still available
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.0  # Off inside 1.0m so it does not block the deterministic in-place settle rotation
 
 local_costmap:  # original: (none); Local rolling costmap configuration block.
   local_costmap:  # original: (none); Local rolling costmap configuration block.

@@ -32,8 +32,17 @@
   gz_type_name: ignition.msgs.Pose_V
   direction: GZ_TO_ROS
 
-# LiDAR (Gazebo -> ROS)
+# Navigation 2D LiDAR (Gazebo -> ROS): single-ring gpu_lidar emits a real
+# LaserScan on gz /scan; nav2_sim.yaml obstacle_layer consumes this directly.
 - topic_name: /scan
+  ros_type_name: sensor_msgs/msg/LaserScan
+  gz_type_name: ignition.msgs.LaserScan
+  direction: GZ_TO_ROS
+
+# 3D Livox-approximation cloud (Gazebo -> ROS), perception only, not used
+# by the Nav2 costmap. Bridged under a distinct name for visualization.
+- ros_topic_name: /lidar_points
+  gz_topic_name: /lidar/points
   ros_type_name: sensor_msgs/msg/PointCloud2
   gz_type_name: ignition.msgs.PointCloudPacked
   direction: GZ_TO_ROS

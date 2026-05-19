@@ -127,9 +127,66 @@
   </gazebo>
 
   <!-- ================================================================== -->
+  <!-- Navigation 2D LiDAR (sim-only)                                     -->
+  <!--                                                                    -->
+  <!-- The "Livox approximation" sensor below is 3D and the real lidar    -->
+  <!-- mount is pitched 45 deg (rpy 0 pi/4 0), so it is unsuitable for a   -->
+  <!-- flat 2D Nav2 costmap. This dedicated horizontal single-ring        -->
+  <!-- gpu_lidar (1 vertical sample) makes Gazebo emit a real LaserScan   -->
+  <!-- on gz topic /scan, bridged 1:1 to ROS /scan (sensor_msgs/          -->
+  <!-- LaserScan) - exactly what nav2_sim.yaml's obstacle_layer expects.  -->
+  <!-- Mounted level on base_link at 0.30 m so it intersects furniture    -->
+  <!-- (boxes modeled solid from the floor up). SIM ONLY: the real robot  -->
+  <!-- uses the Livox 3D + FASTLIO2 + STVL stack.                         -->
+  <!-- ================================================================== -->
+  <link name="nav_scan_link"/>
+  <joint name="nav_scan_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="nav_scan_link"/>
+    <origin xyz="0 0 0.30" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="nav_scan_link">
+    <sensor name="nav_scan" type="gpu_lidar">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>true</visualize>
+      <topic>scan</topic>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0</min_angle>
+            <max_angle>0</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.15</min>
+          <max>20.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </lidar>
+      <gz_frame_id>nav_scan_link</gz_frame_id>
+    </sensor>
+  </gazebo>
+
+  <!-- ================================================================== -->
   <!-- Simulated LiDAR (Livox Mid-360 approximation)                     -->
   <!-- 360 deg horizontal, ~59 deg vertical, ~200k pts/s                 -->
-  <!-- Published on the Gazebo side; bridged to /scan via ros_gz_bridge   -->
+  <!-- 3D cloud for perception fidelity; NOT used by the Nav2 costmap     -->
+  <!-- (see the dedicated 2D nav_scan above). Published gz-side only.     -->
   <!-- ================================================================== -->
   <gazebo reference="lidar_link">
     <sensor name="lidar" type="gpu_lidar">

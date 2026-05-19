@@ -120,7 +120,8 @@ controller_server:
       primary_controller: "nav2_mppi_controller::MPPIController"
       # --- Shim behavior ---
       rotate_to_goal_heading: true  # once inside xy_goal_tolerance the shim takes over and rotates in place to the goal yaw deterministically, instead of MPPI's slow sampling creep.
-      angular_dist_threshold: 3.2  # > pi: fully disables START-of-path rotation; this omni base strafes onto the path. Only the goal-heading rotation is active.
+      angular_dist_threshold: 0.785  # 45deg: ENABLE start-of-path rotation so the robot turns to face the path (forward-only lidar must point where it travels). NOTE: heading error <= pi, so the old 3.2 silently disabled this entirely.
+      angular_disengage_threshold: 0.35  # ~20deg: hand off to MPPI once roughly facing the path; MPPI (still full Omni) takes it from there.
       forward_sampling_distance: 0.5
       rotate_to_heading_angular_vel: 1.4  # rad/s. Kept <= wz_max (1.5) and velocity_smoother angular max (1.5) so it is not clipped.
       max_angular_accel: 2.5  # rad/s^2. Matches velocity_smoother max_accel[2] so the shim ramps up fast and still decelerates cleanly into yaw_goal_tolerance.
@@ -145,7 +146,7 @@ controller_server:
       prune_distance: 1.5
       transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock (real file: 0.2)
       motion_model: "Omni"  # CRITICAL for the swerve/omni base
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic"]  # No PreferForwardCritic (it penalizes the in-place rotation/strafing an omni base needs to settle) and no PathAngleCritic (holonomic).
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # PathAngleCritic biases +x toward path direction (forward-facing travel, lidar points where it goes); PreferForwardCritic penalizes reverse. Both shut off inside threshold_to_consider 1.0 so they don't fight GoalAngleCritic's final-yaw alignment.
       ConstraintCritic:
         enabled: true
         cost_power: 1
@@ -184,6 +185,19 @@ controller_server:
         cost_weight: 4.0
         offset_from_furthest: 5
         threshold_to_consider: 0.8  # disable path following near goal to allow pure rotation
+      PathAngleCritic:  # keep +x (front + forward lidar) pointed toward where the path is going
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        offset_from_furthest: 4
+        threshold_to_consider: 1.0  # off inside 1.0m so GoalAngleCritic owns final-yaw (no fight)
+        max_angle_to_furthest: 0.45
+        forward_preference: true  # Humble key (NOT `mode:`, which is Iron+)
+      PreferForwardCritic:  # penalize reverse vx; soft forward bias, omni still available
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.0  # off inside 1.0m so it doesn't block the settle rotation
 
 local_costmap:
   local_costmap:
