@@ -1,0 +1,345 @@
+# =============================================================================
+# Nav2 parameters — GAZEBO SIMULATION ONLY.
+#
+# This is the sim counterpart of robofi_bringup/config/nav2_params.yaml. Nav2's
+# navigation_launch.py takes a SINGLE params_file (it does not merge overlays),
+# so this is a full copy. It is kept deliberately in lock-step with the real
+# file EXCEPT for the sim-required deviations, all tagged `# SIM:`:
+#
+#   1. use_sim_time: True everywhere   (Gazebo publishes /clock).
+#   2. odom_topic: /odom               (Gazebo DiffDrive plugin; the real file
+#                                       uses FASTLIO2 /fastlio2/lio_odom).
+#   3. local_costmap  -> ObstacleLayer from the bridged 2D /scan
+#                        (real file uses SpatioTemporalVoxelLayer fed by the
+#                        Livox /fastlio2/body_cloud, which does not exist in
+#                        sim and whose plugin pkg is not installed here).
+#   4. global_costmap -> rolling window + ObstacleLayer from /scan, no
+#                        static_layer (real file pulls an octomap /projected_map
+#                        which is not produced in sim); track_unknown_space
+#                        false so open ground is plannable without a prior map.
+#
+# ALL controller/planner/behavior/smoother tuning (RotationShim + MPPI goal
+# alignment work) is byte-for-byte the same as the real file on purpose — the
+# sim is what we use to validate it. If you change tuning, change BOTH files.
+# =============================================================================
+
+# NOTE: the Nav2 lifecycle bond watchdog (bond_timeout) is NOT configured here.
+# Stock nav2_bringup/navigation_launch.py builds lifecycle_manager_navigation
+# with an inline param dict and never passes it this params_file, so a
+# lifecycle_manager_navigation block here would be silently ignored. The
+# sim-only bond_timeout:0.0 is instead injected via a scoped SetParameter in
+# sim_bringup.launch.py (see the comment there).
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: True  # SIM
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: /odom  # SIM: Gazebo odometry (real: /fastlio2/lio_odom)
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    wait_for_service_timeout: 10000  # ms. Sim brings servers up slowly; <2s here makes Humble's BtServiceNode throw, masked as "Exception when loading BT: basic_string::_M_create".
+    action_server_result_timeout: 900.0
+    navigators: ["navigate_to_pose", "navigate_through_poses"]
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator"
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator"
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_assisted_teleop_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_is_battery_low_condition_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_assisted_teleop_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+      - nav2_is_battery_charging_condition_bt_node
+
+controller_server:
+  ros__parameters:
+    use_sim_time: True  # SIM
+    odom_topic: "/odom"  # SIM: Gazebo odometry (real: /fastlio2/lio_odom)
+    controller_frequency: 20.0  # 20Hz: the rotation shim and MPPI must replan fast or the final goal-heading alignment is coarse and slow. Compute is bounded via batch_size, not frequency.
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.001  # omnidirectional lateral motion detection
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.5
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath"]
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.1  # robot may rotate in place (still progress)
+      movement_time_allowance: 15.0
+    general_goal_checker:
+      stateful: True
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.10  # ~5.7deg: the shim's accel-limited rotation decelerates cleanly into this, so it can be tight AND fast.
+    FollowPath:  # RotationShimController wrapping MPPI: MPPI for all travel, fast deterministic in-place rotation to the GOAL heading.
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+      # --- Shim behavior ---
+      rotate_to_goal_heading: true  # once inside xy_goal_tolerance the shim takes over and rotates in place to the goal yaw deterministically, instead of MPPI's slow sampling creep.
+      angular_dist_threshold: 3.2  # > pi: fully disables START-of-path rotation; this omni base strafes onto the path. Only the goal-heading rotation is active.
+      forward_sampling_distance: 0.5
+      rotate_to_heading_angular_vel: 1.4  # rad/s. Kept <= wz_max (1.5) and velocity_smoother angular max (1.5) so it is not clipped.
+      max_angular_accel: 2.5  # rad/s^2. Matches velocity_smoother max_accel[2] so the shim ramps up fast and still decelerates cleanly into yaw_goal_tolerance.
+      simulate_ahead_time: 1.0
+      # --- Primary controller (MPPI) ---
+      time_steps: 24  # 24 * 0.1s = 2.4s horizon
+      model_dt: 0.1
+      batch_size: 400  # bound compute here, not via controller_frequency
+      vx_std: 0.2
+      vy_std: 0.2
+      wz_std: 0.3
+      vx_max: 0.26
+      vx_min: -0.26
+      vy_max: 0.26  # omnidirectional strafing
+      vy_min: -0.26
+      wz_max: 1.5  # so MPPI's own near-goal rotation is not the bottleneck either
+      ax_max: 0.6
+      ax_min: -0.6
+      ay_max: 0.6
+      az_max: 2.5  # NOTE: stock Humble MPPI ignores ax/ay/az; the real angular-accel limit is velocity_smoother max_accel[2]. Kept for documentation/forward-compat.
+      iteration_count: 1
+      prune_distance: 1.5
+      transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock (real file: 0.2)
+      motion_model: "Omni"  # CRITICAL for the swerve/omni base
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic"]  # No PreferForwardCritic (it penalizes the in-place rotation/strafing an omni base needs to settle) and no PathAngleCritic (holonomic).
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0  # strong so MPPI drives decisively into xy_goal_tolerance instead of creeping, which delays the shim handoff
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0  # carries the robot into the goal already near correct yaw; shim only finishes the residual
+        threshold_to_consider: 1.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.5
+        critical_cost: 253.0  # costmap cost caps at 255; ~253 = inscribed-radius cost so this actually rejects near-collision trajectories (300.0 was unreachable)
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 0.5
+        trajectory_point_step: 3
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 8.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.8  # disable alignment near goal to allow pure rotation
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+        offset_from_furthest: 5
+        threshold_to_consider: 0.8  # disable path following near goal to allow pure rotation
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 10.0
+      publish_frequency: 5.0
+      global_frame: odom
+      robot_base_frame: base_footprint
+      use_sim_time: True  # SIM
+      rolling_window: true
+      width: 8
+      height: 8
+      resolution: 0.05
+      transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock (real file: 0.3)
+      footprint: "[[0.35, 0.25], [0.35, -0.25], [-0.35, -0.25], [-0.35, 0.25]]"
+      plugins: ["obstacle_layer", "inflation_layer"]  # SIM: ObstacleLayer from /scan instead of the real STVL/Livox stack
+      obstacle_layer:  # SIM: 2D obstacle layer fed by the Gazebo-bridged LaserScan
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          data_type: "LaserScan"
+          marking: true
+          clearing: true
+          max_obstacle_height: 2.0
+          obstacle_max_range: 10.0
+          obstacle_min_range: 0.0
+          raytrace_max_range: 12.0
+          raytrace_min_range: 0.0
+          inf_is_valid: false
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+      always_send_full_costmap: True
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_footprint
+      use_sim_time: True  # SIM
+      transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock
+      footprint: "[[0.35, 0.25], [0.35, -0.25], [-0.35, -0.25], [-0.35, 0.25]]"
+      resolution: 0.05
+      track_unknown_space: false  # SIM: no prior map; treat unobserved cells as free so open-ground goals are plannable
+      rolling_window: true  # SIM: no octomap/static map in sim, so roll a local-ish global window around the robot
+      width: 40  # SIM: 40m window (real file is a fixed 100m static-map costmap)
+      height: 40  # SIM
+      plugins: ["obstacle_layer", "inflation_layer"]  # SIM: no static_layer (octomap /projected_map absent in sim)
+      obstacle_layer:  # SIM: same /scan source as the local costmap so global plans avoid sensed obstacles
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          data_type: "LaserScan"
+          marking: true
+          clearing: true
+          max_obstacle_height: 2.0
+          obstacle_max_range: 10.0
+          obstacle_min_range: 0.0
+          raytrace_max_range: 12.0
+          raytrace_min_range: 0.0
+          inf_is_valid: false
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.2  # kept at 0.2 to match the real-file global setting (deliberate: allows tight corridors)
+      always_send_full_costmap: True
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    use_sim_time: True  # SIM
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: true
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 5.0
+      motion_model_for_search: "MOORE"  # 8-connected grid for the omni base
+      cost_penalty: 2.0
+      retrospective_penalty: 0.015
+      lookup_table_size: 20.0
+      cache_obstacle_heuristic: false
+      smooth_path: true
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: True  # SIM
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+    global_frame: map
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock (real file: 0.3)
+    use_sim_time: True  # SIM
+    simulate_ahead_time: 2.5
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.2
+    rotational_acc_lim: 2.5
+
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: True  # SIM
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: True  # SIM
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: True
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: True  # SIM
+    smoothing_frequency: 20.0
+    scale_velocities: False
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.26, 0.26, 1.5]  # angular 1.5 so it does not clip the rotation-shim goal spin
+    min_velocity: [-0.26, -0.26, -1.5]
+    max_accel: [0.8, 0.8, 2.5]  # angular 2.5 matches shim max_angular_accel
+    max_decel: [-0.8, -0.8, -2.5]
+    odom_topic: "/odom"  # SIM: Gazebo odometry (real: /fastlio2/lio_odom)
+    odom_duration: 0.1
+    deadband_velocity: [0.02, 0.02, 0.02]
+    velocity_timeout: 1.0

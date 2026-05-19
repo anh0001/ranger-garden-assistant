@@ -13,6 +13,17 @@
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
 
+  <!-- Pick-and-place demo node -->
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+
   <!-- Robot description -->
   <exec_depend>ranger_description</exec_depend>
   <exec_depend>xacro</exec_depend>

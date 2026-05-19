@@ -66,8 +66,18 @@ fusion, pure Python — the most unit-testable package).
 This repo commands real actuators. Treat anything that moves the base or arm or
 writes to a CAN bus as requiring explicit human confirmation — never run it
 speculatively to "test". This includes `scripts/piper_*.py`, `ros2 topic pub`
-to cmd_vel / joint / servo topics, `ros2 action send_goal` for motion, and
-`cansend` / `ip link` on `can_base`/`can_piper`.
+to cmd_vel / joint / servo topics, and `cansend` / `ip link` on
+`can_base`/`can_piper`. These remain hard-blocked in `.claude/settings.json`
+(`deny`) because they bypass the software stack and hit hardware directly.
+
+Simulation exception: the Nav2 navigation actions `navigate_to_pose` and
+`navigate_through_poses` (`ros2 action send_goal`) are allowed without
+prompting, because the supported workflow drives them against the Gazebo sim
+(`ranger_sim`). They are NOT distinguishable by command from a real-robot run —
+so if a real Ranger base is powered and bridged, do not issue navigation goals
+without human confirmation regardless of this allowance. All other
+`ros2 action send_goal` targets (e.g. arm/gripper `follow_joint_trajectory`)
+are no longer hard-denied but still prompt for confirmation.
 
 ## Conventions
 

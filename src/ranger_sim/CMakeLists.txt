@@ -8,6 +8,14 @@ install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )
 
+# Install Python node scripts as executables
+install(PROGRAMS
+  scripts/base_joint_state_publisher.py
+  scripts/pick_place_demo.py
+  scripts/grasp_magnet.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Install config files
 install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config

@@ -23,6 +23,15 @@
   gz_type_name: ignition.msgs.Pose_V
   direction: GZ_TO_ROS
 
+# World-frame poses of all moving entities (cup, ranger links incl.
+# piper_link6). grasp_magnet reads the gripper pose from here so it is
+# in the exact same world frame as the cup it repositions.
+- ros_topic_name: /gz_world_poses
+  gz_topic_name: /world/garden_world/dynamic_pose/info
+  ros_type_name: tf2_msgs/msg/TFMessage
+  gz_type_name: ignition.msgs.Pose_V
+  direction: GZ_TO_ROS
+
 # LiDAR (Gazebo -> ROS)
 - topic_name: /scan
   ros_type_name: sensor_msgs/msg/PointCloud2

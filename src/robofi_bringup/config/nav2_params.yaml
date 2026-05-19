@@ -47,7 +47,7 @@ bt_navigator:  # original: (none); Behavior Tree navigator node; orchestrates Na
     odom_topic: /fastlio2/lio_odom  # original: /odom; this repo standardizes Nav2 on FASTLIO2 odometry.
     bt_loop_duration: 10  # original: 10; How often (Hz) the behavior tree ticks; lower numbers slow reactions.
     default_server_timeout: 20  # original: 20; Default timeout for BT actions/services; raise for slow servers.
-    wait_for_service_timeout: 1000  # original: 1000; How long to wait for service discovery; increase when nodes start slowly.; Not set in original; large timeout to tolerate slow bringup of servers.
+    wait_for_service_timeout: 10000  # MILLISECONDS (not seconds!). 1000 = only 1.0s: in sim the clear-costmap services aren't discoverable that fast during BT activation, so Humble's BtServiceNode throws and the real error is masked as the cryptic "Exception when loading BT: basic_string::_M_create" (a Nav2 Humble error-string-construction bug). 10000 = 10s tolerates slow sim bringup.
     action_server_result_timeout: 900.0  # original: 900.0; Time before BT gives up waiting on an action result.; Not set in original; allow long outdoor missions before timing out.
     navigators: ["navigate_to_pose", "navigate_through_poses"]  # original: ["navigate_to_pose", "navigate_through_poses"]; List of navigator action servers to start; include pose/waypoint flavors you need.; Explicit navigators; original relies on defaults.
     navigate_to_pose:  # original: (none); Configuration block for the NavigateToPose action server.
@@ -107,7 +107,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
   ros__parameters:  # original: (none); ROS 2 parameter namespace for this node; adjust values inside this block.
     use_sim_time: False  # original: True; controller runs on real robot time.
     odom_topic: "/fastlio2/lio_odom"  # original: /odom; align controller with FASTLIO2 odometry per repo conventions.
-    controller_frequency: 10.0  # REDUCED from 15Hz to 10Hz - MPPI needs more time per cycle
+    controller_frequency: 20.0  # RESTORED to 20Hz. The 10Hz "compute-saving" setting was the single biggest cause of the slow, coarse final goal-heading alignment: the rotation shim and MPPI only re-planned every 100ms. Compute is bounded via batch_size/time_steps instead (see below), which is the correct knob.
     min_x_velocity_threshold: 0.001  # original: 0.001; Below this linear x velocity commands are forced to zero.
     min_y_velocity_threshold: 0.001  # original: 0.5; threshold for omnidirectional lateral motion detection.
     min_theta_velocity_threshold: 0.001  # original: 0.001; Below this angular velocity commands are forced to zero.
@@ -123,12 +123,21 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       stateful: True  # original: True; When true the plugin remembers state between goals; turn off for stateless behavior.
       plugin: "nav2_controller::SimpleGoalChecker"  # original: "nav2_controller::SimpleGoalChecker"; Fully qualified plugin class implementing this capability.
       xy_goal_tolerance: 0.25  # Position tolerance (m) - reasonable for outdoor navigation
-      yaw_goal_tolerance: 0.25  # INCREASED from 0.15 (~14°) - more relaxed to prevent rotation oscillation
-    FollowPath:  # MPPI Controller: Model Predictive Path Integral controller for omnidirectional robot
-      plugin: "nav2_mppi_controller::MPPIController"  # Direct MPPI without rotation shim for omni robots
+      yaw_goal_tolerance: 0.10  # ~5.7°: tightened back down. The shim's accel-limited in-place rotation decelerates cleanly into tolerance, so the old anti-oscillation relaxation (0.25) is no longer needed and final heading is now both fast AND precise.
+    FollowPath:  # RotationShimController wrapping MPPI: fast deterministic in-place rotation to the GOAL heading, MPPI for all path travel.
+      plugin: "nav2_rotation_shim_controller::RotationShimController"  # Humble binary supports rotate_to_goal_heading (verified against humble branch source).
+      primary_controller: "nav2_mppi_controller::MPPIController"  # MPPI still does 100% of path tracking + omnidirectional strafing; shim only intercepts the final yaw alignment.
+      # --- Shim behavior ---
+      rotate_to_goal_heading: true  # KEY FIX: once inside xy_goal_tolerance the shim regains control and rotates in place to the goal yaw with a deterministic P+accel-limited primitive, instead of MPPI's slow sampling-based creep that caused the long wait at the goal.
+      angular_dist_threshold: 3.2  # > pi: fully disables the START-of-path in-place rotation (3.0 still fired above ~172 deg). This is an omni base that strafes onto the path; only the goal-heading rotation is active. Lower this (e.g. 0.785) if you also want start-of-path heading alignment.
+      forward_sampling_distance: 0.5  # Path sample distance for the start-rotation heading estimate (only relevant if angular_dist_threshold is lowered).
+      rotate_to_heading_angular_vel: 1.4  # In-place rotation speed (rad/s). RAISED from 0.9: the goal rotation was slow partly because it was throttled here AND clipped again by the velocity_smoother. Kept <= the new wz_max (1.5) and velocity_smoother max angular (1.5) so it is NOT clipped.
+      max_angular_accel: 2.5  # rad/s^2. RAISED from 1.5 so the shim ramps to rotate_to_heading_angular_vel quickly instead of crawling. Matches the new velocity_smoother max_accel[2] (2.5) and MPPI az_max (2.5) so it is not clipped and still decelerates cleanly into yaw_goal_tolerance.
+      simulate_ahead_time: 1.0  # Collision-check horizon (s) while the shim rotates in place.
+      # --- Primary controller (MPPI) parameters: live at this same level per Nav2 rotation-shim convention ---
       time_steps: 24  # REDUCED from 42: 24 steps * 0.1s = 2.4s lookahead (shorter but sufficient)
       model_dt: 0.1  # INCREASED from 0.067s to 0.1s - coarser timestep reduces computation
-      batch_size: 500  # REDUCED from 1000 to 500 - significantly reduces computation
+      batch_size: 400  # REDUCED to 400 (from 500). This, not controller_frequency, is the right place to bound compute on the Jetson Orin: fewer sampled rollouts per cycle while keeping the 20Hz replan rate that makes goal alignment responsive.
       vx_std: 0.2  # Standard deviation for forward velocity sampling (m/s); tune for exploration vs exploitation
       vy_std: 0.2  # Standard deviation for lateral velocity sampling (m/s); ENABLED for omnidirectional motion
       wz_std: 0.3  # RENAMED from wx_std: Standard deviation for angular velocity sampling (rad/s)
@@ -136,16 +145,16 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       vx_min: -0.26  # Minimum forward velocity (m/s); allows reverse motion
       vy_max: 0.26  # Maximum lateral velocity (m/s); ENABLED for omnidirectional strafing
       vy_min: -0.26  # Minimum lateral velocity (m/s); full omnidirectional capability
-      wz_max: 1.0  # Maximum angular velocity (rad/s); matches platform rotation capability
+      wz_max: 1.5  # Maximum angular velocity (rad/s). RAISED from 1.0 so MPPI's own rotation near the goal is not the bottleneck either; well within the Ranger Mini's rotation capability.
       ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
       ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
       ay_max: 0.6  # Maximum lateral acceleration (m/s²); ENABLED for omnidirectional dynamics
-      az_max: 1.5  # Maximum angular acceleration (rad/s²); smooth rotation changes
+      az_max: 2.5  # NOTE: stock Humble nav2_mppi_controller ignores ax/ay/az (acceleration constraints were added post-Humble). The effective angular-accel limit is velocity_smoother max_accel[2] (2.5), which is the real knob. Kept here only for forward-compat / documentation.
       iteration_count: 1  # Number of MPPI iterations per control cycle; 1 is typically sufficient
       prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
       transform_tolerance: 0.2  # TF tolerance (s); increase if transforms arrive late with FASTLIO2
       motion_model: "Omni"  # CRITICAL: Motion model for omnidirectional robot (Omni/DiffDrive/Ackermann)
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PreferForwardCritic"]  # REMOVED PathAngleCritic (disabled anyway)
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic"]  # REMOVED PreferForwardCritic: it is meant for non-holonomic robots that must drive forward. On this Omni (swerve) base it penalizes the in-place rotation and strafing needed to settle at the goal, which made MPPI creep instead of rotate. PathAngleCritic also intentionally absent (holonomic).
       ConstraintCritic:  # Enforces kinematic and safety constraints
         enabled: true
         cost_power: 1  # Power order for constraint cost (linear)
@@ -153,22 +162,18 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       GoalCritic:  # Attracts robot to goal position
         enabled: true
         cost_power: 1
-        cost_weight: 5.0  # Moderate weight for goal position - increased for better goal reaching
+        cost_weight: 8.0  # RAISED from 5.0. A weak GoalCritic let MPPI sample tiny velocities and *creep* into xy_goal_tolerance; the rotation shim only takes over once XY tolerance is met, so a slow XY approach directly delays the fast goal rotation. Stronger pull = decisive arrival, earlier shim handoff.
         threshold_to_consider: 1.4  # Start considering goal attraction at 1.4m distance
       GoalAngleCritic:  # Attracts robot to goal orientation
         enabled: true
         cost_power: 1
-        cost_weight: 5.0  # INCREASED - critical for rotation tasks, stronger goal angle attraction
-        threshold_to_consider: 1.0  # INCREASED - start aligning orientation earlier (1.0m from goal)
-      PreferForwardCritic:  # Penalizes reverse motion to prefer forward driving
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.0  # REDUCED - less aggressive to allow smoother rotation maneuvers
+        cost_weight: 8.0  # RAISED from 5.0. With PreferForwardCritic gone there is no critic fighting heading convergence, so a stronger GoalAngleCritic makes MPPI carry the robot into the goal already near the correct yaw — the shim then only has a small residual to finish.
+        threshold_to_consider: 1.0  # start aligning orientation 1.0m from goal
       CostCritic:  # Uses costmap to avoid obstacles
         enabled: true
         cost_power: 1
         cost_weight: 3.5  # INCREASED weight for better obstacle avoidance - was too low at 2.5
-        critical_cost: 300.0  # Costmap cost above which trajectory is rejected (inscribed radius)
+        critical_cost: 253.0  # Costmap cost above which a trajectory is rejected. Costmap costs cap at 255; 253 ~= inscribed-radius cost, so this now actually rejects near-collision trajectories (the old 300.0 was unreachable and never triggered).
         consider_footprint: false  # DISABLED footprint checking - use inflation instead (much faster)
         collision_cost: 1000000.0  # Cost assigned to trajectories in collision
         near_goal_distance: 0.5  # Distance (m) to goal where costmap influence is reduced
@@ -285,13 +290,10 @@ planner_server:  # original: (none); Global planner server configuration block.
       max_on_approach_iterations: 1000  # Max iterations when close to goal.
       max_planning_time: 5.0  # Maximum planning time in seconds (generous for outdoor).
       motion_model_for_search: "MOORE"  # 8-connected grid for omnidirectional motion (vs 4-connected).
-      angle_quantization_bins: 72  # Number of angle bins for smooth orientation (72 = 5° resolution).
-      analytic_expansion_ratio: 3.5  # When to use analytic expansion vs search.
-      analytic_expansion_max_length: 3.0  # Max length for analytic expansion.
-      minimum_turning_radius: 0.20  # Tight turns allowed for omnidirectional base.
-      reverse_penalty: 2.0  # Penalty for reverse motion.
-      change_penalty: 0.0  # No penalty for direction change (omni can move any direction).
-      non_straight_penalty: 1.2  # Small penalty for non-straight paths.
+      # NOTE: angle_quantization_bins / analytic_expansion_* / minimum_turning_radius /
+      # reverse_penalty / change_penalty / non_straight_penalty are SmacPlannerHybrid
+      # parameters. SmacPlanner2D (a holonomic grid planner) silently ignores them, so
+      # they were removed to avoid implying car-like behavior on this omni base.
       cost_penalty: 2.0  # Penalty weight for high-cost areas (respects inflation).
       retrospective_penalty: 0.015  # Penalty for retrospective search.
       lookup_table_size: 20.0  # Size of lookup table for heuristics.
@@ -354,10 +356,10 @@ velocity_smoother:  # original: (none); Velocity smoother node configuration blo
     smoothing_frequency: 20.0  # original: 20.0; How fast the smoother filters incoming cmd_vel.
     scale_velocities: False  # original: False; Scale commands proportionally when smoothing rather than clipping.
     feedback: "OPEN_LOOP"  # original: "OPEN_LOOP"; Feedback mode; OPEN_LOOP ignores odom while CLOSED_LOOP tracks it.
-    max_velocity: [0.26, 0.26, 1.0]  # original: [0.26, 0.0, 1.0]; ENABLED omnidirectional Y velocity.
-    min_velocity: [-0.26, -0.26, -1.0]  # original: [-0.26, 0.0, -1.0]; ENABLED reverse lateral motion.
-    max_accel: [0.8, 0.8, 1.5]  # original: [2.5, 0.0, 3.2]; ENABLED omnidirectional lateral acceleration.
-    max_decel: [-0.8, -0.8, -1.5]  # original: [-2.5, 0.0, -3.2]; ENABLED omnidirectional lateral deceleration.
+    max_velocity: [0.26, 0.26, 1.5]  # original: [0.26, 0.0, 1.0]; angular RAISED 1.0->1.5 so it no longer clips the rotation-shim goal spin (must be >= shim rotate_to_heading_angular_vel and wz_max).
+    min_velocity: [-0.26, -0.26, -1.5]  # original: [-0.26, 0.0, -1.0]; symmetric with max for in-place rotation either direction.
+    max_accel: [0.8, 0.8, 2.5]  # original: [2.5, 0.0, 3.2]; angular RAISED 1.5->2.5 to match shim max_angular_accel/MPPI az_max so the spin-up is not clipped.
+    max_decel: [-0.8, -0.8, -2.5]  # original: [-2.5, 0.0, -3.2]; symmetric angular decel so it still brakes cleanly into yaw_goal_tolerance.
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
     deadband_velocity: [0.02, 0.02, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands including lateral.

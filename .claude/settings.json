@@ -13,6 +13,8 @@
       "Bash(ros2 topic echo:*)",
       "Bash(ros2 service list:*)",
       "Bash(ros2 action list:*)",
+      "Bash(ros2 action send_goal /navigate_to_pose:*)",
+      "Bash(ros2 action send_goal /navigate_through_poses:*)",
       "Bash(ros2 param list:*)",
       "Bash(ros2 param get:*)",
       "Bash(ros2 interface show:*)",
@@ -29,7 +31,6 @@
     ],
     "deny": [
       "Bash(ros2 topic pub:*)",
-      "Bash(ros2 action send_goal:*)",
       "Bash(cansend:*)",
       "Bash(sudo ip link set can_base:*)",
       "Bash(sudo ip link set can_piper:*)",

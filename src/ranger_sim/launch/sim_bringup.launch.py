@@ -18,7 +18,7 @@ from launch.actions import (
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import SetParameter
+from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -105,6 +105,40 @@ def generate_launch_description():
             GroupAction(
                 condition=IfCondition(launch_nav),
                 actions=[
+                    # SIM-ONLY: disable the Nav2 lifecycle bond watchdog.
+                    # Stock navigation_launch.py constructs
+                    # lifecycle_manager_navigation with an inline 3-key param
+                    # dict and does NOT pass it the params_file, so
+                    # bond_timeout in nav2_sim.yaml is ignored (stays 4.0s).
+                    # A scoped SetParameter injects it into every node in
+                    # this GroupAction, including the lifecycle manager
+                    # (which sets no bond_timeout of its own, so this lands).
+                    # On a loaded box / with intermittent Gazebo TF the
+                    # controller_server executor stalls >4s and the watchdog
+                    # kills the whole stack on a false positive. This is a
+                    # SIM workaround only: real hardware uses a different
+                    # params file + FASTLIO2 and MUST keep the watchdog live
+                    # (a wedged server there is a real fault). The proper
+                    # sim correctness fix is making odom->base_footprint
+                    # continuous; tracked separately.
+                    SetParameter(name="bond_timeout", value=0.0),
+                    SetParameter(name="attempt_respawn_reconnection",
+                                 value=True),
+                    # Sim localization: Gazebo's DiffDrive plugin already
+                    # publishes a drift-free odom->base_footprint, so the
+                    # real-stack FASTLIO2 map->odom (which needs Livox 3D
+                    # points, not bridged here) is replaced by a static
+                    # identity map->odom. This is the only piece Nav2 needs
+                    # to have a usable `map` frame in simulation.
+                    Node(
+                        package="tf2_ros",
+                        executable="static_transform_publisher",
+                        name="sim_map_to_odom",
+                        arguments=["0", "0", "0", "0", "0", "0",
+                                   "map", "odom"],
+                        parameters=[{"use_sim_time": use_sim_time}],
+                        output="screen",
+                    ),
                     IncludeLaunchDescription(
                         PythonLaunchDescriptionSource(
                             PathJoinSubstitution([
@@ -114,6 +148,18 @@ def generate_launch_description():
                         ),
                         launch_arguments={
                             "use_sim_time": "true",
+                            # Exercise the repo's tuned Nav2 config (RotationShimController +
+                            # MPPI) in sim, not the nav2_bringup defaults.
+                            # Sim-specific Nav2 params: same controller/
+                            # planner tuning as robofi_bringup/config/
+                            # nav2_params.yaml, but costmaps fed by the
+                            # bridged /scan and odom from Gazebo /odom (the
+                            # real file uses STVL + FASTLIO2 cloud + octomap,
+                            # none of which exist in sim).
+                            "params_file": PathJoinSubstitution([
+                                FindPackageShare("ranger_sim"),
+                                "config", "nav2_sim.yaml",
+                            ]),
                         }.items(),
                     ),
                 ],

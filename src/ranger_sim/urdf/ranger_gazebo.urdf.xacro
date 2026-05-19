@@ -5,7 +5,8 @@
   Includes the real robot description (with Gazebo Classic plugin disabled)
   and adds:
     - Gazebo Fortress ros2_control plugin (gz_ros2_control) for the arm
-    - DiffDrive plugin for base mobility (holonomic approximation for v1)
+    - True holonomic base (VelocityControl + OdometryPublisher) matching
+      the real swerve robot, so the shipped Omni MPPI tuning is exercised
     - Simulated Livox-style lidar
     - Simulated front camera (fisheye approximation)
     - Simulated wrist RGBD camera
@@ -84,26 +85,44 @@
     </plugin>
   </gazebo>
 
+  <!-- Grasp-fix is handled by the grasp_magnet node (pose-follow virtual
+       attach via the Gazebo /world/<world>/set_pose service), not a
+       DetachableJoint plugin: in Fortress DetachableJoint starts attached
+       and drags the object off the table before any ROS node can detach
+       it, and its Empty trigger / state topics did not bridge reliably.
+       See scripts/grasp_magnet.py. -->
+
   <!-- ================================================================== -->
-  <!-- Base mobility: DiffDrive approximation (v1, holonomic deferred)    -->
-  <!-- Uses front-left/right wheels for differential drive.               -->
-  <!-- Steering/wheel joints are present for visuals but not actively     -->
-  <!-- controlled by this plugin.                                         -->
+  <!-- Base mobility: TRUE HOLONOMIC sim base (matches real swerve robot)  -->
+  <!--                                                                    -->
+  <!-- The real Ranger Mini 3.0 is omnidirectional (swerve wheels): it    -->
+  <!-- translates in any direction (vx, vy) and rotates (wz). To exercise  -->
+  <!-- the SAME RotationShim + MPPI "Omni" tuning we ship for hardware     -->
+  <!-- (robofi_bringup/config/nav2_params.yaml) without faking a mecanum   -->
+  <!-- or a full swerve drivetrain, the sim base is driven kinematically: -->
+  <!--   * VelocityControl   - consumes full vx,vy,wz from /cmd_vel       -->
+  <!--   * OdometryPublisher  - emits /odom + odom->base_footprint TF      -->
+  <!-- (dimensions=2 -> planar). This is why the earlier MecanumDrive      -->
+  <!-- attempt produced no odom/TF: MecanumDrive has no odom publisher;    -->
+  <!-- OdometryPublisher is the missing piece. nav2_sim.yaml stays Omni    -->
+  <!-- with nonzero vy - no controller behavior change needed.            -->
   <!-- ================================================================== -->
   <gazebo>
-    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
-      <left_joint>fl_wheel</left_joint>
-      <right_joint>fr_wheel</right_joint>
-      <wheel_separation>0.38</wheel_separation>
-      <wheel_radius>0.09</wheel_radius>
-      <max_linear_acceleration>1.0</max_linear_acceleration>
-      <max_angular_acceleration>2.0</max_angular_acceleration>
+    <plugin filename="ignition-gazebo-velocity-control-system"
+            name="ignition::gazebo::systems::VelocityControl">
+      <topic>/cmd_vel</topic>
+      <initial_linear>0 0 0</initial_linear>
+      <initial_angular>0 0 0</initial_angular>
+    </plugin>
+    <plugin filename="ignition-gazebo-odometry-publisher-system"
+            name="ignition::gazebo::systems::OdometryPublisher">
+      <odom_frame>odom</odom_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+      <dimensions>2</dimensions>
       <odom_publish_frequency>50</odom_publish_frequency>
-      <topic>cmd_vel</topic>
-      <odom_topic>odom</odom_topic>
-      <frame_id>odom</frame_id>
-      <child_frame_id>base_footprint</child_frame_id>
+      <odom_topic>/odom</odom_topic>
       <tf_topic>/tf</tf_topic>
+      <gaussian_noise>0.0</gaussian_noise>
     </plugin>
   </gazebo>
 
