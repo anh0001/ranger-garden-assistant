@@ -18,6 +18,7 @@ msg/_*.py
 build_isolated/
 devel_isolated/
 .env
+bags/
 
 # Agent instruction files
 /*.png
