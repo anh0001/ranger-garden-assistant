@@ -8,15 +8,19 @@ world_frame: odom
 print_time_cost: false
 
 # LiDAR filtering and map resolution
-lidar_filter_num: 6
+# Bag analysis on Jetson Orin showed FASTLIO2 publish lag spikes >1s and odom
+# freezes up to 2.6s. lio_node is single-threaded (rclcpp::spin) and serializes
+# IESKF + body_cloud + world_cloud + path publish — so per-iter cost directly
+# bounds odom rate. The tunings below trade map fidelity for cycle headroom.
+lidar_filter_num: 8        # 6->8: skip more points per scan (downsample 1/8). Cuts IESKF correspondences/iter cost.
 lidar_min_range: 0.5
-lidar_max_range: 120.0
-scan_resolution: 0.15
-map_resolution: 0.25
+lidar_max_range: 50.0       # 120->50: garden ops never need 120m; ignoring far returns shrinks the point set + tightens local map.
+scan_resolution: 0.20       # 0.15->0.20: coarser voxel filter on the input scan.
+map_resolution: 0.40        # 0.25->0.40: coarser map voxel = much faster KNN in correspondence search.
 
 # Cube/map sizing
-cube_len: 300
-det_range: 60
+cube_len: 200               # 300->200: smaller ikd-tree footprint.
+det_range: 30               # 60->30: don't track points beyond 30m. Local map shrinks proportionally.
 move_thresh: 1.0
 
 # Noise parameters
@@ -27,8 +31,8 @@ nbg: 0.0001
 
 # Optimization settings
 imu_init_num: 20
-near_search_num: 5
-ieskf_max_iter: 5
+near_search_num: 3          # 5->3: faster KNN. Less accurate but still well-constrained with the new scan resolution.
+ieskf_max_iter: 3           # 5->3: cap IESKF iters per scan. Worst case scan still bounded in compute.
 
 # Extrinsics from the Livox Mid-360 IMU to LiDAR
 gravity_align: true

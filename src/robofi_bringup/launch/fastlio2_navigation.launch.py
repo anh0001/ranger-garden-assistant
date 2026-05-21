@@ -60,8 +60,14 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             "octomap_point_topic",
-            default_value="/fastlio2/world_cloud",
-            description="PointCloud2 topic fed into OctoMap.",
+            # Was "/fastlio2/world_cloud". Switched to body_cloud (per-scan, body
+            # frame, much smaller) so the heavy world_cloud topic loses its only
+            # subscriber. lio_node short-circuits the world_cloud publish when
+            # subscription_count == 0, which removes ~half of the per-iter
+            # PointCloud2 work and cuts the publish-side lag spikes observed in
+            # FASTLIO2 odom (max 1.2s arrival lag, 2.6s pose freezes).
+            default_value="/fastlio2/body_cloud",
+            description="PointCloud2 topic fed into OctoMap (body_cloud preferred over world_cloud for CPU).",
         ),
         DeclareLaunchArgument(
             "launch_pgo",

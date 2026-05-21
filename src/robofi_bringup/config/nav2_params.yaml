@@ -144,8 +144,8 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       wz_std: 0.25  # 0.3->0.25. Tighter sampling around the desired wz now that the base can't track aggressive rotations.
       vx_max: 0.26  # Maximum forward velocity (m/s); matches robot capability
       vx_min: 0.0  # 0->-0.26 disabled. Forward-only: reverse driving is blind because lidar only faces +x. Forces MPPI to plan forward-facing approaches.
-      vy_max: 0.18  # Balanced: enough strafe for obstacle avoidance, low enough that forward-bias critics dominate in clear paths.
-      vy_min: -0.18
+      vy_max: 0.0  # DiffDrive ignores vy but set to 0 for clarity. No lateral capability — robot uses forward+rotate for navigation/avoidance.
+      vy_min: 0.0
       wz_max: 0.9  # 1.5->0.9. Bag showed wz commands saturated at 1.5 but yaw barely changed — base can't track that fast. 0.9 matches what hardware actually realizes.
       ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
       ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
@@ -154,7 +154,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       iteration_count: 1  # Number of MPPI iterations per control cycle; 1 is typically sufficient
       prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
       transform_tolerance: 0.5  # 0.2->0.5. Real bag: "Lookup would require extrapolation into the future. Requested X but latest data at X-0.1s". FASTLIO2 publish jitter exceeds 0.2s window; 0.5s gives headroom (still investigate FASTLIO2 stamping/rate separately).
-      motion_model: "Omni"  # CRITICAL: Motion model for omnidirectional robot (Omni/DiffDrive/Ackermann)
+      motion_model: "Omni"  # Omnidirectional Ranger Mini V3.
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # PathAngleCritic + PreferForwardCritic RE-ADDED for forward-facing travel bias: the obstacle lidar only faces +x, so the robot must travel facing forward (not strafe/reverse blind). Both shut off inside threshold_to_consider 1.0 so they DON'T fight GoalAngleCritic's final in-place yaw alignment near the goal (that was the original reason PreferForwardCritic was removed; coordinated thresholds resolve it). Omni base + full vy retained — soft bias, not a lock. Sim-validated in nav2_sim.yaml.
       ConstraintCritic:  # Enforces kinematic and safety constraints
         enabled: true
@@ -172,13 +172,13 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
         threshold_to_consider: 0.40  # 1.0->0.40. Defer goal-yaw alignment until robot is tightly inside the new xy_goal_tolerance (0.40) — lets PreferForwardCritic/PathAngleCritic keep robot facing path during transit, and the rotation shim does the actual final yaw.
       CostCritic:  # Uses costmap to avoid obstacles
         enabled: true
-        cost_power: 1
-        cost_weight: 3.5  # INCREASED weight for better obstacle avoidance - was too low at 2.5
-        critical_cost: 253.0  # Costmap cost above which a trajectory is rejected. Costmap costs cap at 255; 253 ~= inscribed-radius cost, so this now actually rejects near-collision trajectories (the old 300.0 was unreachable and never triggered).
-        consider_footprint: false  # DISABLED footprint checking - use inflation instead (much faster)
-        collision_cost: 1000000.0  # Cost assigned to trajectories in collision
-        near_goal_distance: 0.5  # Distance (m) to goal where costmap influence is reduced
-        trajectory_point_step: 3  # INCREASED from 2 to 3 - check every 3rd point for efficiency
+        cost_power: 2  # 1->2. Quadratic cost penalty: cells deep in the inflation gradient are punished MUCH harder, so MPPI commits to wider arcs around obstacles instead of skimming the inflation edge.
+        cost_weight: 12.0  # 5->12. Match GoalCritic weight so the goal-pull can't dominate the obstacle-push (bag9 robot still hit obstacles with cost_weight 5).
+        critical_cost: 253.0  # Reject trajectories at inscribed-radius cost.
+        consider_footprint: true  # false->true. With DiffDrive motion model the MPPI rollouts are simpler so we can afford accurate footprint collision checks instead of relying purely on the inflation gradient. Rectangular footprint [0.7m x 0.5m] is small enough that the per-rollout cost remains tractable.
+        collision_cost: 1000000.0
+        near_goal_distance: 0.5
+        trajectory_point_step: 3
       PathAlignCritic:  # Aligns velocity vector with path direction
         enabled: true
         cost_power: 1
@@ -224,9 +224,9 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
       footprint: "[[0.35, 0.25], [0.35, -0.25], [-0.35, -0.25], [-0.35, 0.25]]"  # Rectangular footprint for Ranger Mini 3.0 (approx 0.7m x 0.5m)
       plugins: ["stvl_layer", "inflation_layer"]  # CHANGED to SpatioTemporalVoxelLayer for 3D LiDAR support.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
-        plugin: "nav2_costmap_2d::InflationLayer"  # original: "nav2_costmap_2d::InflationLayer"; Fully qualified plugin class implementing this capability.
-        cost_scaling_factor: 3.0  # original: 3.0; Controls how quickly inflated cost decays from the obstacle.
-        inflation_radius: 0.55  # original: 0.55; Increased for better safety buffer in dynamic environments.
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 2.5  # 3.0->2.5. Gentler decay so MEDIUM cost extends further out, biasing MPPI to swing wider around obstacles. Combined with the larger radius below.
+        inflation_radius: 0.80  # 0.55->0.80. Bag8: robot brushed an obstacle in transit. Footprint half-diagonal ~0.43m + 0.80m radius = ~37cm buffer past corner — comfortable margin given the forward-only lidar.
       stvl_layer:  # SpatioTemporalVoxelLayer for 3D obstacle detection from Livox Mid-360 LiDAR.
         plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Recommended for 3D LiDARs (Nav2 tuning guide).
         enabled: True  # Enable this layer for real-time 3D obstacle detection.
@@ -284,9 +284,9 @@ global_costmap:  # original: (none); Global planning costmap configuration block
         subscribe_to_updates: True  # Allow incremental map updates from Octomap Server during navigation.
         first_map_only: False  # Accept map updates continuously (not just first map); allows map refinement during operation.
       inflation_layer:  # Inflation layer: creates safety buffer around obstacles for path planning.
-        plugin: "nav2_costmap_2d::InflationLayer"  # Standard inflation plugin for Nav2.
-        cost_scaling_factor: 3.0  # Cost decay rate (higher = smoother gradient); creates gentle potential field for planning.
-        inflation_radius: 0.2  # Inflation radius (20cm); conservative for global planning, allows tight corridors.
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 2.5  # 3.0->2.5. Match local inflation for consistent gradient between planner and controller.
+        inflation_radius: 0.60  # 0.2->0.60. Was way too tight: 0.20m << footprint half-diag (0.43m) meant the global planner could route through cells where the robot doesn't fit. 0.60m gives planner real clearance.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 planner_server:  # original: (none); Global planner server configuration block.
@@ -376,5 +376,5 @@ velocity_smoother:  # original: (none); Velocity smoother node configuration blo
     max_decel: [-0.8, -0.6, -1.2]
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
-    deadband_velocity: [0.02, 0.02, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands including lateral.
+    deadband_velocity: [0.02, 0.05, 0.02]  # vy 0.10->0.05. The 0.10 deadband killed obstacle-avoidance strafe in transit (bag7 ran into an obstacle). 0.05 still suppresses MPPI's micro-residual vy during near-goal oscillation (so base stays SPINNING for the rotation-shim handoff) but lets MPPI's real avoidance strafes (>0.05 m/s) through. Rotation shim sends exactly vy=0 so it's unaffected. Root bug is upstream in ranger_messenger.cpp: ANY vy!=0 → PARALLEL mode → wz DROPPED. Bench tests (A wz=0.5/B wz=1.0) rotated 22-36 deg/s ✓; mixed vy+wz rotated 0 deg/s ✗.
     velocity_timeout: 1.0  # original: 1.0; Timeout (s) after which commands decay to zero if none received.
