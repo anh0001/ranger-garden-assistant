@@ -144,8 +144,8 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       wz_std: 0.25  # 0.3->0.25. Tighter sampling around the desired wz now that the base can't track aggressive rotations.
       vx_max: 0.26  # Maximum forward velocity (m/s); matches robot capability
       vx_min: 0.0  # 0->-0.26 disabled. Forward-only: reverse driving is blind because lidar only faces +x. Forces MPPI to plan forward-facing approaches.
-      vy_max: 0.22  # 0.18->0.22. Inside 1.2m of goal forward-bias critics turn off; faster strafe shortens final approach (was 28s to close 0.5m->0.25m).
-      vy_min: -0.22
+      vy_max: 0.18  # Balanced: enough strafe for obstacle avoidance, low enough that forward-bias critics dominate in clear paths.
+      vy_min: -0.18
       wz_max: 0.9  # 1.5->0.9. Bag showed wz commands saturated at 1.5 but yaw barely changed — base can't track that fast. 0.9 matches what hardware actually realizes.
       ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
       ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
@@ -370,10 +370,10 @@ velocity_smoother:  # original: (none); Velocity smoother node configuration blo
     smoothing_frequency: 20.0  # original: 20.0; How fast the smoother filters incoming cmd_vel.
     scale_velocities: False  # original: False; Scale commands proportionally when smoothing rather than clipping.
     feedback: "OPEN_LOOP"  # original: "OPEN_LOOP"; Feedback mode; OPEN_LOOP ignores odom while CLOSED_LOOP tracks it.
-    max_velocity: [0.26, 0.22, 0.9]  # vy 0.18->0.22: match MPPI for faster final approach.
-    min_velocity: [0.0, -0.22, -0.9]
-    max_accel: [0.8, 0.7, 1.2]  # lateral accel slight bump.
-    max_decel: [-0.8, -0.7, -1.2]
+    max_velocity: [0.26, 0.18, 0.9]  # vy matches MPPI.
+    min_velocity: [0.0, -0.18, -0.9]  # vx_min 0: no reverse driving (blind lidar).
+    max_accel: [0.8, 0.6, 1.2]
+    max_decel: [-0.8, -0.6, -1.2]
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
     deadband_velocity: [0.02, 0.02, 0.02]  # original: [0.0, 0.0, 0.0]; ignore tiny commands including lateral.
