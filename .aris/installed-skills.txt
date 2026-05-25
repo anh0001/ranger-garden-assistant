@@ -1,7 +1,7 @@
 version	1
-repo_root	/home/anhar/codes/Auto-claude-code-research-in-sleep
-project_root	/home/anhar/codes/ranger-garden-assistant
-generated	2026-05-18T02:33:23Z
+repo_root	/home/robofi/codes/Auto-claude-code-research-in-sleep
+project_root	/home/robofi/codes/ranger-garden-assistant
+generated	2026-05-25T02:43:28Z
 kind	name	source_rel	target_rel	mode
 skill	ablation-planner	skills/ablation-planner	.claude/skills/ablation-planner	symlink
 skill	alphaxiv	skills/alphaxiv	.claude/skills/alphaxiv	symlink
@@ -31,6 +31,7 @@ skill	grant-proposal	skills/grant-proposal	.claude/skills/grant-proposal	symlink
 skill	idea-creator	skills/idea-creator	.claude/skills/idea-creator	symlink
 skill	idea-discovery	skills/idea-discovery	.claude/skills/idea-discovery	symlink
 skill	idea-discovery-robot	skills/idea-discovery-robot	.claude/skills/idea-discovery-robot	symlink
+skill	interview-cheatsheet	skills/interview-cheatsheet	.claude/skills/interview-cheatsheet	symlink
 skill	invention-structuring	skills/invention-structuring	.claude/skills/invention-structuring	symlink
 skill	jurisdiction-format	skills/jurisdiction-format	.claude/skills/jurisdiction-format	symlink
 skill	kill-argument	skills/kill-argument	.claude/skills/kill-argument	symlink
@@ -60,6 +61,7 @@ skill	proof-checker	skills/proof-checker	.claude/skills/proof-checker	symlink
 skill	proof-writer	skills/proof-writer	.claude/skills/proof-writer	symlink
 skill	qzcli	skills/qzcli	.claude/skills/qzcli	symlink
 skill	rebuttal	skills/rebuttal	.claude/skills/rebuttal	symlink
+skill	render-html	skills/render-html	.claude/skills/render-html	symlink
 skill	research-lit	skills/research-lit	.claude/skills/research-lit	symlink
 skill	research-pipeline	skills/research-pipeline	.claude/skills/research-pipeline	symlink
 skill	research-refine	skills/research-refine	.claude/skills/research-refine	symlink

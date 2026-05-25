@@ -1,7 +1,7 @@
 version	1
 repo_root	/home/anhar/codes/Auto-claude-code-research-in-sleep
 project_root	/home/anhar/codes/ranger-garden-assistant
-generated	2026-05-18T02:31:41Z
+generated	2026-05-18T02:33:23Z
 kind	name	source_rel	target_rel	mode
 skill	ablation-planner	skills/ablation-planner	.claude/skills/ablation-planner	symlink
 skill	alphaxiv	skills/alphaxiv	.claude/skills/alphaxiv	symlink
