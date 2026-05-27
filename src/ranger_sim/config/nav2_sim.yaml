@@ -231,8 +231,8 @@ local_costmap:
           inf_is_valid: false
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        cost_scaling_factor: 3.5
+        inflation_radius: 0.40  # > inscribed 0.25; soft preference for MPPI rollouts. Footprint collision check handles hard avoidance.
       always_send_full_costmap: True
 
 global_costmap:
@@ -268,8 +268,8 @@ global_costmap:
           inf_is_valid: false
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.2  # kept at 0.2 to match the real-file global setting (deliberate: allows tight corridors)
+        cost_scaling_factor: 3.5
+        inflation_radius: 0.35  # 0.20 was BELOW inscribed 0.25 (planner could route through non-fitting cells). 0.35 = safe floor + corridor-friendly.
       always_send_full_costmap: True
 
 planner_server:

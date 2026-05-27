@@ -225,8 +225,8 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
       plugins: ["stvl_layer", "inflation_layer"]  # CHANGED to SpatioTemporalVoxelLayer for 3D LiDAR support.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5  # 3.0->2.5. Gentler decay so MEDIUM cost extends further out, biasing MPPI to swing wider around obstacles. Combined with the larger radius below.
-        inflation_radius: 0.80  # 0.55->0.80. Bag8: robot brushed an obstacle in transit. Footprint half-diagonal ~0.43m + 0.80m radius = ~37cm buffer past corner — comfortable margin given the forward-only lidar.
+        cost_scaling_factor: 3.5  # 2.5->3.5. Steeper decay: tight gradient near obstacles, fast falloff so MPPI sees free corridors instead of inflated walls. Combined with smaller radius below.
+        inflation_radius: 0.45  # 0.80->0.45. Hard collision avoidance now handled by CostCritic.consider_footprint=true; inflation is soft preference only. 0.45 > inscribed 0.25 (Nav2 floor) but small enough to keep tight garden corridors plannable.
       stvl_layer:  # SpatioTemporalVoxelLayer for 3D obstacle detection from Livox Mid-360 LiDAR.
         plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Recommended for 3D LiDARs (Nav2 tuning guide).
         enabled: True  # Enable this layer for real-time 3D obstacle detection.
@@ -250,7 +250,7 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
           marking: true  # Mark detected obstacles in the costmap.
           clearing: true  # Clear space using raycasting (remove obstacles when no longer detected).
           obstacle_range: 10.0  # Obstacle marking range (10m); focused on immediate surroundings for local avoidance.
-          min_obstacle_height: -0.2  # Minimum height in fastlio2_body frame (-20cm); negative due to 45° LiDAR tilt, detects ground obstacles.
+          min_obstacle_height: -0.10  # -0.20 -> -0.10. STVL applies this in costmap GLOBAL frame (odom) after TF transform, NOT in fastlio2_body source frame. With FASTLIO2 gravity_align=true and 45° tilted IMU, t_wi settles at ~+0.13m vertical bias after init, so transformed ground points land at z_odom ≈ -0.20 instead of -0.33 (= -lidar_height_above_ground). The old -0.20 threshold sat exactly on top of the drifted ground, letting front-facing ground returns pass through and mark phantom obstacles ahead of the robot. -0.10 gives ~0.10m safety margin above the +0.13m bias. Cost: obstacles shorter than ~23cm above true ground are also filtered (acceptable for garden ops). If FASTLIO2 vertical bias changes, retune.
           max_obstacle_height: 2.0  # Maximum height in fastlio2_body frame (2m); focuses on robot-height obstacles, excludes high overhangs.
           expected_update_rate: 0.0  # Expected sensor rate (0 = no timeout check); FASTLIO2 publishes at variable rate ~10Hz.
           observation_persistence: 0.0  # Don't persist observations; use voxel_decay for temporal filtering instead.
@@ -285,8 +285,8 @@ global_costmap:  # original: (none); Global planning costmap configuration block
         first_map_only: False  # Accept map updates continuously (not just first map); allows map refinement during operation.
       inflation_layer:  # Inflation layer: creates safety buffer around obstacles for path planning.
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5  # 3.0->2.5. Match local inflation for consistent gradient between planner and controller.
-        inflation_radius: 0.60  # 0.2->0.60. Was way too tight: 0.20m << footprint half-diag (0.43m) meant the global planner could route through cells where the robot doesn't fit. 0.60m gives planner real clearance.
+        cost_scaling_factor: 3.5  # Match local for consistent gradient between planner and controller.
+        inflation_radius: 0.35  # 0.60->0.35. Smaller global inflation so planner finds paths through narrow garden corridors. >0.25 inscribed (Nav2 floor); MPPI's footprint collision check provides the real safety margin.
       always_send_full_costmap: True  # original: True; Publish the entire costmap each cycle instead of tiles.
 
 planner_server:  # original: (none); Global planner server configuration block.
