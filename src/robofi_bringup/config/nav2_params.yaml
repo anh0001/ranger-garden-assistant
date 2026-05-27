@@ -140,21 +140,21 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       model_dt: 0.1  # 20 steps * 0.1s = 2.0s lookahead
       batch_size: 250  # 400->250. Bag showed 50% controller_frequency miss rate at 400x24; 250x20 leaves compute headroom.
       vx_std: 0.2  # Standard deviation for forward velocity sampling (m/s); tune for exploration vs exploitation
-      vy_std: 0.15  # 0.08->0.15. Allow lateral exploration for obstacle avoidance; PathAngleCritic + PreferForwardCritic (weights 12 + 12) still bias forward.
+      vy_std: 0.0  # DiffDrive: lateral noise generated only when is_holonomic_ (noise_generator.cpp); zero for hygiene.
       wz_std: 0.25  # 0.3->0.25. Tighter sampling around the desired wz now that the base can't track aggressive rotations.
       vx_max: 0.26  # Maximum forward velocity (m/s); matches robot capability
       vx_min: 0.0  # 0->-0.26 disabled. Forward-only: reverse driving is blind because lidar only faces +x. Forces MPPI to plan forward-facing approaches.
-      vy_max: 0.0  # DiffDrive ignores vy but set to 0 for clarity. No lateral capability — robot uses forward+rotate for navigation/avoidance.
+      vy_max: 0.0  # DiffDrive ignores vy (only used when isHolonomic()) but kept at 0 for clarity.
       vy_min: 0.0
       wz_max: 0.9  # 1.5->0.9. Bag showed wz commands saturated at 1.5 but yaw barely changed — base can't track that fast. 0.9 matches what hardware actually realizes.
       ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
       ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
-      ay_max: 0.6  # Maximum lateral acceleration (m/s²); ENABLED for omnidirectional dynamics
+      ay_max: 0.0  # DiffDrive: not a Humble MPPI param (kept for forward-compat); zero since no lateral dynamics.
       az_max: 1.2  # 2.5->1.2 for forward-compat. Real angular accel limit is velocity_smoother max_accel[2] (now 1.2).
       iteration_count: 1  # Number of MPPI iterations per control cycle; 1 is typically sufficient
       prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
       transform_tolerance: 0.5  # 0.2->0.5. Real bag: "Lookup would require extrapolation into the future. Requested X but latest data at X-0.1s". FASTLIO2 publish jitter exceeds 0.2s window; 0.5s gives headroom (still investigate FASTLIO2 stamping/rate separately).
-      motion_model: "Omni"  # Omnidirectional Ranger Mini V3.
+      motion_model: "DiffDrive"  # Swerve modules constrained to diff-drive: ranger_messenger.cpp drops wz whenever vy!=0 (PARALLEL mode bug); MPPI now plans forward+rotate only, matching what hardware can execute.
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # PathAngleCritic + PreferForwardCritic RE-ADDED for forward-facing travel bias: the obstacle lidar only faces +x, so the robot must travel facing forward (not strafe/reverse blind). Both shut off inside threshold_to_consider 1.0 so they DON'T fight GoalAngleCritic's final in-place yaw alignment near the goal (that was the original reason PreferForwardCritic was removed; coordinated thresholds resolve it). Omni base + full vy retained — soft bias, not a lock. Sim-validated in nav2_sim.yaml.
       ConstraintCritic:  # Enforces kinematic and safety constraints
         enabled: true
@@ -370,11 +370,11 @@ velocity_smoother:  # original: (none); Velocity smoother node configuration blo
     smoothing_frequency: 20.0  # original: 20.0; How fast the smoother filters incoming cmd_vel.
     scale_velocities: False  # original: False; Scale commands proportionally when smoothing rather than clipping.
     feedback: "OPEN_LOOP"  # original: "OPEN_LOOP"; Feedback mode; OPEN_LOOP ignores odom while CLOSED_LOOP tracks it.
-    max_velocity: [0.26, 0.18, 0.9]  # vy matches MPPI.
-    min_velocity: [0.0, -0.18, -0.9]  # vx_min 0: no reverse driving (blind lidar).
-    max_accel: [0.8, 0.6, 1.2]
-    max_decel: [-0.8, -0.6, -1.2]
+    max_velocity: [0.26, 0.0, 0.9]  # DiffDrive: y=0 to guarantee Twist.linear.y==0 reaches ranger_messenger.cpp (PARALLEL-mode bug drops wz on any vy!=0).
+    min_velocity: [0.0, 0.0, -0.9]  # vx_min 0: no reverse driving (blind lidar); vy_min 0: diff-drive.
+    max_accel: [0.8, 0.0, 1.2]
+    max_decel: [-0.8, 0.0, -1.2]
     odom_topic: "/fastlio2/lio_odom"  # original: odom; align smoothing with FASTLIO2 odometry.
     odom_duration: 0.1  # original: 0.1; Time window of odom data kept for smoothing.
-    deadband_velocity: [0.02, 0.05, 0.02]  # vy 0.10->0.05. The 0.10 deadband killed obstacle-avoidance strafe in transit (bag7 ran into an obstacle). 0.05 still suppresses MPPI's micro-residual vy during near-goal oscillation (so base stays SPINNING for the rotation-shim handoff) but lets MPPI's real avoidance strafes (>0.05 m/s) through. Rotation shim sends exactly vy=0 so it's unaffected. Root bug is upstream in ranger_messenger.cpp: ANY vy!=0 → PARALLEL mode → wz DROPPED. Bench tests (A wz=0.5/B wz=1.0) rotated 22-36 deg/s ✓; mixed vy+wz rotated 0 deg/s ✗.
+    deadband_velocity: [0.02, 0.0, 0.02]  # DiffDrive: vy locked to 0 by smoother limits above, deadband immaterial. vx/wz deadbands kept for near-goal oscillation suppression. Root issue: ranger_messenger.cpp drops wz when vy!=0 — fully avoided here by motion_model: DiffDrive + smoother y=0.
     velocity_timeout: 1.0  # original: 1.0; Timeout (s) after which commands decay to zero if none received.

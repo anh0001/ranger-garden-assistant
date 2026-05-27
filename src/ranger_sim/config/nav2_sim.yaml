@@ -131,21 +131,21 @@ controller_server:
       model_dt: 0.1
       batch_size: 400  # bound compute here, not via controller_frequency
       vx_std: 0.2
-      vy_std: 0.2
+      vy_std: 0.0  # DiffDrive: lateral noise gated by is_holonomic_ in noise_generator.cpp; zero for hygiene.
       wz_std: 0.3
       vx_max: 0.26
-      vx_min: -0.26
-      vy_max: 0.26  # omnidirectional strafing
-      vy_min: -0.26
+      vx_min: 0.0  # forward-only to mirror real-robot constraint (forward-facing lidar)
+      vy_max: 0.0  # DiffDrive: lateral sampling/integration only when isHolonomic()
+      vy_min: 0.0
       wz_max: 1.5  # so MPPI's own near-goal rotation is not the bottleneck either
       ax_max: 0.6
       ax_min: -0.6
-      ay_max: 0.6
+      ay_max: 0.0  # not a Humble MPPI param; kept for forward-compat
       az_max: 2.5  # NOTE: stock Humble MPPI ignores ax/ay/az; the real angular-accel limit is velocity_smoother max_accel[2]. Kept for documentation/forward-compat.
       iteration_count: 1
       prune_distance: 1.5
       transform_tolerance: 0.5  # SIM: laggy Gazebo TF/clock (real file: 0.2)
-      motion_model: "Omni"  # CRITICAL for the swerve/omni base
+      motion_model: "DiffDrive"  # Swerve mechanically omni, but ranger_messenger.cpp drops wz when vy!=0 (PARALLEL-mode bug). DiffDrive plans forward+rotate only.
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # PathAngleCritic biases +x toward path direction (forward-facing travel, lidar points where it goes); PreferForwardCritic penalizes reverse. Both shut off inside threshold_to_consider 1.0 so they don't fight GoalAngleCritic's final-yaw alignment.
       ConstraintCritic:
         enabled: true
@@ -349,11 +349,11 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
-    max_velocity: [0.26, 0.26, 1.5]  # angular 1.5 so it does not clip the rotation-shim goal spin
-    min_velocity: [-0.26, -0.26, -1.5]
-    max_accel: [0.8, 0.8, 2.5]  # angular 2.5 matches shim max_angular_accel
-    max_decel: [-0.8, -0.8, -2.5]
+    max_velocity: [0.26, 0.0, 1.5]  # DiffDrive: y=0 forces Twist.linear.y==0
+    min_velocity: [0.0, 0.0, -1.5]  # vx_min 0 mirrors real-robot forward-only constraint
+    max_accel: [0.8, 0.0, 2.5]  # angular 2.5 matches shim max_angular_accel
+    max_decel: [-0.8, 0.0, -2.5]
     odom_topic: "/odom"  # SIM: Gazebo odometry (real: /fastlio2/lio_odom)
     odom_duration: 0.1
-    deadband_velocity: [0.02, 0.02, 0.02]
+    deadband_velocity: [0.02, 0.0, 0.02]
     velocity_timeout: 1.0
