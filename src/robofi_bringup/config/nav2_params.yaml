@@ -136,21 +136,21 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       max_angular_accel: 1.2  # 2.5->1.2 rad/s^2. Gentler ramp matches the reduced rotate_to_heading_angular_vel and avoids commanding angular accel the base can't track.
       simulate_ahead_time: 1.0  # Collision-check horizon (s) while the shim rotates in place.
       # --- Primary controller (MPPI) parameters: live at this same level per Nav2 rotation-shim convention ---
-      time_steps: 20  # 24->20. With batch 250 below, total rollout states = 5000 (was 9600) which fits Jetson Orin 15Hz budget.
+      time_steps: 25  # 20->25 (smoothness pass 3, 2026-05-27). Extends rollout to 2.5s = 0.65m lookahead at vx_max 0.26. Pass 2 (wz_max cap) showed late-reaction dodge: capping wz made it worse, not better, because MPPI saw obstacle too late and had to swerve harder. Extend horizon so MPPI commits earlier with gentler arc. Total rollout states 250*25=6250 vs Pass 2's 300*20=6000; Pass 3 keeps batch 300 for ~7500 states (still within Orin headroom but monitor 15Hz miss).
       model_dt: 0.1  # 20 steps * 0.1s = 2.0s lookahead
-      batch_size: 250  # 400->250. Bag showed 50% controller_frequency miss rate at 400x24; 250x20 leaves compute headroom.
+      batch_size: 300  # 250->300. With the directional critics defanged and cost_power 1, each rollout is cheaper to evaluate, so reclaim some sampling diversity. Monitor controller_frequency miss rate; revert to 250 if 15Hz misses come back.
       vx_std: 0.2  # Standard deviation for forward velocity sampling (m/s); tune for exploration vs exploitation
       vy_std: 0.0  # DiffDrive: lateral noise generated only when is_holonomic_ (noise_generator.cpp); zero for hygiene.
-      wz_std: 0.25  # 0.3->0.25. Tighter sampling around the desired wz now that the base can't track aggressive rotations.
+      wz_std: 0.35  # 0.25->0.35. Wider angular sampling so MPPI explores decisive left/right arcs around obstacles instead of micro-tweaking and oscillating.
       vx_max: 0.26  # Maximum forward velocity (m/s); matches robot capability
       vx_min: 0.0  # 0->-0.26 disabled. Forward-only: reverse driving is blind because lidar only faces +x. Forces MPPI to plan forward-facing approaches.
       vy_max: 0.0  # DiffDrive ignores vy (only used when isHolonomic()) but kept at 0 for clarity.
       vy_min: 0.0
-      wz_max: 0.9  # 1.5->0.9. Bag showed wz commands saturated at 1.5 but yaw barely changed — base can't track that fast. 0.9 matches what hardware actually realizes.
+      wz_max: 0.9  # 0.7->0.9 (REVERTED 2026-05-27 pass 3). Pass-2 cap to 0.7 made dodge worse, not better: yaw overshoot doubled (18°→35°), y excursion +80%, travel +33% slower. Robot needs the full 0.9 rad/s to dodge agilely; address late reaction via time_steps extension instead.
       ax_max: 0.6  # Maximum forward acceleration (m/s²); gentler for outdoor robot stability
       ax_min: -0.6  # Maximum forward deceleration (m/s²); smooth braking
       ay_max: 0.0  # DiffDrive: not a Humble MPPI param (kept for forward-compat); zero since no lateral dynamics.
-      az_max: 1.2  # 2.5->1.2 for forward-compat. Real angular accel limit is velocity_smoother max_accel[2] (now 1.2).
+      az_max: 1.2  # 0.8->1.2 (REVERTED 2026-05-27 pass 3). Same revert reason as wz_max above.
       iteration_count: 1  # Number of MPPI iterations per control cycle; 1 is typically sufficient
       prune_distance: 1.5  # Distance (m) ahead on path to start trajectory optimization; larger = smoother far ahead
       transform_tolerance: 0.5  # 0.2->0.5. Real bag: "Lookup would require extrapolation into the future. Requested X but latest data at X-0.1s". FASTLIO2 publish jitter exceeds 0.2s window; 0.5s gives headroom (still investigate FASTLIO2 stamping/rate separately).
@@ -172,8 +172,8 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
         threshold_to_consider: 0.40  # 1.0->0.40. Defer goal-yaw alignment until robot is tightly inside the new xy_goal_tolerance (0.40) — lets PreferForwardCritic/PathAngleCritic keep robot facing path during transit, and the rotation shim does the actual final yaw.
       CostCritic:  # Uses costmap to avoid obstacles
         enabled: true
-        cost_power: 2  # 1->2. Quadratic cost penalty: cells deep in the inflation gradient are punished MUCH harder, so MPPI commits to wider arcs around obstacles instead of skimming the inflation edge.
-        cost_weight: 12.0  # 5->12. Match GoalCritic weight so the goal-pull can't dominate the obstacle-push (bag9 robot still hit obstacles with cost_weight 5).
+        cost_power: 1  # 2->1. Linear cost. Quadratic was producing jerky stop-go + side-to-side oscillation because tiny costmap deltas near obstacles produced huge rollout-cost deltas, so the MPPI optimum jittered between cycles. Smoother gradient handled by inflation widening (below).
+        cost_weight: 6.0  # 12->6. Halved to match the linear power. With the phantom-obstacle bug fixed, the costmap is cleaner and we don't need the previous heavy push to compensate.
         critical_cost: 253.0  # Reject trajectories at inscribed-radius cost.
         consider_footprint: true  # false->true. With DiffDrive motion model the MPPI rollouts are simpler so we can afford accurate footprint collision checks instead of relying purely on the inflation gradient. Rectangular footprint [0.7m x 0.5m] is small enough that the per-rollout cost remains tractable.
         collision_cost: 1000000.0
@@ -182,7 +182,7 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       PathAlignCritic:  # Aligns velocity vector with path direction
         enabled: true
         cost_power: 1
-        cost_weight: 8.0  # REDUCED from 10.0 - less aggressive so it doesn't fight with GoalAngleCritic
+        cost_weight: 6.0  # 8->6. Easing all directional critics together to stop oscillating sides around obstacles.
         max_path_occupancy_ratio: 0.05  # Fraction of path in collision before switching behavior
         trajectory_point_step: 4  # Check every 4th point for efficiency
         threshold_to_consider: 0.45  # Disable path alignment just before xy_tol handoff to rotation shim (0.40).
@@ -197,15 +197,15 @@ controller_server:  # original: (none); Trajectory controller node handling Foll
       PathAngleCritic:  # Biases robot +x (chassis front + forward obstacle lidar) toward the path travel direction so it drives facing where it goes
         enabled: true
         cost_power: 1
-        cost_weight: 12.0  # Heavy forward-facing bias during transit.
+        cost_weight: 3.0  # 12->3. Heavy weight + narrow max_angle was the main oscillation cause: any deviation around an obstacle got punished hard, MPPI couldn't commit to a side. Nav2 MPPI default is ~2.2.
         offset_from_furthest: 4
         threshold_to_consider: 0.45  # Active until shim handoff (xy_tol 0.40).
-        max_angle_to_furthest: 0.25  # rad (~14deg)
+        max_angle_to_furthest: 0.8  # ~46deg, 0.25->0.8. Allow committing to wider arcs around obstacles without being punished.
         forward_preference: true
       PreferForwardCritic:  # Penalizes reverse (-vx) so the forward-facing lidar leads
         enabled: true
         cost_power: 1
-        cost_weight: 12.0
+        cost_weight: 3.0  # 12->3. Redundant with vx_min: 0.0 (which hard-blocks reverse) - kept light only as a soft bias.
         threshold_to_consider: 0.45  # Active until shim handoff.
 
 local_costmap:  # original: (none); Local rolling costmap configuration block.
@@ -225,12 +225,12 @@ local_costmap:  # original: (none); Local rolling costmap configuration block.
       plugins: ["stvl_layer", "inflation_layer"]  # CHANGED to SpatioTemporalVoxelLayer for 3D LiDAR support.
       inflation_layer:  # original: (none); Inflation layer parameters; buffers obstacles outward.
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.5  # 2.5->3.5. Steeper decay: tight gradient near obstacles, fast falloff so MPPI sees free corridors instead of inflated walls. Combined with smaller radius below.
-        inflation_radius: 0.45  # 0.80->0.45. Hard collision avoidance now handled by CostCritic.consider_footprint=true; inflation is soft preference only. 0.45 > inscribed 0.25 (Nav2 floor) but small enough to keep tight garden corridors plannable.
+        cost_scaling_factor: 2.5  # 3.5->2.5. Gentler decay so MPPI sees a smoother potential field instead of a cost cliff. Combined with wider radius below this gives the controller earlier warning and reduces last-second swerves.
+        inflation_radius: 0.70  # 0.45->0.70. Old radius was barely beyond the rectangular footprint's circumscribed radius (~0.43) so MPPI got almost no warning before lethal cost. 0.70 gives ~3x footprint-width worth of soft buffer; tight garden corridors still passable because cost_scaling_factor was reduced.
       stvl_layer:  # SpatioTemporalVoxelLayer for 3D obstacle detection from Livox Mid-360 LiDAR.
         plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"  # Recommended for 3D LiDARs (Nav2 tuning guide).
         enabled: True  # Enable this layer for real-time 3D obstacle detection.
-        voxel_decay: 2.0  # Temporal decay: voxels expire after 2 seconds (good for dynamic obstacles like moving people/branches).
+        voxel_decay: 1.0  # 2.0->1.0. Forward-only sensing means side/behind ghosts linger after robot passes obstacles, contributing to jerky control. 1.0s is still safe for slow-moving outdoor obstacles.
         decay_model: 0  # Linear decay model (0=linear, 1=exponential, 2=persistent); linear best for outdoor gardens.
         voxel_size: 0.05  # Voxel resolution (5cm); matches costmap resolution for consistency.
         track_unknown_space: true  # Track unexplored areas in the voxel grid.
