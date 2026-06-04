@@ -452,7 +452,7 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "piper_bridge_speed",
-            default_value="60",
+            default_value="20",
             description="Default speed (1-100) forwarded via PiPER joint command velocity[6].",
         )
     )
