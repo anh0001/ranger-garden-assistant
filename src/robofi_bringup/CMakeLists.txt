@@ -21,6 +21,7 @@ install(PROGRAMS
   scripts/camera_info_frame_id_fixer.py
   scripts/servo_array_to_piper_joint_cmd.py
   scripts/piper_joint_state_sanitizer.py
+  scripts/odom_reset_relay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

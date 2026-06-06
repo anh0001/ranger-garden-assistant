@@ -474,7 +474,7 @@ ranger-garden-assistant/
 
 - `fastlio2_navigation.launch.py` – Complete bringup (robot + FAST-LIO2 + PGO + OctoMap + Nav2 wrapper)
 - `ranger_complete_bringup.launch.py` – Robot description + Livox driver + optional RViz
-- `ranger_base.launch.py` – Base controller only
+- `ranger_base.launch.py` – Base controller only. By default (`enable_odom_reset:=true`) the AgileX driver publishes raw wheel odometry on `/odom_raw` and an `odom_reset_relay` republishes the resettable `/odom`. Zero the wheel odometry at runtime with `ros2 service call /reset_odom std_srvs/srv/Trigger`. Set `enable_odom_reset:=false` to publish `/odom` straight from the driver (no reset service).
 - `livox_lidar.launch.py` – Livox driver only
 - `navigation.launch.py` – Thin Nav2 wrapper with optional AMCL
 - `slam.launch.py` – Legacy slam_toolbox mapping (still available)
