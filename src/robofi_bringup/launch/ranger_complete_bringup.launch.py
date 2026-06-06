@@ -284,8 +284,13 @@ def generate_launch_description():
     declared_arguments.append(
         DeclareLaunchArgument(
             "wrist_camera_device_type",
-            default_value="''",
-            description="Device type filter for the RealSense camera (e.g., D405).",
+            default_value="D405",
+            description=(
+                "Device type filter for the RealSense camera. Defaults to 'D405' so "
+                "the wrist node only ever binds the D405 wrist camera and never "
+                "silently grabs another connected RealSense (e.g. the rear D435i) "
+                "when 'wrist_camera_serial' is unset."
+            ),
         )
     )
 
