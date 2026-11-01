@@ -33,6 +33,7 @@ from rclpy.clock import Clock, ClockType
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
@@ -371,6 +372,11 @@ class DemoVideoRecorder(Node):
         if self._exit_code is not None:
             return self._exit_code
         self._exit_code = self._sink.close()
+        if self._written == 0:
+            # ffmpeg still writes a header-only, unplayable file.
+            Path(self._out_path).unlink(missing_ok=True)
+            self.get_logger().warn(f"no frames recorded; removed {self._out_path}")
+            return self._exit_code
         seconds = self._written / self._fps
         if self._exit_code == 0:
             self.get_logger().info(
@@ -385,7 +391,11 @@ class DemoVideoRecorder(Node):
 
 
 def main() -> int:
-    rclpy.init()
+    # Plain KeyboardInterrupt on SIGINT (launch shutdown, Ctrl-C) instead of
+    # rclpy's handler, which shuts the context down first so finish() could
+    # no longer log to /rosout. On SIGTERM the process just dies; ffmpeg then
+    # sees EOF on its stdin and still finalizes the file.
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = DemoVideoRecorder()
     try:
         while rclpy.ok() and not node.failed:
