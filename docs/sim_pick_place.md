@@ -93,6 +93,32 @@ roughly the base travel. All of it is superseded by the DetachableJoint +
 paused start + `/grasp/set` design above; `grasp_magnet.py` and the
 `/gripper/grasp` / `/gz_world_poses` bridges were deleted.
 
+## Recording a video
+
+With the sim up (`sim_bringup.launch.py`, headless is fine):
+
+```bash
+ros2 launch ranger_sim record_pick_place_video.launch.py
+ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
+```
+
+- Spawns `models/video_rig.sdf` (two static cameras, no collisions) at the
+  world origin, bridges `/video/wide` and `/video/close`, and runs
+  `scripts/record_demo_video.py`. The result is a 1280×720 H.264 MP4
+  (default `~/.ros/videos/pick_place_<time>.mp4`) with a close-up inset, the
+  current demo step (from the `pick_place_demo` log), the grasp state and
+  the sim time.
+- Frames are placed on simulation time, one per 1/30 s, so playback runs at
+  sim speed even when the extra cameras slow the sim down.
+- The demo (`execute:=true`) starts only after the recorder has its first
+  camera frame. `ros_gz_sim create` exits 0 even when no Gazebo answers, so
+  the rig's frames are the gate that keeps this launch from moving a real
+  arm. No frame within `first_frame_timeout` (default 60 s) ends the launch
+  without running the demo.
+- The launch ends when the demo exits; the recorder then closes the file.
+- Garden world only (the camera poses are tuned to its table). The cameras
+  need GPU rendering, like the robot's own sensors.
+
 ## Known limitations
 
 - `colcon test` with `RANGER_SIM_GPU=1` can leave an orphaned headless
@@ -126,3 +152,6 @@ paused start + `/grasp/set` design above; `grasp_magnet.py` and the
   `src/ranger_sim/scripts/mimic_joint_state_relay.py`,
   `src/ranger_sim/scripts/pick_place_demo.py`
 - `src/ranger_sim/worlds/garden_world.sdf` — cup at the table front edge
+- `src/ranger_sim/launch/record_pick_place_video.launch.py`,
+  `src/ranger_sim/scripts/record_demo_video.py`,
+  `src/ranger_sim/models/video_rig.sdf` — demo video recording
