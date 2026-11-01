@@ -2,9 +2,9 @@
 <!--
   Indoor obstacle world for observing Nav2 obstacle avoidance.
 
-  Same <world name="garden_world"> as garden_world.sdf on purpose: the
-  gz_bridge config and grasp_magnet hardcode /world/garden_world/... topic
-  names, so the world name must not change.
+  Same <world name="garden_world"> as garden_world.sdf on purpose: it
+  matches the default world_name launch argument (sim_bringup /
+  spawn_robot), so no extra argument is needed.
 
   Layout (robot spawns at origin facing +x; a goal at ~(6, 0) forces the
   planner to weave around the furniture):

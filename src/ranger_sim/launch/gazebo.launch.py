@@ -29,6 +29,7 @@ def _launch_gazebo(context, *args, **kwargs):
 
     world = LaunchConfiguration("world").perform(context)
     headless = LaunchConfiguration("headless").perform(context)
+    paused = LaunchConfiguration("paused").perform(context)
     resource_paths = [
         os.path.dirname(get_package_share_directory("piper_description")),
         os.path.dirname(get_package_share_directory("ranger_description")),
@@ -38,7 +39,10 @@ def _launch_gazebo(context, *args, **kwargs):
         [path for path in [existing_gz_resource_path, *resource_paths] if path]
     )
 
-    gz_args = f"-r {world}"
+    # Paused start (no -r): every DetachableJoint grasp joint is created
+    # attached at robot spawn; grasp_manager.py detaches them all and then
+    # unpauses the world, so no object is dragged on the first step.
+    gz_args = world if paused.lower() == "true" else f"-r {world}"
     if headless.lower() == "true":
         gz_args += " --headless-rendering -s"
 
@@ -69,6 +73,12 @@ def generate_launch_description():
             "headless",
             default_value="false",
             description="Run Gazebo headless (no GUI) for CI.",
+        ),
+        DeclareLaunchArgument(
+            "paused",
+            default_value="true",
+            description="Start the world paused; grasp_manager unpauses it "
+                        "after detaching the graspable objects.",
         ),
         OpaqueFunction(function=_launch_gazebo),
     ])

@@ -1,0 +1,18 @@
+# Single source of truth for objects the simulated gripper can hold.
+#
+# Read by:
+#   - urdf/ranger_gazebo.urdf.xacro  -> one DetachableJoint plugin per object
+#   - scripts/grasp_manager.py       -> /grasp/set service + startup detach
+#   - config/gz_bridge.yaml          -> attach/detach/state bridge entries
+#                                       (hand-synced, see its GRASP SECTION)
+#
+# Objects missing from the loaded world are harmless: their plugin stays
+# inert (suppress_child_warning) and grasp_manager skips them.
+gripper_link: piper_link6        # parent link of every DetachableJoint
+objects:
+  - {name: cup,                link: link}      # garden world (kept for regression)
+  - {name: ycb_mug,            link: link}
+  - {name: ycb_cracker_box,    link: link}
+  - {name: ycb_mustard_bottle, link: link}
+  - {name: ycb_bowl,           link: link}
+  - {name: low_drawer_cabinet, link: drawer}    # articulated drawer (Phase 2)

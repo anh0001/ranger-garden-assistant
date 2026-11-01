@@ -2,9 +2,9 @@
 <!--
   Minimal OPEN world for observing Nav2 navigation clearly.
 
-  Same <world name="garden_world"> as garden_world.sdf on purpose: the
-  gz_bridge config and grasp_magnet hardcode /world/garden_world/... topic
-  names, so the world name must not change. This variant strips ALL
+  Same <world name="garden_world"> as garden_world.sdf on purpose: it
+  matches the default world_name launch argument (sim_bringup /
+  spawn_robot), so no extra argument is needed. This variant strips ALL
   obstacles (table, planters, bin, bottle, box, walls) and keeps only
   physics + the required system plugins + lighting + a flat ground plane,
   so the robot has unobstructed space to navigate and the motion is easy

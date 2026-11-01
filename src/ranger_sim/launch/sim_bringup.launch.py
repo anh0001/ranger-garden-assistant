@@ -26,6 +26,9 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     headless = LaunchConfiguration("headless")
     world = LaunchConfiguration("world")
+    world_name = LaunchConfiguration("world_name")
+    paused = LaunchConfiguration("paused")
+    grasp_detach_timeout = LaunchConfiguration("grasp_detach_timeout")
     launch_moveit = LaunchConfiguration("launch_moveit")
     launch_nav = LaunchConfiguration("launch_nav")
     use_rviz = LaunchConfiguration("use_rviz")
@@ -39,6 +42,18 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([
                 FindPackageShare("ranger_sim"), "worlds", "garden_world.sdf"
             ]),
+        ),
+        DeclareLaunchArgument(
+            "world_name", default_value="garden_world",
+            description="<world name> inside the SDF given as `world`.",
+        ),
+        DeclareLaunchArgument(
+            "paused", default_value="true",
+            description="Start paused; grasp_manager unpauses after the startup detach.",
+        ),
+        DeclareLaunchArgument(
+            "grasp_detach_timeout", default_value="20.0",
+            description="Startup detach wait of grasp_manager (s); raise on slow GPUs.",
         ),
         DeclareLaunchArgument("launch_moveit", default_value="true"),
         DeclareLaunchArgument("launch_nav", default_value="false"),
@@ -55,6 +70,7 @@ def generate_launch_description():
         launch_arguments={
             "world": world,
             "headless": headless,
+            "paused": paused,
         }.items(),
     )
 
@@ -70,6 +86,8 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     "use_sim_time": use_sim_time,
+                    "world_name": world_name,
+                    "grasp_detach_timeout": grasp_detach_timeout,
                 }.items(),
             ),
         ],
