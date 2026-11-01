@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""
+Record the pick-and-place demo to an MP4 against an already-running sim.
+
+Prereq: `ros2 launch ranger_sim sim_bringup.launch.py` is up (headless is
+fine, but the cameras need GPU rendering like the robot's own sensors).
+
+  ros2 launch ranger_sim record_pick_place_video.launch.py
+  ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
+
+Spawns the static camera rig (models/video_rig.sdf), bridges its two
+cameras, starts record_demo_video.py and starts pick_place_demo
+(execute:=true) only once the recorder logs its first frame. ros_gz_sim
+create exits 0 even when no Gazebo answers, so that first frame, which only
+a running sim with the rig can produce, is what keeps this launch from
+moving a real arm. When the demo exits the launch shuts down and the
+recorder finishes the file. If the recorder gives up first (no frame within
+first_frame_timeout, encoder error) everything shuts down and the demo
+never starts. The default output is ~/.ros/videos/pick_place_<time>.mp4.
+
+Garden world only: the camera poses are tuned to its table.
+"""
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, EmitEvent, LogInfo, RegisterEventHandler
+from launch.event_handlers import OnProcessExit, OnProcessIO
+from launch.events import Shutdown
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
+
+# Must equal READY_MARKER in scripts/record_demo_video.py (asserted by
+# test/test_video_rig_launch.py).
+READY_MARKER = "video recording started"
+# Time the recorder gets on shutdown to flush the encoder and close the MP4.
+RECORDER_SIGTERM_TIMEOUT_SEC = "30"
+
+
+def make_demo_gate(demo_actions):
+    """Return an OnProcessIO callback that yields ``demo_actions`` on the first ready line."""
+    started = False
+
+    def gate(event):
+        nonlocal started
+        if started or READY_MARKER not in event.text.decode(errors="replace"):
+            return None
+        started = True
+        return demo_actions
+
+    return gate
+
+
+def generate_launch_description():
+    world_name = LaunchConfiguration("world_name")
+    object_name = LaunchConfiguration("object_name")
+    args = [
+        DeclareLaunchArgument("world_name", default_value="garden_world",
+                              description="<world name> of the running sim"),
+        DeclareLaunchArgument("output_path", default_value="",
+                              description="MP4 to write (default ~/.ros/videos/...)"),
+        DeclareLaunchArgument("object_name", default_value="cup",
+                              description="Object the demo picks (and the overlay tracks)"),
+        DeclareLaunchArgument("base_approach_x", default_value="0.52",
+                              description="World x the base drives to before grasping"),
+        DeclareLaunchArgument("gripper_closed", default_value="0.002",
+                              description="joint7 travel (m) when closing on the object"),
+        DeclareLaunchArgument("first_frame_timeout", default_value="60.0",
+                              description="Wall seconds to wait for the first camera frame"),
+    ]
+
+    spawn_rig = Node(
+        package="ros_gz_sim",
+        executable="create",
+        arguments=[
+            "-world", world_name,
+            "-file", PathJoinSubstitution(
+                [FindPackageShare("ranger_sim"), "models", "video_rig.sdf"]
+            ),
+            "-name", "video_rig",
+        ],
+        output="screen",
+    )
+    rig_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="video_rig_bridge",
+        arguments=[
+            "/video/wide@sensor_msgs/msg/Image[ignition.msgs.Image",
+            "/video/close@sensor_msgs/msg/Image[ignition.msgs.Image",
+        ],
+        output="screen",
+    )
+    recorder = Node(
+        package="ranger_sim",
+        executable="record_demo_video.py",
+        name="demo_video_recorder",
+        output="screen",
+        sigterm_timeout=RECORDER_SIGTERM_TIMEOUT_SEC,
+        parameters=[{
+            "output_path": ParameterValue(LaunchConfiguration("output_path"), value_type=str),
+            "grasp_object": ParameterValue(object_name, value_type=str),
+            "first_frame_timeout_sec": ParameterValue(
+                LaunchConfiguration("first_frame_timeout"), value_type=float
+            ),
+            "use_sim_time": True,
+        }],
+    )
+    demo = Node(
+        package="ranger_sim",
+        executable="pick_place_demo.py",
+        name="pick_place_demo",
+        output="screen",
+        parameters=[{
+            "execute": True,
+            "object_name": ParameterValue(object_name, value_type=str),
+            "base_approach_x": ParameterValue(
+                LaunchConfiguration("base_approach_x"), value_type=float
+            ),
+            "gripper_closed": ParameterValue(
+                LaunchConfiguration("gripper_closed"), value_type=float
+            ),
+            "use_sim_time": True,
+        }],
+    )
+
+    gate = make_demo_gate([LogInfo(msg="first camera frame recorded; starting the demo"), demo])
+    start_demo_on_first_frame = RegisterEventHandler(
+        OnProcessIO(target_action=recorder, on_stdout=gate, on_stderr=gate)
+    )
+    stop_when_demo_exits = RegisterEventHandler(
+        OnProcessExit(
+            target_action=demo,
+            on_exit=[
+                LogInfo(msg="demo finished; closing the video"),
+                EmitEvent(event=Shutdown(reason="pick_place_demo finished")),
+            ],
+        )
+    )
+    stop_when_recorder_exits = RegisterEventHandler(
+        OnProcessExit(
+            target_action=recorder,
+            on_exit=[EmitEvent(event=Shutdown(reason="demo_video_recorder exited"))],
+        )
+    )
+
+    return LaunchDescription(
+        args + [
+            spawn_rig,
+            rig_bridge,
+            recorder,
+            start_demo_on_first_frame,
+            stop_when_demo_exits,
+            stop_when_recorder_exits,
+        ]
+    )
