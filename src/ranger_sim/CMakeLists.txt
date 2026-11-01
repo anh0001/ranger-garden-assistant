@@ -21,6 +21,7 @@ install(PROGRAMS
   scripts/pick_place_demo.py
   scripts/grasp_manager.py
   scripts/mimic_joint_state_relay.py
+  scripts/record_demo_video.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -68,6 +69,10 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_grasp_manager test/test_grasp_manager.py
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_mimic_joint_state_relay test/test_mimic_joint_state_relay.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_record_demo_video test/test_record_demo_video.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_video_rig_launch test/test_video_rig_launch.py
     ENV ${RANGER_SIM_TEST_ENV})
 
   # Headless Gazebo bringup. Needs a GPU (gpu_lidar / camera sensors), so it
