@@ -382,6 +382,31 @@ def test_finish_closes_the_encoder_once_and_returns_its_code(ros, tmp_path):
     assert sink.closed == 1
 
 
+def test_finish_without_frames_removes_the_empty_file(ros, tmp_path):
+    node, _ = _recorder(tmp_path)
+    out = tmp_path / "videos" / "demo.mp4"
+    out.write_bytes(b"mp4 header, no frames")  # what ffmpeg leaves behind
+    try:
+        node.finish()
+    finally:
+        node.destroy_node()
+
+    assert not out.exists()
+
+
+def test_finish_keeps_a_recorded_file(ros, tmp_path):
+    node, _ = _recorder(tmp_path)
+    out = tmp_path / "videos" / "demo.mp4"
+    out.write_bytes(b"mp4 with frames")
+    try:
+        node._on_wide(_image(64, 36, sec=1))
+        node.finish()
+    finally:
+        node.destroy_node()
+
+    assert out.exists()
+
+
 def test_finish_reports_a_failed_encoder(ros, tmp_path):
     node, _ = _recorder(tmp_path, close_code=1)
     try:
