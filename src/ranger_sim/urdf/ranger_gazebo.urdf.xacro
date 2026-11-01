@@ -37,14 +37,21 @@
       <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
       <state_interface name="velocity"/>
     </joint>
+    <!-- joint2 / joint3 start slightly INSIDE their limits (0 is the lower
+         limit of joint2 and the upper limit of joint3). DART 6.12 (Fortress)
+         skips the servo motor of a DOF whose position is beyond its limit by
+         any amount (JointConstraint has zero error allowance); gravity holds
+         a joint started exactly at 0 a few nanometres past the limit, so
+         velocity/position commands are silently ignored and the shoulder and
+         elbow never move (trajectory goals still "succeed" on time). -->
     <joint name="piper_joint2">
       <command_interface name="position"><param name="min">0.0</param><param name="max">3.14</param></command_interface>
-      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="position"><param name="initial_value">0.02</param></state_interface>
       <state_interface name="velocity"/>
     </joint>
     <joint name="piper_joint3">
       <command_interface name="position"><param name="min">-2.967</param><param name="max">0.0</param></command_interface>
-      <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
+      <state_interface name="position"><param name="initial_value">-0.02</param></state_interface>
       <state_interface name="velocity"/>
     </joint>
     <joint name="piper_joint4">
@@ -68,8 +75,15 @@
       <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
       <state_interface name="velocity"/>
     </joint>
+    <!-- Second finger: gz_ros2_control mimic of joint7 (the URDF <mimic>
+         tag alone is ignored by gz_ros2_control Humble; this param form
+         drives it). 0.7.x exports its interfaces as "piper_joint8_mimic";
+         mimic_joint_state_relay.py republishes the state as piper_joint8
+         so MoveIt / robot_state_publisher see a complete robot state. -->
     <joint name="piper_joint8">
-      <command_interface name="position"><param name="min">-0.75</param><param name="max">0.0</param></command_interface>
+      <param name="mimic">piper_joint7</param>
+      <param name="multiplier">-1</param>
+      <command_interface name="position"/>
       <state_interface name="position"><param name="initial_value">0.0</param></state_interface>
       <state_interface name="velocity"/>
     </joint>
@@ -85,12 +99,43 @@
     </plugin>
   </gazebo>
 
-  <!-- Grasp-fix is handled by the grasp_magnet node (pose-follow virtual
-       attach via the Gazebo /world/<world>/set_pose service), not a
-       DetachableJoint plugin: in Fortress DetachableJoint starts attached
-       and drags the object off the table before any ROS node can detach
-       it, and its Empty trigger / state topics did not bridge reliably.
-       See scripts/grasp_magnet.py. -->
+  <!-- ================================================================== -->
+  <!-- Grasp: one DetachableJoint per graspable object                     -->
+  <!--                                                                    -->
+  <!-- A fixed joint piper_link6 -> <object>/<link> is created/removed on  -->
+  <!-- demand (/grasp/<obj>/attach|detach, std_msgs/Empty via the bridge), -->
+  <!-- state on /grasp/<obj>/state ("attached"/"detached"). The object    -->
+  <!-- list comes from config/graspable_objects.yaml (single source of    -->
+  <!-- truth, shared with grasp_manager.py).                              -->
+  <!--                                                                    -->
+  <!-- Fortress 6.16 has no initial_attach: every joint is created at     -->
+  <!-- spawn, attached. The sim therefore starts PAUSED (gazebo.launch.py) -->
+  <!-- and grasp_manager.py detaches every object before unpausing;       -->
+  <!-- detach is processed while paused (only the physics step is         -->
+  <!-- skipped). Objects absent from the loaded world leave their plugin  -->
+  <!-- inert (suppress_child_warning).                                    -->
+  <!-- ================================================================== -->
+  <xacro:arg name="graspable_objects_file" default="$(find ranger_sim)/config/graspable_objects.yaml"/>
+  <xacro:property name="grasp_cfg" value="${xacro.load_yaml('$(arg graspable_objects_file)')}"/>
+  <xacro:macro name="grasp_joints" params="objs">
+    <xacro:if value="${len(objs) > 0}">
+      <xacro:property name="obj" value="${objs[0]}"/>
+      <gazebo>
+        <plugin filename="ignition-gazebo-detachable-joint-system"
+                name="ignition::gazebo::systems::DetachableJoint">
+          <parent_link>${grasp_cfg['gripper_link']}</parent_link>
+          <child_model>${obj['name']}</child_model>
+          <child_link>${obj['link']}</child_link>
+          <attach_topic>/grasp/${obj['name']}/attach</attach_topic>
+          <detach_topic>/grasp/${obj['name']}/detach</detach_topic>
+          <output_topic>/grasp/${obj['name']}/state</output_topic>
+          <suppress_child_warning>true</suppress_child_warning>
+        </plugin>
+      </gazebo>
+      <xacro:grasp_joints objs="${objs[1:]}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:grasp_joints objs="${grasp_cfg['objects']}"/>
 
   <!-- ================================================================== -->
   <!-- Base mobility: TRUE HOLONOMIC sim base (matches real swerve robot)  -->

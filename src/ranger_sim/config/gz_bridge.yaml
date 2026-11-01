@@ -23,15 +23,6 @@
   gz_type_name: ignition.msgs.Pose_V
   direction: GZ_TO_ROS
 
-# World-frame poses of all moving entities (cup, ranger links incl.
-# piper_link6). grasp_magnet reads the gripper pose from here so it is
-# in the exact same world frame as the cup it repositions.
-- ros_topic_name: /gz_world_poses
-  gz_topic_name: /world/garden_world/dynamic_pose/info
-  ros_type_name: tf2_msgs/msg/TFMessage
-  gz_type_name: ignition.msgs.Pose_V
-  direction: GZ_TO_ROS
-
 # Navigation 2D LiDAR (Gazebo -> ROS): single-ring gpu_lidar emits a real
 # LaserScan on gz /scan; nav2_sim.yaml obstacle_layer consumes this directly.
 - topic_name: /scan
@@ -79,4 +70,84 @@
 - topic_name: /piper/wrist_camera/camera_info
   ros_type_name: sensor_msgs/msg/CameraInfo
   gz_type_name: ignition.msgs.CameraInfo
+  direction: GZ_TO_ROS
+
+# ---------------------------------------------------------------------
+# GRASP SECTION — hand-written, one attach/detach/state triple per object
+# in config/graspable_objects.yaml (test/test_grasp_manager.py fails if an
+# object is missing here).
+# DetachableJoint per object: attach/detach take ignition.msgs.Empty,
+# state reports "attached"/"detached". Driven by grasp_manager.py.
+# ---------------------------------------------------------------------
+- topic_name: /grasp/cup/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/cup/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/cup/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/ycb_mug/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_mug/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_mug/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/ycb_cracker_box/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_cracker_box/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_cracker_box/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/ycb_mustard_bottle/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_mustard_bottle/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_mustard_bottle/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/ycb_bowl/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_bowl/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/ycb_bowl/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/low_drawer_cabinet/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/low_drawer_cabinet/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/low_drawer_cabinet/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
   direction: GZ_TO_ROS

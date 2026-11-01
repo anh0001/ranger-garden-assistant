@@ -1,0 +1,8 @@
+# Attach a graspable object to the gripper, or release it.
+# Simulator-agnostic seam: task code calls /grasp/set and never talks to
+# the Gazebo DetachableJoint topics directly.
+string object      # Gazebo model name, must exist in config/graspable_objects.yaml
+bool attach        # true = attach to gripper, false = release
+---
+bool success
+string message

@@ -3,13 +3,12 @@
 Run the pick-and-place demo against an already-running sim.
 
 Prereq: `ros2 launch ranger_sim sim_bringup.launch.py` is up (Gazebo +
-controllers + MoveIt move_group).
+controllers + grasp_manager + MoveIt move_group).
 
-Examples:
-  # Safe: validate planning only, no motion
+Safe, validate planning only (no motion):
   ros2 launch ranger_sim pick_place_demo.launch.py
 
-  # Actually run it in Gazebo (drives base + moves arm + gripper)
+Actually run it in Gazebo (drives base + moves arm + gripper + grasp):
   ros2 launch ranger_sim pick_place_demo.launch.py execute:=true
 """
 
@@ -25,20 +24,15 @@ def generate_launch_description():
                               description="false = plan only (no motion); true = run in sim"),
         DeclareLaunchArgument("base_approach_x", default_value="0.52",
                               description="World x the base drives to before grasping"),
+        DeclareLaunchArgument("object_name", default_value="cup",
+                              description="Graspable model (config/graspable_objects.yaml)"),
+        DeclareLaunchArgument("gripper_closed", default_value="0.002",
+                              description="joint7 travel (m) when closing on the object"),
         DeclareLaunchArgument("use_sim_time", default_value="true"),
     ]
 
-    # Pose-follow virtual-attach grasp helper (always on; idle until told
-    # to hold). Kept here rather than in sim_bringup so it stays a
-    # demo-scoped component.
-    magnet = Node(
-        package="ranger_sim",
-        executable="grasp_magnet.py",
-        name="grasp_magnet",
-        output="screen",
-        parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
-    )
-
+    # The grasp itself is served by grasp_manager (/grasp/set), started by
+    # sim_bringup / spawn_robot, so this launch only runs the demo node.
     demo = Node(
         package="ranger_sim",
         executable="pick_place_demo.py",
@@ -47,8 +41,10 @@ def generate_launch_description():
         parameters=[{
             "execute": LaunchConfiguration("execute"),
             "base_approach_x": LaunchConfiguration("base_approach_x"),
+            "object_name": LaunchConfiguration("object_name"),
+            "gripper_closed": LaunchConfiguration("gripper_closed"),
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],
     )
 
-    return LaunchDescription(args + [magnet, demo])
+    return LaunchDescription(args + [demo])
