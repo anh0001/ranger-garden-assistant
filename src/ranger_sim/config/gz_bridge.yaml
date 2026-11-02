@@ -18,6 +18,16 @@
   gz_type_name: ignition.msgs.Odometry
   direction: GZ_TO_ROS
 
+# Real wheel/steer joint angles from the sim-only JointStatePublisher in
+# ranger_gazebo.urdf.xacro. Deliberately NOT /joint_states:
+# base_joint_state_publisher.py relays them there, so a missing sim
+# message degrades to the old static zeros instead of a missing state.
+- ros_topic_name: /gz/base_joint_states
+  gz_topic_name: /ranger/base_joint_states
+  ros_type_name: sensor_msgs/msg/JointState
+  gz_type_name: ignition.msgs.Model
+  direction: GZ_TO_ROS
+
 - topic_name: /tf
   ros_type_name: tf2_msgs/msg/TFMessage
   gz_type_name: ignition.msgs.Pose_V

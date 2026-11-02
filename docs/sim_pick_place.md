@@ -5,9 +5,11 @@ Scope: simulation only (`ranger_sim`). Hardware is unaffected.
 ## Status (verified headless, Gazebo Sim 6.16 / Humble)
 
 `pick_place_demo.launch.py execute:=true` on the garden world runs the full
-sequence and the cup is physically lifted (~0.19 m) and put back where it
-was (final offset a few millimetres, no fling). Every MoveIt step returns
-SUCCESS and the joints actually reach their targets.
+sequence: the base rolls straight to the table on aligned wheels, the
+gripper descends level so its finger pads straddle the cup body, and the
+cup is lifted and put back where it was (final offset ~3 mm). Every MoveIt
+step returns SUCCESS and the joints actually reach their targets; the base
+holds its position to ±0.2 mm while the arm works.
 
 ```bash
 ros2 launch ranger_sim sim_bringup.launch.py                      # full sim (starts paused, see below)
@@ -56,8 +58,16 @@ ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Ga
   exports it as `piper_joint8_mimic`, which `piper_mimic_state_broadcaster`
   publishes on its local topic and `mimic_joint_state_relay.py` republishes
   as `piper_joint8` on `/joint_states`.
-- The object is attached **before** the fingers close, from a hover pose
-  with ~5 cm clearance, so the joint is never created during contact.
+- **Grasp geometry.** The level gripper (approach +x, fingers closing along
+  y) goes to a hover pose (pads ≥ 1.7 cm above the cup rim), descends
+  straight down to the grasp pose (pads inside the 5 cm cup body,
+  ≥ 2.4 cm above the table, palm ≥ 1.2 cm from the cup, 1 cm per side
+  between the open fingers and the cup), attaches, then closes to the cup
+  radius (`gripper_closed:=0.025`) so the pads rest on its surface. The
+  object is attached **before** the fingers close, so the joint is never
+  created during contact. `test/test_pick_place_geometry.py` re-derives
+  every clearance from the URDF and the world (forward kinematics, no
+  simulator).
 
 ## Root causes found while making it work
 
@@ -74,14 +84,55 @@ ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Ga
 2. **Waypoints collided with the table once the arm really moved.** With
    the base at the table, `home` puts the gripper under the table top and
    the old pre-grasp pose put the open fingers exactly on the cup surface.
-   The demo now raises the arm to the `lift` carry pose before approaching,
-   attaches from a hover pose (TCP ≈ 5 cm above the cup top, solved with
-   MoveIt IK), and backs the base away before retracting to `home`.
+   The demo now raises the arm to the `lift` carry pose before approaching
+   and backs the base away before retracting to `home`. (It then attached
+   from a hover pose ~5 cm above the cup top; item 4 replaced that.)
 3. **Humble action/discovery race.** The first gripper goal's acceptance
    could be lost right after `wait_for_server()`; the demo waits for
    discovery to settle and re-sends gripper goals (idempotent) once. It
    also waits for the arm to stop moving before the next MoveIt goal
    (MoveIt rejects a start state off by more than 0.01 rad).
+4. **The gripper never held the cup body.** The demo attached the cup from
+   the hover pose, with the fingertips ~5 cm above the rim, so the cup hung
+   welded under the gripper; and the PiPER's full 70 mm opening equalled
+   the 7 cm cup diameter, so the fingers could not have straddled it
+   anyway. The cup is now 5 cm wide and the demo descends from `hover` to
+   a level `grasp` pose before attaching. Two more things decided the
+   final numbers: the base used to stop anywhere within 3 cm of the
+   approach pose (it now stops within 5 mm, with a speed floor so the
+   last centimetres do not crawl), and Gazebo rests `base_footprint`
+   ~1 cm below the ground, which the waypoints allow for.
+5. **Wheels swivelled to random angles.** The `*_steering_joint`s are
+   free revolute joints (no actuator, damping or caster trail) under a
+   kinematically moved base, so ground contact turned them — to their
+   ±2.1 rad limits already while the robot settled after spawning, which
+   also slid the base ~6 cm sideways before the demo started.
+6. **Aligned wheels exposed a cam.** Once the steering was locked the
+   wheels rolled freely, and their collision cylinders sat 5 mm off the
+   axle (`ranger_complete.urdf.xacro`), so ride height changed by 1 cm
+   per revolution and the idle base crept up to a quarter metre into the
+   low spots (2–3 mm per arm move during the demo). The sim now uses
+   concentric wheel collisions (see *Base wheels*).
+
+## Base wheels
+
+- **Kinematic base.** `VelocityControl` moves the base from `/cmd_vel`
+  (vx, vy, wz) and `OdometryPublisher` reports it; the wheels are passive.
+- **Steering lock (sim-only).** `ranger_gazebo.urdf.xacro` holds every
+  `*_steering_joint` at 0 rad with one `JointPositionController` each
+  (velocity-command mode, the same DART joint servo the arm uses). The
+  wheel joints stay free and roll from ground contact. Lateral `vy` makes
+  the aligned wheels skid; `nav2_sim.yaml` plans DiffDrive (vy = 0), so
+  nothing exercises that.
+- **Concentric wheel collisions (sim-only).** `ranger_complete.urdf.xacro`
+  takes `wheel_collision_z` (default −0.005, the historical value: the
+  hardware URDF is unchanged); the sim wrapper passes 0.0.
+- **Live wheel state.** A `JointStatePublisher` plugin publishes the 8
+  base joints on gz `/ranger/base_joint_states`, bridged to ROS
+  `/gz/base_joint_states`; `base_joint_state_publisher.py` relays them to
+  `/joint_states` (zeros until the first message), so RViz shows the
+  wheels rolling. The smoke test drives the base 0.3 m and asserts the
+  steering stays at 0 and the base does not drift in y.
 
 ## History: the teleport "magnet" (resolved, removed)
 
@@ -129,9 +180,13 @@ ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.
   (`ROS_LOCALHOST_ONLY=1`, `ROS_DOMAIN_ID=99`, gz partition
   `ranger_sim_test`, set in `CMakeLists.txt`); without `RANGER_SIM_GPU=1`
   the smoke test is skipped.
-- The base approach is still open-loop on `/odom` (Nav2 goals come with the
-  task executor in a later phase); the base can be nudged a few
-  centimetres by arm contacts.
+- The base approach is proportional control on `/odom` along x only (Nav2
+  goals come with the task executor in a later phase); it relies on the
+  base starting at y = 0, yaw = 0, which the steering lock now keeps.
+- The sim base has no drivetrain: lateral `vy` skids the wheels, and the
+  wheel collisions differ from the hardware description (concentric).
+- The grasp waypoints are joint-space and solved for the garden-world cup;
+  moving the cup means re-solving them (see `test_pick_place_geometry.py`).
 
 ## Key files
 
@@ -147,11 +202,20 @@ ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.
 - `src/ranger_sim/config/ros2_controllers_sim.yaml` — GripperActionController,
   mimic broadcaster
 - `src/ranger_sim/urdf/ranger_gazebo.urdf.xacro` — DetachableJoint macro,
-  joint8 mimic, joint2/3 initial values
+  joint8 mimic, joint2/3 initial values, steering lock, base
+  JointStatePublisher, concentric wheel collisions
+- `src/ranger_description/urdf/ranger_complete.urdf.xacro` —
+  `wheel_collision_z` arg
 - `src/ranger_sim/scripts/grasp_manager.py`,
   `src/ranger_sim/scripts/mimic_joint_state_relay.py`,
+  `src/ranger_sim/scripts/base_joint_state_publisher.py`,
   `src/ranger_sim/scripts/pick_place_demo.py`
-- `src/ranger_sim/worlds/garden_world.sdf` — cup at the table front edge
+- `src/ranger_sim/worlds/garden_world.sdf` — 5 cm cup at the table front
+  edge
+- `src/ranger_sim/test/test_pick_place_geometry.py` — FK clearances of the
+  grasp waypoints, steering-lock / bridge / relay consistency
+- `src/ranger_sim/test/test_sim_smoke.py` — headless bringup incl. the
+  drive-straight check (`RANGER_SIM_GPU=1`)
 - `src/ranger_sim/launch/record_pick_place_video.launch.py`,
   `src/ranger_sim/scripts/record_demo_video.py`,
   `src/ranger_sim/models/video_rig.sdf` — demo video recording

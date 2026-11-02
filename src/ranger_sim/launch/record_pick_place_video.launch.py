@@ -63,8 +63,9 @@ def generate_launch_description():
                               description="Object the demo picks (and the overlay tracks)"),
         DeclareLaunchArgument("base_approach_x", default_value="0.52",
                               description="World x the base drives to before grasping"),
-        DeclareLaunchArgument("gripper_closed", default_value="0.002",
-                              description="joint7 travel (m) when closing on the object"),
+        DeclareLaunchArgument("gripper_closed", default_value="0.025",
+                              description="joint7 travel (m) when closing on the object: "
+                                          "the cup radius"),
         DeclareLaunchArgument("first_frame_timeout", default_value="60.0",
                               description="Wall seconds to wait for the first camera frame"),
     ]

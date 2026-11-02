@@ -18,6 +18,12 @@
   <xacro:arg name="piper_mesh_dir" default="package://piper_description/meshes"/>
   <xacro:arg name="sim_gazebo_classic" default="false"/>
   <xacro:arg name="gz_controller_config" default="$(find ranger_sim)/config/ros2_controllers_sim.yaml"/>
+  <!-- Concentric wheel collisions (ranger_complete keeps a historical
+       -0.005 offset). With the steering locked (below) the wheels roll
+       freely, and an off-axle collision turns each wheel into a cam: the
+       ride height then changes by 1 cm per revolution and the idle base
+       creeps up to a quarter metre into the low spots. -->
+  <xacro:arg name="wheel_collision_z" default="0.0"/>
 
   <!-- Include the real robot URDF with Gazebo Classic plugin disabled.
        The sim_gazebo_classic arg above (default=false) overrides the
@@ -168,6 +174,63 @@
       <odom_topic>/odom</odom_topic>
       <tf_topic>/tf</tf_topic>
       <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
+  </gazebo>
+
+  <!-- ================================================================== -->
+  <!-- Steering lock (sim-only)                                           -->
+  <!--                                                                    -->
+  <!-- The base is moved kinematically (VelocityControl above); the       -->
+  <!-- *_steering_joint revolute joints of ranger_complete.urdf.xacro     -->
+  <!-- have no actuator, damping or caster trail, so ground contact       -->
+  <!-- swivels the wheels to random angles (up to the +-2.1 rad limits,   -->
+  <!-- already while the robot settles after spawning) and the base       -->
+  <!-- slides. Hold every steering joint at 0 rad (wheels aligned with    -->
+  <!-- +x) with a JointPositionController in velocity-command mode: the   -->
+  <!-- same DART joint servo the arm already uses. The wheel joints stay  -->
+  <!-- free and roll from ground contact. Lateral vy motion skids the     -->
+  <!-- wheels; nav2_sim.yaml plans DiffDrive (vy = 0), so nothing uses it. -->
+  <!-- ================================================================== -->
+  <xacro:property name="steering_joints"
+                  value="${['fl_steering_joint', 'fr_steering_joint', 'rl_steering_joint', 'rr_steering_joint']}"/>
+  <xacro:property name="wheel_joints"
+                  value="${['fl_wheel', 'fr_wheel', 'rl_wheel', 'rr_wheel']}"/>
+  <xacro:macro name="lock_steering" params="joints">
+    <xacro:if value="${len(joints) > 0}">
+      <gazebo>
+        <plugin filename="ignition-gazebo-joint-position-controller-system"
+                name="ignition::gazebo::systems::JointPositionController">
+          <joint_name>${joints[0]}</joint_name>
+          <initial_position>0.0</initial_position>
+          <use_velocity_commands>true</use_velocity_commands>
+          <p_gain>20.0</p_gain>
+          <!-- rad/s: the URDF steering velocity limit -->
+          <cmd_max>6.28</cmd_max>
+          <cmd_min>-6.28</cmd_min>
+          <topic>/model/ranger/joint/${joints[0]}/cmd_pos</topic>
+        </plugin>
+      </gazebo>
+      <xacro:lock_steering joints="${joints[1:]}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:lock_steering joints="${steering_joints}"/>
+
+  <!-- Real wheel/steer angles out of Gazebo on gz topic
+       /ranger/base_joint_states, bridged to ROS /gz/base_joint_states by
+       config/gz_bridge.yaml and relayed to /joint_states by
+       base_joint_state_publisher.py. Arm joints are NOT listed: they come
+       from ros2_control's joint_state_broadcaster. -->
+  <xacro:macro name="joint_names" params="joints">
+    <xacro:if value="${len(joints) > 0}">
+      <joint_name>${joints[0]}</joint_name>
+      <xacro:joint_names joints="${joints[1:]}"/>
+    </xacro:if>
+  </xacro:macro>
+  <gazebo>
+    <plugin filename="ignition-gazebo-joint-state-publisher-system"
+            name="ignition::gazebo::systems::JointStatePublisher">
+      <topic>/ranger/base_joint_states</topic>
+      <xacro:joint_names joints="${steering_joints + wheel_joints}"/>
     </plugin>
   </gazebo>
 

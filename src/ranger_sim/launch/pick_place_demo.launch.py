@@ -26,8 +26,9 @@ def generate_launch_description():
                               description="World x the base drives to before grasping"),
         DeclareLaunchArgument("object_name", default_value="cup",
                               description="Graspable model (config/graspable_objects.yaml)"),
-        DeclareLaunchArgument("gripper_closed", default_value="0.002",
-                              description="joint7 travel (m) when closing on the object"),
+        DeclareLaunchArgument("gripper_closed", default_value="0.025",
+                              description="joint7 travel (m) when closing on the object: "
+                                          "the cup radius"),
         DeclareLaunchArgument("use_sim_time", default_value="true"),
     ]
 
