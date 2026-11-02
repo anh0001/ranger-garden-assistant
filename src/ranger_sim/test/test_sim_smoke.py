@@ -22,6 +22,8 @@ from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 import rclpy
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from ranger_sim.srv import SetGrasp
 from rosgraph_msgs.msg import Clock
@@ -33,6 +35,20 @@ from sensor_msgs.msg import JointState
 # activation after the unpause).
 READY_DELAY_SEC = 10.0
 WAIT_SEC = 30.0
+
+# Drive test: forward until odom reports DRIVE_DISTANCE_M (the table edge is
+# 0.9 m ahead of the spawn pose, so stay well short of it).
+STEERING_JOINTS = [
+    "fl_steering_joint",
+    "fr_steering_joint",
+    "rl_steering_joint",
+    "rr_steering_joint",
+]
+DRIVE_SPEED_MPS = 0.25  # pick_place_demo base_speed default
+DRIVE_DISTANCE_M = 0.3
+DRIVE_TIMEOUT_SEC = 20.0
+MAX_Y_DRIFT_M = 0.01
+MAX_STEERING_RAD = 0.05
 
 
 @unittest.skipIf(
@@ -229,6 +245,68 @@ class TestSimSmoke(unittest.TestCase):
         self.assertTrue(attached.success, attached.message)
         self.assertIsNotNone(released)
         self.assertTrue(released.success, released.message)
+
+    def test_gz_base_joint_states_topic(self):
+        """Gazebo's JointStatePublisher must reach ROS for the base joint relay."""
+        self.assertTrue(
+            self._wait_for_topic("/gz/base_joint_states"),
+            "/gz/base_joint_states topic not found",
+        )
+
+    def test_base_drives_straight_with_locked_steering(self):
+        """Forward /cmd_vel must not swivel the steering joints or drift the base in y."""
+        # Publishes /cmd_vel: only ever run in the isolated test domain against
+        # the headless sim (RANGER_SIM_TEST_ENV), never with a real base bridged.
+        # grasp_manager serves /grasp/set only after unpausing the world.
+        self.assertTrue(self._wait_for_service("/grasp/set"), "sim never unpaused")
+        self.assertTrue(self._wait_for_topic("/odom"), "/odom not found")
+        self.assertTrue(self._wait_for_topic("/gz/base_joint_states"))
+        odom, steering, worst = [], {}, {}
+
+        def on_joints(msg):
+            for name, position in zip(msg.name, msg.position):
+                steering[name] = position
+                worst[name] = max(worst.get(name, 0.0), abs(position))
+
+        subs = [
+            self.node.create_subscription(
+                Odometry, "/odom", lambda msg: odom.append(msg.pose.pose), 10
+            ),
+            self.node.create_subscription(
+                JointState, "/gz/base_joint_states", on_joints, 10
+            ),
+        ]
+        pub = self.node.create_publisher(Twist, "/cmd_vel", 10)
+        start = time.time()
+        while time.time() - start < WAIT_SEC and not (odom and steering):
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+        self.assertTrue(odom and steering, "no /odom or base joint states")
+        start_pose = odom[-1].position
+        twist = Twist()
+        twist.linear.x = DRIVE_SPEED_MPS
+        start = time.time()
+        while (
+            time.time() - start < DRIVE_TIMEOUT_SEC
+            and odom[-1].position.x - start_pose.x < DRIVE_DISTANCE_M
+        ):
+            pub.publish(twist)
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+        for _ in range(10):
+            pub.publish(Twist())  # stop
+            rclpy.spin_once(self.node, timeout_sec=0.1)
+        for sub in subs:
+            self.node.destroy_subscription(sub)
+        self.node.destroy_publisher(pub)
+
+        dx = odom[-1].position.x - start_pose.x
+        dy = odom[-1].position.y - start_pose.y
+        self.assertGreaterEqual(dx, DRIVE_DISTANCE_M, f"base barely moved ({dx:.2f} m)")
+        self.assertLess(abs(dy), MAX_Y_DRIFT_M, f"base drifted {dy:.3f} m in y")
+        for name in STEERING_JOINTS:
+            self.assertIn(name, worst, f"{name} missing from /gz/base_joint_states")
+            self.assertLess(
+                worst[name], MAX_STEERING_RAD, f"{name} swivelled to {worst[name]:.3f} rad"
+            )
 
     def test_gripper_action(self):
         """The GripperCommand action must be up (same interface as MoveIt / real bridge)."""

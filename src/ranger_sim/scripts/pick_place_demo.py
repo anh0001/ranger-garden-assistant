@@ -6,12 +6,13 @@ Pipeline
 --------
   1. Release any held object, open the gripper, arm to 'home' and then to
      the high 'lift' carry pose -- BEFORE the base approaches the table.
-  2. Drive the base to the approach pose (open-loop proportional control on
-     /odom).
-  3. Lower the arm to the pre-grasp hover pose just above the cup (joint
-     space, via the MoveIt MoveGroup action -> ranger_piper_moveit).
-  4. Attach the cup (/grasp/set -> DetachableJoint), then close the gripper.
-  5. Lift, place it back (hover pose again), open, release, clear upward.
+  2. Drive the base to the approach pose (proportional control on /odom).
+  3. Lower the level gripper to the hover pose above the cup, then descend
+     straight down so the finger pads straddle the cup body (joint space,
+     via the MoveIt MoveGroup action -> ranger_piper_moveit).
+  4. Attach the cup (/grasp/set -> DetachableJoint), close on the body.
+  5. Raise, lift, come back down the same way to set it on its spot, open,
+     release, clear upward.
   6. Back the base away to where it started, then retract to 'home'.
 
 Grasp
@@ -19,7 +20,8 @@ Grasp
 The cup is held by a simulator-native fixed joint (grasp_manager.py serves
 /grasp/set on top of Gazebo's DetachableJoint), not by finger friction. It
 is attached BEFORE the fingers close so the physics engine never creates
-the joint while the fingers interpenetrate the cup. The gripper is driven
+the joint while the fingers interpenetrate the cup; the fingers then close
+to the cup radius, i.e. the pads rest on its surface. The gripper is driven
 through control_msgs/GripperCommand on /piper_gripper_controller/gripper_cmd,
 the same interface MoveIt and the real PiPER bridge use.
 
@@ -32,17 +34,27 @@ tree"). The waypoints below were chosen from MoveIt FK so every TCP pose
 is verified reachable; the cup is placed in the world to match the grasp
 TCP. This is the robust, deterministic approach for a scripted sim demo.
 
-Geometry (TCP in base_footprint frame; garden_world table top z = 0.77,
-front edge at world x = 0.90; cup centre (0.915, 0, 0.82), top z = 0.87):
-  home      -> (0.484, 0, 0.596)  BELOW the table top: only used away from
-                                  the table, hence the back-off before it
-  lift      -> (0.347, 0, 1.111)  carry pose, clear above the table
-  pre-grasp -> (0.438, 0, 0.920)  hover: fingers ~5 cm above the cup top, so
-                                  attach/release happen without contact
-With base_approach_x = 0.52 the hovering gripper sits over the cup. The
-attach keeps the cup's current pose relative to the gripper, so placing
-back at the same hover pose returns the cup to its original spot. Tune
-`*_joints` / `base_approach_x` together if you move the cup.
+Geometry (base_footprint frame; garden_world table top z = 0.77, front
+edge at world x = 0.90; cup r = 0.025, h = 0.10, centre (0.915, 0, 0.82),
+rim z = 0.87). Gazebo rests base_footprint 1 cm below the ground (the
+wheel geometry says 2 cm; the waypoints are checked for both), so world
+z = frame z - 0.01..0.02. HOVER and GRASP keep the gripper level
+(approach +x, fingers closing along y) at the same link6 x = 0.290; the
+finger pads then span x 0.349..0.426 (cup centre at 0.395 with the base
+at world x = 0.52) and 5.6 cm in z:
+  home  TCP (0.484, 0, 0.596)  BELOW the table top: only used away from
+                               the table, hence the back-off before it
+  lift  TCP (0.347, 0, 1.111)  carry pose, clear above the table
+  hover TCP (0.430, 0, 0.935)  pads >= 1.7 cm above the rim: no contact
+  grasp TCP (0.430, 0, 0.842)  pads inside the cup body (>= 2.4 cm above
+                               the table, >= 1.0 cm below the rim), palm
+                               >= 1.2 cm from the cup, 1 cm finger gap
+                               per side when open
+The attach keeps the cup's current pose relative to the gripper, so
+going back down to the grasp pose sets the cup on its original spot.
+test/test_pick_place_geometry.py re-derives all of this from the URDF and
+the world; re-solve `*_joints` / `base_approach_x` there if you move the
+cup.
 
 Safety
 ------
@@ -52,6 +64,7 @@ drive the base and does not attach anything. Set `execute:=true` to
 actually run it (Gazebo only).
 """
 
+import math
 import time
 from typing import Callable
 
@@ -69,19 +82,28 @@ from ranger_sim.srv import SetGrasp
 
 ARM_JOINTS = [f"piper_joint{i}" for i in range(1, 7)]
 
-# Joint configurations (rad); TCP from MoveIt FK / IK (base_footprint frame).
-#   HOME      TCP ~ (0.484, 0, 0.596)  retract / stowed (away from the table)
-#   PRE_GRASP TCP ~ (0.438, 0, 0.920)  hover above the cup (attach/release)
-#   LIFT      TCP ~ (0.347, 0, 1.111)  carry pose, cup clear of the table
+# Joint configurations (rad); TCP from FK in the base_footprint frame
+# (test/test_pick_place_geometry.py re-derives them from the URDF).
+#   HOME  TCP ~ (0.484, 0, 0.596)  retract / stowed (BELOW the table top)
+#   HOVER TCP ~ (0.430, 0, 0.935)  level gripper, pads clear of the cup rim
+#   GRASP TCP ~ (0.430, 0, 0.842)  straight below HOVER; the finger pads
+#                                  straddle the cup body
+#   LIFT  TCP ~ (0.347, 0, 1.111)  carry pose, cup clear of the table
 HOME = [0.0, 1.2, -0.2, 0.0, -0.8, 0.0]
-PRE_GRASP = [0.0, 0.854, -1.23, 0.0, 0.376, 0.0]
+HOVER = [0.0, 0.9, -1.413, 0.0, 0.601, 0.0]
+GRASP = [0.0, 0.732, -0.943, 0.0, 0.298, 0.0]
 LIFT = [0.0, 0.9, -1.4, 0.0, -0.3, 0.0]
-BASE_TOLERANCE_M = 0.03
+# The grasp leaves ~1 cm between palm and cup: the base must stop within
+# a few millimetres of the approach pose (a 3 cm band left the fingers on
+# the near edge of the cup).
+BASE_TOLERANCE_M = 0.005
+BASE_GAIN = 1.0  # 1/s, proportional drive gain
+BASE_MIN_SPEED_MPS = 0.02  # speed floor so the last centimetres do not crawl
 BASE_DRIVE_TIMEOUT_SEC = 30.0
 ODOM_WAIT_SEC = 5.0
 
-GRIPPER_OPEN = 0.035  # joint7 travel (m)
-GRIPPER_CLOSED = 0.002  # cosmetic close: the cup is held by the grasp joint
+GRIPPER_OPEN = 0.035  # joint7 travel (m): 70 mm opening, the PiPER stroke
+GRIPPER_CLOSED = 0.025  # = cup radius: pads on the surface; the grasp joint holds it
 GRIPPER_MAX_EFFORT = 5.0
 SERVER_WAIT_SEC = 10.0
 GRIPPER_RESULT_TIMEOUT_SEC = 10.0
@@ -113,7 +135,8 @@ class PickPlaceDemo(Node):
         p("base_approach_x", 0.52)  # world x to drive base to
         p("base_speed", 0.25)  # m/s open-loop drive
         p("home_joints", HOME)
-        p("pre_grasp_joints", PRE_GRASP)
+        p("hover_joints", HOVER)
+        p("grasp_joints", GRASP)
         p("lift_joints", LIFT)
         # Finger travel when "closed" on the attached object; object specific.
         p("gripper_closed", GRIPPER_CLOSED)
@@ -216,7 +239,9 @@ class PickPlaceDemo(Node):
                 reached = True
                 break
             tw = Twist()
-            tw.linear.x = max(-speed, min(speed, 1.0 * err))
+            tw.linear.x = math.copysign(
+                max(BASE_MIN_SPEED_MPS, min(speed, BASE_GAIN * abs(err))), err
+            )
             self._cmd_vel.publish(tw)
         self._cmd_vel.publish(Twist())  # stop
         if not reached:
@@ -334,7 +359,9 @@ class PickPlaceDemo(Node):
     def run(self) -> None:
         self._wait_servers()
         home = list(self.get_parameter("home_joints").value)
-        pre = list(self.get_parameter("pre_grasp_joints").value)
+        hover = list(self.get_parameter("hover_joints").value)
+        # Not `grasp`: that is the attach/release method.
+        grasp_pose = list(self.get_parameter("grasp_joints").value)
         lift = list(self.get_parameter("lift_joints").value)
         closed = float(self.get_parameter("gripper_closed").value)
 
@@ -352,17 +379,24 @@ class PickPlaceDemo(Node):
             # end up under the table top and jam against it.
             ("carry pose", lambda: self.move_to_joint_state("lift", lift)),
             ("approach table", lambda: self.drive_base_to(approach_x)),
-            ("pre-grasp (hover)", lambda: self.move_to_joint_state("pre-grasp", pre)),
+            ("hover above cup", lambda: self.move_to_joint_state("hover", hover)),
+            # Straight descent: HOVER and GRASP share link6 x and a level
+            # approach, so the joint-space path stays vertical.
+            ("descend to grasp", lambda: self.move_to_joint_state("grasp", grasp_pose)),
             # Attach before closing so the fixed joint is never created
-            # while the fingers interpenetrate the cup.
+            # while the fingers interpenetrate the cup (1 cm clearance per
+            # side when open).
             ("attach cup", lambda: self.grasp(True)),
             ("close gripper", lambda: self.set_gripper(closed, "close")),
+            ("raise", lambda: self.move_to_joint_state("hover", hover)),
             ("lift", lambda: self.move_to_joint_state("lift", lift)),
-            # Place: back to the hover pose, where the cup rests on the
-            # table again, then open and release.
-            ("place", lambda: self.move_to_joint_state("place", pre)),
+            # Place: back down the same way; the attach kept the cup's pose
+            # relative to the wrist, so GRASP sets it on its original spot.
+            ("hover above table", lambda: self.move_to_joint_state("hover", hover)),
+            ("place", lambda: self.move_to_joint_state("place", grasp_pose)),
             ("open gripper", lambda: self.set_gripper(GRIPPER_OPEN, "open")),
             ("release cup", lambda: self.grasp(False)),
+            ("clear (hover)", lambda: self.move_to_joint_state("hover", hover)),
             ("clear (lift)", lambda: self.move_to_joint_state("lift", lift)),
             # 'home' is below the table top: back away before retracting.
             ("back away", lambda: start_x is None or self.drive_base_to(start_x)),

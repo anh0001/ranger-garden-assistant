@@ -109,16 +109,20 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Static joint states for the Ranger base wheel/steering joints.
-    # gz_ros2_control only publishes the PiPER arm joints; without these
-    # MoveIt's planning_scene_monitor never gets a complete robot state
-    # and refuses to plan for piper_arm.
+    # Live base wheel/steering joint states relayed from Gazebo's
+    # JointStatePublisher (bridged to /gz/base_joint_states; zeros until the
+    # sim reports them). gz_ros2_control only publishes the PiPER arm
+    # joints; without these MoveIt's planning_scene_monitor never gets a
+    # complete robot state and refuses to plan for piper_arm.
     base_joint_state_publisher = Node(
         package="ranger_sim",
         executable="base_joint_state_publisher.py",
         name="base_joint_state_publisher",
         output="screen",
-        parameters=[{"use_sim_time": use_sim_time}],
+        parameters=[{
+            "use_sim_time": use_sim_time,
+            "input_topic": "/gz/base_joint_states",
+        }],
     )
 
     # gz_ros2_control exports the joint8 mimic as "piper_joint8_mimic"
