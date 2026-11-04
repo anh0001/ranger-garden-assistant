@@ -300,6 +300,9 @@ models and the fetch command instead of starting an empty world.
 
 ## Recording a video
 
+A recorded garden transfer (65 s of sim time, wrist-camera inset top left)
+is in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4).
+
 With the sim up (`sim_bringup.launch.py`, headless is fine, same `scene`):
 
 ```bash
