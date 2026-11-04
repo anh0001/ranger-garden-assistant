@@ -3,7 +3,8 @@
 Pick-and-place scenes for the launch files (a helper module, not a launch file).
 
 config/pick_place_scenes.yaml holds, per scene, the world, the object, the base
-approach, the arm waypoints and the video camera rig. The launch files take a
+approach, the arm waypoints, the place pose and route of the transfer and the
+video camera rig. The launch files take a
 `scene` argument and read their defaults through SceneValue / from_scene. They
 import this module by path (it is installed next to them; `ros2 launch` only
 lists *.launch.py, so it stays out of the way):
@@ -27,6 +28,7 @@ SCENES_FILE = Path(__file__).parent.parent / "config" / "pick_place_scenes.yaml"
 REQUIRED_KEYS = frozenset({
     "world_file", "world_name", "object_name", "base_approach_x",
     "gripper_closed", "hover_joints", "grasp_joints", "rig_file",
+    "standoff_m", "place_base_pose", "place_route", "place_surface",
 })
 # Scene keys a launch argument of the same name can override (empty = scene).
 OVERRIDABLE = ("object_name", "base_approach_x", "gripper_closed")

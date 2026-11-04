@@ -65,14 +65,19 @@
   gz_type_name: ignition.msgs.CameraInfo
   direction: GZ_TO_ROS
 
-# Wrist camera color (Gazebo -> ROS)
-- topic_name: /piper/wrist_camera/color/image_raw
+# Wrist camera color / depth (Gazebo -> ROS). The rgbd_camera sensor of
+# ranger_gazebo.urdf.xacro (<topic>piper/wrist_camera</topic>) publishes
+# /piper/wrist_camera/{image,depth_image,camera_info}; the ROS names follow
+# the RealSense driver. record_demo_video.py draws the colour image as the
+# video inset (test/test_video_rig_launch.py checks the pairing).
+- ros_topic_name: /piper/wrist_camera/color/image_raw
+  gz_topic_name: /piper/wrist_camera/image
   ros_type_name: sensor_msgs/msg/Image
   gz_type_name: ignition.msgs.Image
   direction: GZ_TO_ROS
 
-# Wrist camera depth (Gazebo -> ROS)
-- topic_name: /piper/wrist_camera/depth/image_rect_raw
+- ros_topic_name: /piper/wrist_camera/depth/image_rect_raw
+  gz_topic_name: /piper/wrist_camera/depth_image
   ros_type_name: sensor_msgs/msg/Image
   gz_type_name: ignition.msgs.Image
   direction: GZ_TO_ROS

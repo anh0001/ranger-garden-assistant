@@ -5,13 +5,19 @@ from pathlib import Path
 from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
+import cv2
 from launch.actions import DeclareLaunchArgument
+from launch.substitutions import TextSubstitution
 from launch_ros.actions import Node
+import numpy as np
 import pytest
 import yaml
 
 PKG = Path(__file__).resolve().parents[1]
 SCENES = yaml.safe_load((PKG / "config" / "pick_place_scenes.yaml").read_text())
+SIM_XACRO = PKG / "urdf" / "ranger_gazebo.urdf.xacro"
+BRIDGE = PKG / "config" / "gz_bridge.yaml"
+MAX_INSET_STRETCH = 0.01  # wrist image vs. inset aspect ratio
 # Every scene's rig (config/pick_place_scenes.yaml: rig_file).
 RIGS = pytest.mark.parametrize(
     "rig_file", sorted({cfg["rig_file"] for cfg in SCENES.values()})
@@ -68,12 +74,67 @@ def test_rig_wide_camera_matches_the_recorder_defaults(rig_file):
 
 
 @RIGS
-def test_rig_close_camera_matches_the_recorder_defaults(rig_file):
-    _, cameras = _rig(rig_file)
-    close = cameras["close_cam"]
-    assert "/" + close.findtext("topic") == recorder.DEFAULT_CLOSE_TOPIC
-    width, height = _size(close)
-    assert width * 9 == height * 16  # same 16:9 shape as the inset
+def test_rig_has_only_the_wide_camera(rig_file):
+    # The inset is the robot's wrist camera: a rig close-up would only cost
+    # a render per frame.
+    model, cameras = _rig(rig_file)
+    assert set(cameras) == {"wide_cam"}
+    assert [s.get("name") for s in model.iter("sensor")] == ["wide_cam"]
+
+
+# ---- the inset: the robot's wrist camera ----------------------------------
+
+
+def _wrist_sensor():
+    """Return the wrist RGBD sensor of the sim xacro (plain XML: no xacro processing)."""
+    root = ET.parse(SIM_XACRO).getroot()
+    return next(s for s in root.iter("sensor") if s.get("name") == "wrist_rgbd")
+
+
+def _bridge_entry(gz_topic):
+    entries = [e for e in yaml.safe_load(BRIDGE.read_text()) if e.get("gz_topic_name") == gz_topic]
+    assert len(entries) == 1, f"{gz_topic} bridged {len(entries)} times"
+    return entries[0]
+
+
+def test_recorder_inset_is_the_bridged_wrist_camera():
+    sensor = _wrist_sensor()
+    entry = _bridge_entry("/" + sensor.findtext("topic") + "/image")  # rgbd_camera colour
+
+    assert entry["ros_topic_name"] == recorder.DEFAULT_CLOSE_TOPIC
+    assert entry["direction"] == "GZ_TO_ROS"
+    assert entry["ros_type_name"] == "sensor_msgs/msg/Image"
+
+
+def test_wrist_depth_image_is_bridged_too():
+    sensor = _wrist_sensor()
+    entry = _bridge_entry("/" + sensor.findtext("topic") + "/depth_image")
+
+    assert entry["ros_topic_name"] == "/piper/wrist_camera/depth/image_rect_raw"
+
+
+def test_wrist_camera_has_the_shape_of_the_inset():
+    width, height = _size(_wrist_sensor())
+
+    # 848x480, a native D405 colour mode, is 0.6 % from the inset's 16:9.
+    inset_aspect = recorder.INSET_W / recorder.INSET_H
+    assert abs(width / height - inset_aspect) / inset_aspect <= MAX_INSET_STRETCH
+
+
+def test_inset_label_fits_its_shade():
+    frame = recorder.compose_frame(
+        np.zeros((720, 1280, 3), np.uint8), np.full((480, 848, 3), 255, np.uint8),
+        size=(1280, 720), title="t", caption="c", grasp_text="cup: DETACHED",
+        grasp_attached=False, sim_sec=0.0,
+    )
+    x0, y0 = recorder.MARGIN, recorder.TITLE_BAR_H + recorder.MARGIN
+    label_w = cv2.getTextSize(
+        recorder.INSET_LABEL, recorder.FONT, recorder.INSET_LABEL_SCALE, 1
+    )[0][0]
+    right_of_label = frame[y0 + 2:y0 + recorder.INSET_LABEL_H - 2,
+                           x0 + label_w + recorder.INSET_LABEL_PAD + 2]
+
+    assert (right_of_label < 255).all(), "the shade ends before the label does"
 
 
 # ---- launch file ----------------------------------------------------------
@@ -101,6 +162,35 @@ def test_launch_does_not_start_the_demo_up_front():
     executables = {e.node_executable for e in _entities() if isinstance(e, Node)}
     assert "pick_place_demo.py" not in executables
     assert "record_demo_video.py" in executables
+
+
+def _literal_arguments(node):
+    """Return the plain-text command-line arguments of a launch_ros Node."""
+    return [
+        "".join(s.text for s in arg) for arg in node.cmd
+        if all(isinstance(s, TextSubstitution) for s in arg)
+    ]
+
+
+def test_launch_bridges_only_the_wide_camera():
+    (bridge,) = [
+        e for e in _entities() if isinstance(e, Node) and e.node_executable == "parameter_bridge"
+    ]
+    arguments = _literal_arguments(bridge)
+
+    assert any(a.startswith(recorder.DEFAULT_WIDE_TOPIC + "@") for a in arguments)
+    assert not any(a.startswith("/video/close@") for a in arguments)
+
+
+def test_launch_leaves_the_recorder_on_its_wrist_camera_default():
+    (rec,) = [
+        e for e in _entities()
+        if isinstance(e, Node) and e.node_executable == "record_demo_video.py"
+    ]
+    names = {"".join(s.text for s in name) for params in rec._Node__parameters for name in params}
+
+    assert "output_path" in names  # the parameters are visible here at all
+    assert "close_topic" not in names
 
 
 def test_launch_waits_for_the_recorders_ready_line():

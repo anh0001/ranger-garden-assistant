@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Record the pick-and-place demo from the video_rig cameras into an H.264 MP4.
+Record the pick-and-place demo into an H.264 MP4.
 
-Reads the two Gazebo cameras of models/video_rig.sdf (bridged to ROS as
-/video/wide and /video/close), draws the close-up as an inset, overlays the
-latest pick_place_demo log line (from /rosout) and the grasp state of one
-object (/grasp/<object>/state), and pipes the frames to ffmpeg.
+Reads the static wide camera of the scene's video rig (models/video_rig*.sdf,
+bridged to ROS as /video/wide) and the robot's wrist camera (the D405,
+/piper/wrist_camera/color/image_raw via config/gz_bridge.yaml), draws the
+robot's wrist camera as an inset, overlays the latest pick_place_demo log
+line (from /rosout) and the grasp state of one object
+(/grasp/<object>/state), and pipes the frames to ffmpeg. Until the first
+wrist image arrives the video has no inset.
 
 Frames are placed on the simulation clock (image header stamps): one output
 frame per 1/fps of simulation time, extra camera frames dropped and gaps
@@ -40,7 +43,8 @@ from std_msgs.msg import String
 READY_MARKER = "video recording started"
 
 DEFAULT_WIDE_TOPIC = "/video/wide"
-DEFAULT_CLOSE_TOPIC = "/video/close"
+# The inset: the robot's wrist camera (config/gz_bridge.yaml), 16:9 like INSET_W x INSET_H.
+DEFAULT_CLOSE_TOPIC = "/piper/wrist_camera/color/image_raw"
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_FPS = 30
@@ -58,6 +62,10 @@ TITLE_BAR_H = 44
 STATUS_BAR_H = 52
 MARGIN = 16
 INSET_W, INSET_H = 480, 270
+INSET_LABEL = "wrist camera (D405)"
+INSET_LABEL_SCALE = 0.6
+INSET_LABEL_PAD = 8  # label text inset in its shade, pixels
+INSET_LABEL_H = 26
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 TEXT_THICKNESS = 2
 STATUS_SCALE = 0.75  # step caption and grasp state
@@ -177,8 +185,10 @@ def _draw_inset(frame: np.ndarray, close: np.ndarray) -> None:
     x1, y1 = x0 + INSET_W, y0 + INSET_H
     frame[y0:y1, x0:x1] = cv2.resize(close, (INSET_W, INSET_H))
     cv2.rectangle(frame, (x0 - 2, y0 - 2), (x1 + 1, y1 + 1), WHITE, 2)
-    _shade(frame, x0, y0, x0 + 120, y0 + 26)
-    cv2.putText(frame, "close-up", (x0 + 8, y0 + 19), FONT, 0.6, WHITE, 1, cv2.LINE_AA)
+    label_w = cv2.getTextSize(INSET_LABEL, FONT, INSET_LABEL_SCALE, 1)[0][0]
+    _shade(frame, x0, y0, x0 + label_w + 2 * INSET_LABEL_PAD, y0 + INSET_LABEL_H)
+    cv2.putText(frame, INSET_LABEL, (x0 + INSET_LABEL_PAD, y0 + 19), FONT, INSET_LABEL_SCALE,
+                WHITE, 1, cv2.LINE_AA)
 
 
 def compose_frame(
@@ -192,7 +202,7 @@ def compose_frame(
     grasp_attached: bool,
     sim_sec: float,
 ) -> np.ndarray:
-    """Return a new ``size`` (w, h) frame: wide view, close-up inset and overlays."""
+    """Return a new ``size`` (w, h) frame: wide view, wrist camera inset and overlays."""
     width, height = size
     if wide.shape[:2] == (height, width):
         frame = wide.copy()
@@ -341,7 +351,7 @@ class DemoVideoRecorder(Node):
             self._close = image_to_bgr(msg)
         except ValueError as exc:
             self.get_logger().error(
-                f"close-up frame skipped: {exc}", throttle_duration_sec=LOG_THROTTLE_SEC
+                f"inset frame skipped: {exc}", throttle_duration_sec=LOG_THROTTLE_SEC
             )
 
     def _on_log(self, msg: Log) -> None:

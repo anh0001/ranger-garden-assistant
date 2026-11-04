@@ -37,6 +37,8 @@
 
   <!-- tools/fetch_sim_assets.py (downscales the scanned objects' textures) -->
   <exec_depend>python3-pil</exec_depend>
+  <!-- tools/solve_level_waypoint.py (planar IK for the demo's level waypoints) -->
+  <exec_depend>python3-scipy</exec_depend>
 
   <!-- Robot description -->
   <exec_depend>ranger_description</exec_depend>

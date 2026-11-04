@@ -2,18 +2,25 @@
 <!--
   Static, collision-free camera rig for recording the pick-and-place demo
   (launch/record_pick_place_video.launch.py, scripts/record_demo_video.py).
-  Spawned at the world origin, so the sensor poses are world poses. They are
-  tuned to the table and cup of worlds/garden_world.sdf; other worlds need
-  their own poses. The wide camera's topic/size must match the recorder
-  defaults (checked by test/test_video_rig_launch.py).
+  Spawned at the world origin, so the sensor pose is a world pose. It is
+  tuned to the two tables of worlds/garden_world.sdf; other worlds need
+  their own rig. The camera's topic/size must match the recorder defaults
+  (checked by test/test_video_rig_launch.py). The recorder's inset is the
+  robot's own wrist camera, not a rig camera.
 -->
 <sdf version="1.8">
   <model name="video_rig">
     <static>true</static>
     <link name="link">
-      <!-- Wide 3/4 view from the +y side: base approach, arm, table front and cup. -->
+      <!-- High 3/4 view from beyond the garden border (+y), looking down
+           43 deg at (0.45, 0.7, 0.75): the pick at table A seen side-on, the
+           place at table_b from the front, the base route between them. The
+           pick, the place and the robot along its route stay clear of the
+           recorder's wrist inset (top-left 480 x 270 px) and of the title and
+           status bars, and no table top hides the cups or the base (checked
+           by pinhole projection; tune on the GPU box with a recording). -->
       <sensor name="wide_cam" type="camera">
-        <pose>0.55 2.70 2.00 0 0.4777 -1.5153</pose>
+        <pose>1.20 2.77 2.80 0 0.745 -1.786</pose>
         <always_on>true</always_on>
         <update_rate>30</update_rate>
         <topic>video/wide</topic>
@@ -21,18 +28,6 @@
           <horizontal_fov>1.15</horizontal_fov>
           <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
           <clip><near>0.05</near><far>30</far></clip>
-        </camera>
-      </sensor>
-      <!-- Close-up of the cup and the hovering gripper (drawn as the inset). -->
-      <sensor name="close_cam" type="camera">
-        <pose>0.95 0.75 1.00 0 0.0666 -1.5975</pose>
-        <always_on>true</always_on>
-        <update_rate>30</update_rate>
-        <topic>video/close</topic>
-        <camera>
-          <horizontal_fov>0.95</horizontal_fov>
-          <image><width>960</width><height>540</height><format>R8G8B8</format></image>
-          <clip><near>0.02</near><far>10</far></clip>
         </camera>
       </sensor>
     </link>

@@ -13,9 +13,12 @@ Actually run it in Gazebo (drives base + moves arm + gripper + grasp):
   ros2 launch ranger_sim pick_place_demo.launch.py execute:=true
   ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house execute:=true
 
-The object, base approach, gripper closing and hover/grasp waypoints come
-from the scene (config/pick_place_scenes.yaml); a non-empty object_name,
-base_approach_x or gripper_closed argument overrides the scene's value.
+The demo picks the object at the scene's table, carries it along the place
+route and sets it down at the place pose, then drives back. The object,
+base approach, gripper closing, hover/grasp waypoints, standoff, place pose
+and route come from the scene (config/pick_place_scenes.yaml); a non-empty
+object_name, base_approach_x or gripper_closed argument overrides the
+scene's value.
 """
 
 import importlib.util
@@ -65,6 +68,9 @@ def generate_launch_description():
             "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
             "hover_joints": scenes.from_scene(scene, "hover_joints"),
             "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
+            "standoff_m": scenes.from_scene(scene, "standoff_m", float),
+            "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
+            "place_route": scenes.from_scene(scene, "place_route"),
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],
     )

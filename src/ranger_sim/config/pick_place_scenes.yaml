@@ -9,6 +9,17 @@
 #   gripper_closed            joint7 travel (m) when closing on the object: its radius
 #   hover_joints/grasp_joints PiPER joints 1-6 (rad): level gripper above / around it
 #   rig_file                  models/<file>: camera rig of record_pick_place_video
+#   standoff_m                base stops this far short of base_approach_x (and of place_base_pose):
+#                             the arm goes to grasp height there and the wrist camera sees the object
+#                             centred, then the base slides in so the open fingers straddle it
+#   place_base_pose           [x, y, yaw] of the base at the place approach; the object is set down
+#                             the same distance ahead of the base as it was picked
+#   place_route               flat [x0, y0, yaw0, x1, y1, yaw1, ...]: base poses between standoff A
+#                             and standoff B (back off, turn, drive); reversed on the way home.
+#                             At least one pose: ROS parameters cannot be empty lists
+#   place_surface             world model (with a top_collision) the place spot must rest on
+# Base poses are in the odom frame, which is the world frame: the robot spawns at the origin
+# facing +x and the sim odometry has no noise.
 garden:
   world_file: garden_world.sdf
   world_name: garden_world
@@ -18,6 +29,12 @@ garden:
   hover_joints: [0.0, 0.9, -1.413, 0.0, 0.601, 0.0]    # TCP (0.430, 0, 0.935)
   grasp_joints: [0.0, 0.732, -0.943, 0.0, 0.298, 0.0]  # TCP (0.430, 0, 0.842)
   rig_file: video_rig.sdf
+  standoff_m: 0.15
+  # table_b front edge y 1.45 = 1.07 + 0.38, as table A (0.90 = 0.52 + 0.38):
+  # the cup goes down at (0, 1.465), 1.5 cm in from the edge.
+  place_base_pose: [0.0, 1.07, 1.5708]
+  place_route: [0.0, 0.0, 0.0,  0.0, 0.0, 1.5708]      # back to the origin, turn left
+  place_surface: table_b
 small_house:
   world_file: small_house_world.sdf
   world_name: small_house
@@ -31,3 +48,11 @@ small_house:
   hover_joints: [0.0, 0.965, -1.576, 0.0, 0.698, 0.0]  # TCP (0.430, 0, 0.962)
   grasp_joints: [0.0, 0.777, -1.081, 0.0, 0.392, 0.0]  # TCP (0.430, 0, 0.871)
   rig_file: video_rig_small_house.sdf
+  standoff_m: 0.15
+  # Second slot on the same kitchen table (top y -1.2..0.6), 20 cm from its +y
+  # end: the bottle goes down at (0.935, 0.40). The chairs block other slots;
+  # ChairA_01_001 stands at (0.50, -0.86), so the route stays at y >= 0.
+  place_base_pose: [0.535, 0.4, 0.0]
+  # back to the origin, turn left, 0.40 m along y, turn back
+  place_route: [0.0, 0.0, 0.0,  0.0, 0.0, 1.5708,  0.0, 0.4, 1.5708,  0.0, 0.4, 0.0]
+  place_surface: table

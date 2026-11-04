@@ -76,6 +76,8 @@ if(BUILD_TESTING)
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_pick_place_geometry test/test_pick_place_geometry.py
     ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_pick_place_demo test/test_pick_place_demo.py
+    ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_pick_place_scenes test/test_pick_place_scenes.py
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_generate_small_house_world test/test_generate_small_house_world.py

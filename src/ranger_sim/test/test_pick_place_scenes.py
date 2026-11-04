@@ -81,18 +81,39 @@ def test_scene_numbers_are_floats(name):
     # parameter an integer array and the demo node reject it.
     cfg = SCENES[name]
     values = [cfg["base_approach_x"], cfg["gripper_closed"], *cfg["hover_joints"],
-              *cfg["grasp_joints"]]
+              *cfg["grasp_joints"], cfg["standoff_m"], *cfg["place_base_pose"],
+              *cfg["place_route"]]
     assert all(isinstance(v, float) for v in values)
     assert len(cfg["hover_joints"]) == len(cfg["grasp_joints"]) == 6
 
 
-def test_load_scenes_rejects_a_scene_without_a_required_key(tmp_path):
+@pytest.mark.parametrize("name", sorted(SCENES))
+def test_scene_place_pose_and_route_are_base_poses(name):
+    # Poses are [x, y, yaw]; the route is a flat list of them, never empty:
+    # a ROS parameter cannot be an empty list.
+    cfg = SCENES[name]
+    assert len(cfg["place_base_pose"]) == 3
+    assert cfg["place_route"] and len(cfg["place_route"]) % 3 == 0
+    assert 0.0 < cfg["standoff_m"] < cfg["base_approach_x"]
+
+
+@pytest.mark.parametrize("name", sorted(SCENES))
+def test_place_surface_is_a_world_model(name):
+    world = ET.parse(PKG / "worlds" / SCENES[name]["world_file"]).getroot()
+    surface = [m for m in world.iter("model") if m.get("name") == SCENES[name]["place_surface"]]
+
+    assert len(surface) == 1
+    assert any(c.get("name") == "top_collision" for c in surface[0].iter("collision"))
+
+
+@pytest.mark.parametrize("key", ["rig_file", "place_route"])
+def test_load_scenes_rejects_a_scene_without_a_required_key(tmp_path, key):
     broken = {name: dict(cfg) for name, cfg in SCENES.items()}
-    del broken["garden"]["rig_file"]
+    del broken["garden"][key]
     path = tmp_path / "scenes.yaml"
     path.write_text(yaml.safe_dump(broken))
 
-    with pytest.raises(ValueError, match="rig_file"):
+    with pytest.raises(ValueError, match=key):
         scenes.load_scenes(path)
 
 
@@ -135,9 +156,12 @@ def test_from_scene_types_the_parameter():
 
     approach = scenes.from_scene(LaunchConfiguration("scene"), "base_approach_x", float)
     hover = scenes.from_scene(LaunchConfiguration("scene"), "hover_joints")
+    route = scenes.from_scene(LaunchConfiguration("scene"), "place_route")
 
     assert approach.evaluate(context) == SCENES["small_house"]["base_approach_x"]
     assert list(hover.evaluate(context)) == SCENES["small_house"]["hover_joints"]
+    assert list(route.evaluate(context)) == SCENES["small_house"]["place_route"]
+    assert all(isinstance(v, float) for v in route.evaluate(context))
 
 
 def _bringup_configuration(**given):

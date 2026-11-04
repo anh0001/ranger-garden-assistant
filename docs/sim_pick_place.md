@@ -4,12 +4,18 @@ Scope: simulation only (`ranger_sim`). Hardware is unaffected.
 
 ## Status (verified headless, Gazebo Sim 6.16 / Humble)
 
-`pick_place_demo.launch.py execute:=true` on the garden world runs the full
-sequence: the base rolls straight to the table on aligned wheels, the
-gripper descends level so its finger pads straddle the cup body, and the
-cup is lifted and put back where it was (final offset ~3 mm). Every MoveIt
-step returns SUCCESS and the joints actually reach their targets; the base
-holds its position to ±0.2 mm while the arm works.
+`pick_place_demo.launch.py execute:=true` on the garden world moves the cup
+from table A to a second table, `table_b`: the base stops 15 cm short of
+the cup with the gripper level at cup height, so the wrist camera has the
+cup centred (see [Approach along the wrist camera](#approach-along-the-wrist-camera)),
+then slides in until the open finger pads straddle the cup body. The cup is
+attached, lifted and retracted upright into the level carry pose; the base
+backs to the origin, turns left and drives to `table_b`, where the cup is
+set down 1.5 cm in from the front edge (final offset 2 mm from the planned
+spot), and the base drives back to where it started
+(see [Transfer](#transfer)). Every MoveIt step returns SUCCESS and the
+joints actually reach their targets; the base holds its position to
+±0.2 mm while the arm works and stops within 5 mm of every pose.
 
 ```bash
 ros2 launch ranger_sim sim_bringup.launch.py                      # full sim (starts paused, see below)
@@ -19,8 +25,9 @@ ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Ga
 
 The same demo runs in a home dining room with `scene:=small_house` (see
 [Small-house scene](#small-house-scene)): it picks a scanned vitamin bottle
-off the kitchen table and sets it back within ~2.4 mm. `garden` stays the
-default scene.
+off the kitchen table and sets it down 0.40 m further along the same table,
+next to the sprinkles jar (within 3.5 mm of the planned spot). `garden`
+stays the default scene.
 
 ## How the grasp works
 
@@ -63,16 +70,17 @@ default scene.
   exports it as `piper_joint8_mimic`, which `piper_mimic_state_broadcaster`
   publishes on its local topic and `mimic_joint_state_relay.py` republishes
   as `piper_joint8` on `/joint_states`.
-- **Grasp geometry.** The level gripper (approach +x, fingers closing along
-  y) goes to a hover pose (pads ≥ 1.7 cm above the cup rim), descends
-  straight down to the grasp pose (pads inside the 5 cm cup body,
-  ≥ 2.4 cm above the table, palm ≥ 1.2 cm from the cup, 1 cm per side
-  between the open fingers and the cup), attaches, then closes to the cup
-  radius (`gripper_closed:=0.025`) so the pads rest on its surface. The
-  object is attached **before** the fingers close, so the joint is never
-  created during contact. `test/test_pick_place_geometry.py` re-derives
-  every clearance from the URDF and the world (forward kinematics, no
-  simulator).
+- **Grasp geometry.** At the grasp pose the level gripper (approach +x,
+  fingers closing along y) has its pads inside the 5 cm cup body
+  (≥ 2.4 cm above the table, palm ≥ 1.2 cm from the cup, 1 cm per side
+  between the open fingers and the cup). The pick reaches it horizontally
+  (the base slides in at grasp height); the place comes straight down from
+  the hover pose (pads ≥ 1.7 cm above the rim). The demo attaches, then
+  closes to the cup radius (`gripper_closed:=0.025`) so the pads rest on
+  its surface. The object is attached **before** the fingers close, so the
+  joint is never created during contact. `test/test_pick_place_geometry.py`
+  re-derives every clearance from the URDF and the world (forward
+  kinematics, no simulator).
 
 ## Root causes found while making it work
 
@@ -89,8 +97,9 @@ default scene.
 2. **Waypoints collided with the table once the arm really moved.** With
    the base at the table, `home` puts the gripper under the table top and
    the old pre-grasp pose put the open fingers exactly on the cup surface.
-   The demo now raises the arm to the `lift` carry pose before approaching
-   and backs the base away before retracting to `home`. (It then attached
+   The demo now raises the arm to a carry pose before approaching (`lift`
+   then, the level `CARRY` since item 7) and backs the base away before
+   retracting to `home`. (It then attached
    from a hover pose ~5 cm above the cup top; item 4 replaced that.)
 3. **Humble action/discovery race.** The first gripper goal's acceptance
    could be lost right after `wait_for_server()`; the demo waits for
@@ -118,6 +127,93 @@ default scene.
    per revolution and the idle base crept up to a quarter metre into the
    low spots (2–3 mm per arm move during the demo). The sim now uses
    concentric wheel collisions (see *Base wheels*).
+7. **The gripper pointed up and the wrist camera never saw the cup.** The
+   old carry pose `lift` had its approach axis at (0.63, 0, 0.78): the
+   gripper pointed 51° upward and the held cup leaned back 51°. And the
+   grasp came straight down from above, which left the cup 49–54° off the
+   D405's optical axis, outside its 28° half vertical field of view. Not a
+   URDF bug but waypoint choices; see
+   [Approach along the wrist camera](#approach-along-the-wrist-camera).
+8. **The first in-place turn stalled at 85°.** Turning in place drags the
+   straight-locked wheels sideways, and below ~0.13 rad/s the sim base does
+   not turn at all; the proportional turn slowed into that dead zone. See
+   [Transfer](#transfer) for the measured dead zones and the floors.
+
+## Approach along the wrist camera
+
+The RealSense D405 rides on top of the gripper (`piper_camera_*`, the
+calibrated mount in `ranger_complete.urdf.xacro`). With the gripper level
+it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
+`base_footprint`, aimed ~10 cm beyond the TCP.
+
+- **Look, then approach.** The base stops `standoff_m` = 0.15 m short of the
+  pick pose and the arm goes to the grasp pose there ("look at the
+  object"). The object is then 4° off the optical axis at 0.20 m (D405
+  depth range 7–50 cm): centred in the wrist image. Halfway through the
+  slide-in it is 15–19° off, still inside the 28° half vertical field of
+  view.
+  The base then slides in at 0.08 m/s until the open fingers straddle it.
+- **Carry level.** `CARRY` (TCP (0.340, 0, 0.950), level, retracted over
+  the base; `tools/solve_level_waypoint.py 0.20 0.95`) replaces `lift`:
+  the held object stays upright, 5 cm or more above both tables and
+  behind the table edge whenever the base moves. HOVER, GRASP and CARRY
+  share the sum of joints 2, 3 and 5, so the joint-space paths between
+  them stay level too.
+- **Wrist camera in ROS.** `config/gz_bridge.yaml` maps the sensor's gz
+  topics to `/piper/wrist_camera/color/image_raw` and
+  `/piper/wrist_camera/depth/image_rect_raw` (848×480 at 15 Hz, a native
+  D405 mode). The recorded video uses it as its inset.
+- `test_pick_place_geometry.py` checks all of it per scene: the carry pose,
+  the camera view at the standoff (±5 mm base stop), the paths from CARRY
+  at the standoff, and the held object on the way into the carry pose.
+  `tools/solve_level_waypoint.py X Z` solves new level waypoints and is
+  checked against the scene waypoints.
+
+## Transfer
+
+- **Scene keys.** Per scene in `config/pick_place_scenes.yaml`:
+  `standoff_m`; `place_base_pose` `[x, y, yaw]` (the base at the place
+  approach; the object goes down as far ahead of the base as it was picked);
+  `place_route`, a flat `[x0, y0, yaw0, x1, …]` list of base poses between
+  the pick standoff and the place standoff, driven in reverse on the way
+  home (never empty: a ROS parameter cannot be an empty list); and
+  `place_surface`, the world model the place spot must rest on.
+  `load_scenes` rejects a scene without them.
+- **Routes.**
+  - garden: back to the origin, turn to 90°, drive to (0, 0.92), slide in to
+    (0, 1.07). `table_b` is a copy of `table` at (0, 1.75), so the cup is
+    set down at (0, 1.465), 1.5 cm in from the front edge as at table A;
+    `planter_2` moved from (0, 1.5) to (1.2, 1.5) to make room.
+  - small_house: back to the origin, turn to 90°, drive 0.40 m, turn back,
+    drive to (0.385, 0.40), slide in to (0.535, 0.40): the second slot on
+    the same kitchen table, 20 cm from its +y end. The chairs block every
+    other slot (`ChairA_01_001` stands at (0.50, −0.86)), so the route
+    stays at y ≥ 0.
+- **Pose controller.** `drive_to_pose()` turns the base in place until its
+  yaw is within 0.005 rad of the target, then translates it holonomically
+  (`VelocityControl` takes vx, vy, wz), until it is within 5 mm and
+  0.005 rad. While translating it turns back only beyond 0.015 rad, and
+  turns a last time once the position is reached: a `/cmd_vel` that arrives
+  an update late carries a turn past the 0.005 rad band, and turning back
+  every update made the base crawl (18 s instead of 6 s for 0.92 m with one
+  update of latency, never at three; `test_pick_place_demo.py` runs every
+  drive test with 0–2 updates of latency). The base is stopped when a leg
+  ends for any reason, Ctrl-C included, and whenever `/odom` is older than
+  0.5 s: it never drives on a stale pose. Odom is the world frame here: the robot spawns at the origin
+  facing +x and the sim odometry has no noise. Nav2 is not used: its
+  `xy_goal_tolerance` is 0.25 m and the place needs millimetres.
+- **The sim base skids.** With the steering locked straight, turning in
+  place and moving sideways drag the wheels over the ground. Measured with
+  constant `/cmd_vel` commands in `garden_world`: nothing moves below
+  ~0.13 rad/s (turn) or ~0.035 m/s (sideways), and above that the base
+  moves at about (command − dead zone); forward and backward are exact.
+  The controller's floors sit above the dead zones (0.35 rad/s turning,
+  0.08 m/s sideways). A turn also drags the base ~0.1 mm per degree off its
+  spot; the translation removes it. `test_pick_place_demo.py` runs the
+  controller against a fake base with these dead zones.
+- **Order of steps.** The arm is in CARRY on every base leg away from a
+  table, at GRASP for the pick slide-in and at HOVER for the place slide-in
+  and the back-off (`test_pick_place_demo.py` checks the sequence).
 
 ## Base wheels
 
@@ -126,9 +222,10 @@ default scene.
 - **Steering lock (sim-only).** `ranger_gazebo.urdf.xacro` holds every
   `*_steering_joint` at 0 rad with one `JointPositionController` each
   (velocity-command mode, the same DART joint servo the arm uses). The
-  wheel joints stay free and roll from ground contact. Lateral `vy` makes
-  the aligned wheels skid; `nav2_sim.yaml` plans DiffDrive (vy = 0), so
-  nothing exercises that.
+  wheel joints stay free and roll from ground contact. Turning in place
+  and lateral `vy` make the aligned wheels skid, with a dead zone the
+  transfer's pose controller works around (see [Transfer](#transfer));
+  `nav2_sim.yaml` plans DiffDrive (vy = 0).
 - **Concentric wheel collisions (sim-only).** `ranger_complete.urdf.xacro`
   takes `wheel_collision_z` (default −0.005, the historical value: the
   hardware URDF is unchanged); the sim wrapper passes 0.0.
@@ -169,7 +266,8 @@ models and the fetch command instead of starting an empty world.
 
 - **Scenes.** `config/pick_place_scenes.yaml` holds, per scene, the world,
   the object, the base approach, the gripper closing, the hover/grasp
-  waypoints and the video camera rig. The launch files take `scene:=`
+  waypoints, the transfer (standoff, place pose, route, place surface) and
+  the video camera rig. The launch files take `scene:=`
   (default `garden`); explicit `world:=`, `world_name:=`, `object_name:=`,
   `base_approach_x:=` and `gripper_closed:=` still override it. An unknown
   scene fails at launch with the list of known ones.
@@ -177,8 +275,8 @@ models and the fetch command instead of starting an empty world.
   transforms the committed source world
   (`tools/aws_small_house/small_house.world`) rigidly so its kitchen table
   stands where the garden table did: front edge at world x = 0.90, the
-  robot spawning at the origin facing +x. The demo's base drive (odom x)
-  and sim_bringup's identity `map -> odom` stay as they are. Edit
+  robot spawning at the origin facing +x. The demo's odom base poses and
+  sim_bringup's identity `map -> odom` stay as they are. Edit
   `tools/small_house_world.template.sdf`, then regenerate;
   `test_generate_small_house_world.py` fails if the committed world is stale.
 - **Primitive table collisions.** The AWS KitchenTable's collision mesh tops
@@ -211,13 +309,14 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 ```
 
 - Spawns the scene's camera rig (`models/video_rig.sdf` for the garden,
-  `models/video_rig_small_house.sdf` for the house; two static cameras, no
-  collisions) at the world origin, bridges `/video/wide` and `/video/close`,
-  and runs
+  `models/video_rig_small_house.sdf` for the house; one static wide camera,
+  no collisions) at the world origin, bridges `/video/wide`, and runs
   `scripts/record_demo_video.py`. The result is a 1280×720 H.264 MP4
-  (default `~/.ros/videos/pick_place_<time>.mp4`) with a close-up inset, the
-  current demo step (from the `pick_place_demo` log), the grasp state and
-  the sim time.
+  (default `~/.ros/videos/pick_place_<time>.mp4`) with the robot's wrist
+  camera (`/piper/wrist_camera/color/image_raw`) as the inset, the current
+  demo step (from the `pick_place_demo` log), the grasp state and the sim
+  time. The inset shows the object centred at "look at the object" and the
+  held object at the bottom of the image while it is carried.
 - Frames are placed on simulation time, one per 1/30 s, so playback runs at
   sim speed even when the extra cameras slow the sim down.
 - The demo (`execute:=true`) starts only after the recorder has its first
@@ -227,14 +326,15 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   without running the demo.
 - The launch ends when the demo exits; the recorder then closes the file.
 - Each scene names its rig (`rig_file` in `config/pick_place_scenes.yaml`);
-  the poses are tuned to that scene's table and keep the object and the
-  gripper path clear of the close-up inset (top left). The cameras need GPU
-  rendering, like the robot's own sensors.
+  the poses are tuned to that scene's tables and keep the pick, the place
+  and the gripper path clear of the inset (top left). The garden camera
+  looks down 43° from (1.20, 2.77, 2.80), beyond the garden border, so both
+  tables and the route are in view and no table top hides the robot. The
+  cameras need GPU rendering, like the robot's own sensors.
 - The status bar right-aligns the grasp state and the sim time and cuts the
   step caption to the space left, so long object names fit.
-- In the house, the 29 s of sim time of a recorded demo took ~105 s of wall
-  time (measured once; the sim runs at ~0.93 with the rig cameras streaming
-  and the arm idle).
+- The recorded transfer is 63 s of sim time in the garden and 76 s in the
+  house.
 
 ## Known limitations
 
@@ -251,18 +351,22 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   (`ROS_LOCALHOST_ONLY=1`, `ROS_DOMAIN_ID=99`, gz partition
   `ranger_sim_test`, set in `CMakeLists.txt`); without `RANGER_SIM_GPU=1`
   the smoke test is skipped.
-- The base approach is proportional control on `/odom` along x only (Nav2
-  goals come with the task executor in a later phase); it relies on the
-  base starting at y = 0, yaw = 0, which the steering lock now keeps.
-- The sim base has no drivetrain: lateral `vy` skids the wheels, and the
-  wheel collisions differ from the hardware description (concentric).
+- The base moves by a pose controller on `/odom` (Nav2 goals come with the
+  task executor in a later phase); base poses are world poses only because
+  the robot spawns at the origin facing +x and the sim odometry is
+  noise-free.
+- The sim base has no drivetrain: turning in place and lateral `vy` skid the
+  wheels (wheels visibly dragged, dead zones measured above), and the wheel
+  collisions differ from the hardware description (concentric).
+- The house's place slot is 40 cm along the same kitchen table: the chairs
+  around it block the other approaches.
+- The approach is scripted. The wrist camera's view is checked by FK and
+  shown in the video; nothing reads the image yet (no visual servoing).
+- The house rig camera loses part of the base off the right edge of the
+  frame while it turns at (0, 0.40); the pick and the place stay in view.
 - The waypoints are joint-space and per scene in
   `config/pick_place_scenes.yaml`; re-solve them with FK when moving an
   object (see `test_pick_place_geometry.py`, which checks every scene).
-- The wrist RGBD camera renders in Gazebo on `/piper/wrist_camera/image` and
-  `/piper/wrist_camera/depth_image`, but `config/gz_bridge.yaml` bridges
-  `/piper/wrist_camera/color/image_raw` and `/depth/image_rect_raw` without
-  a `gz_topic_name`, so no wrist images reach ROS (true in both scenes).
 
 ## Key files
 
@@ -298,15 +402,21 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   `src/ranger_sim/scripts/base_joint_state_publisher.py`,
   `src/ranger_sim/scripts/pick_place_demo.py`
 - `src/ranger_sim/worlds/garden_world.sdf` — 5 cm cup at the table front
-  edge
+  edge, `table_b` (the place target)
+- `src/ranger_sim/tools/solve_level_waypoint.py` — planar IK for level arm
+  waypoints (how `CARRY` was solved)
 - `src/ranger_sim/test/test_pick_place_geometry.py` — FK clearances of the
-  grasp waypoints for every scene, steering-lock / bridge / relay
-  consistency
+  grasp and carry waypoints, the wrist camera's view, the place spot for
+  every scene; steering-lock / bridge / relay consistency
+- `src/ranger_sim/test/test_pick_place_demo.py` — pose controller (ideal and
+  skidding fake base, 0–2 updates of `/cmd_vel` latency, stale `/odom`,
+  Ctrl-C), step sequence, plan-only safety
 - `src/ranger_sim/test/test_pick_place_scenes.py`,
   `test_generate_small_house_world.py`, `test_fetch_sim_assets.py` —
   scenes and launch helper, world generator, fetch tool (offline)
 - `src/ranger_sim/test/test_sim_smoke.py` — headless bringup incl. the
-  drive-straight check (`RANGER_SIM_GPU=1`, `RANGER_SIM_SCENE=small_house`)
+  drive-straight check and the wrist image (`RANGER_SIM_GPU=1`,
+  `RANGER_SIM_SCENE=small_house`)
 - `src/ranger_sim/launch/record_pick_place_video.launch.py`,
   `src/ranger_sim/scripts/record_demo_video.py`,
   `src/ranger_sim/models/video_rig.sdf`,

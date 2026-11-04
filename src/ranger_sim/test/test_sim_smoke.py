@@ -30,7 +30,7 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from ranger_sim.srv import SetGrasp
 from rosgraph_msgs.msg import Clock
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import Image, JointState
 import yaml
 
 # Humble's launch_testing aborts if ReadyToTest is not emitted within 15 s
@@ -60,6 +60,10 @@ DRIVE_DISTANCE_M = 0.3
 DRIVE_TIMEOUT_SEC = 20.0
 MAX_Y_DRIFT_M = 0.01
 MAX_STEERING_RAD = 0.05
+
+# Wrist D405 colour image (config/gz_bridge.yaml, urdf/ranger_gazebo.urdf.xacro).
+WRIST_IMAGE_TOPIC = "/piper/wrist_camera/color/image_raw"
+WRIST_IMAGE_SIZE = (848, 480)
 
 
 @unittest.skipIf(
@@ -181,6 +185,21 @@ class TestSimSmoke(unittest.TestCase):
             self._wait_for_topic("/camera/image_raw"),
             "/camera/image_raw topic not found",
         )
+
+    def test_wrist_camera_image_is_bridged(self):
+        """The D405's colour image reaches ROS (the demo video's inset)."""
+        self.assertTrue(
+            self._wait_for_topic(WRIST_IMAGE_TOPIC), f"{WRIST_IMAGE_TOPIC} has no publisher"
+        )
+        images = []
+        sub = self.node.create_subscription(Image, WRIST_IMAGE_TOPIC, images.append, 2)
+        start = time.time()
+        while time.time() - start < WAIT_SEC and not images:
+            rclpy.spin_once(self.node, timeout_sec=0.2)
+        self.node.destroy_subscription(sub)
+        self.assertTrue(images, f"no image on {WRIST_IMAGE_TOPIC}")
+        self.assertEqual((images[0].width, images[0].height), WRIST_IMAGE_SIZE)
+        self.assertEqual(images[0].encoding, "rgb8")
 
     def test_grasp_service(self):
         """/grasp/set must be served once grasp_manager finished its startup detach."""
