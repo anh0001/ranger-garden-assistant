@@ -13,8 +13,10 @@ import rclpy
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+import yaml
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "record_demo_video.py"
+PKG = Path(__file__).resolve().parents[1]
+SCRIPT = PKG / "scripts" / "record_demo_video.py"
 _spec = importlib.util.spec_from_file_location("record_demo_video", SCRIPT)
 rec = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rec)
@@ -190,6 +192,39 @@ def test_waiting_lines_do_not_replace_the_caption():
 def test_grasp_label_highlights_attached():
     assert rec.grasp_label("cup", "attached") == ("cup: ATTACHED", True)
     assert rec.grasp_label("cup", "detached") == ("cup: DETACHED", False)
+
+
+# ---- status bar layout ----------------------------------------------------
+
+GRASPABLE_NAMES = [
+    o["name"]
+    for o in yaml.safe_load((PKG / "config" / "graspable_objects.yaml").read_text())["objects"]
+]
+LONGEST_CAPTION = rec.format_caption("step: " + "grasp -> attach 'x' (attached) " * 4)
+SIM_TEXT = "sim t = 9999.9 s"
+
+
+@pytest.mark.parametrize("name", GRASPABLE_NAMES)
+def test_status_texts_never_overlap(name):
+    grasp_text, _ = rec.grasp_label(name, "detached")
+
+    step, grasp_x, sim_x = rec.status_layout(1280, LONGEST_CAPTION, grasp_text, SIM_TEXT)
+
+    step_end = rec.MARGIN + rec.text_width(step, rec.STATUS_SCALE)
+    grasp_end = grasp_x + rec.text_width(grasp_text, rec.STATUS_SCALE)
+    assert step_end < grasp_x, "the step caption runs into the grasp state"
+    assert grasp_end < sim_x, "the grasp state runs into the sim time"
+    assert sim_x + rec.text_width(SIM_TEXT, rec.SIM_SCALE) <= 1280 - rec.MARGIN
+
+
+def test_status_layout_keeps_a_short_caption_whole():
+    step, _, _ = rec.status_layout(1280, "step: Arm -> hover", "cup: DETACHED", SIM_TEXT)
+    assert step == "step: Arm -> hover"
+
+
+def test_status_layout_cuts_a_long_caption_with_an_ellipsis():
+    step, _, _ = rec.status_layout(1280, LONGEST_CAPTION, "vitamin_bottle: DETACHED", SIM_TEXT)
+    assert step.endswith("...") and len(step) < len(LONGEST_CAPTION)
 
 
 # ---- composition ----------------------------------------------------------

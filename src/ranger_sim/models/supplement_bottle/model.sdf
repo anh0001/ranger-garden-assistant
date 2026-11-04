@@ -1,0 +1,27 @@
+<?xml version="1.0" ?>
+<!-- Graspable wrapper around Google Scanned Objects "Beta_Glucan"
+     (CC BY 4.0, Google LLC; fetched by tools/fetch_sim_assets.py, see
+     models/THIRD_PARTY_ASSETS.md). The scan's own SDF has no inertia and uses
+     its full mesh as collision: here the visual is the scan, the collision a
+     primitive cylinder and the inertia a solid cylinder. Origin = bottom centre
+     (as in the scan): place the model with z = surface height. Diameter x height
+     54 x 98 mm fits the 70 mm PiPER opening with 8 mm clearance per side. -->
+<sdf version="1.8">
+  <model name="supplement_bottle">
+    <link name="link">
+      <inertial>
+        <pose>0 0 0.049 0 0 0</pose>
+        <mass>0.10</mass>
+        <inertia><ixx>9.826e-05</ixx><iyy>9.826e-05</iyy><izz>3.645e-05</izz>
+                 <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+      </inertial>
+      <collision name="collision">
+        <pose>0 0 0.049 0 0 0</pose>
+        <geometry><cylinder><radius>0.027</radius><length>0.098</length></cylinder></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry><mesh><uri>model://Beta_Glucan/meshes/model.obj</uri></mesh></geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

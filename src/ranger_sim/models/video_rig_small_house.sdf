@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  Camera rig of the small_house scene (config/pick_place_scenes.yaml) for
+  recording the pick-and-place demo: same model name, topics, image sizes and
+  rates as models/video_rig.sdf (the recorder defaults, checked by
+  test/test_video_rig_launch.py), with poses inside the dining room of
+  worlds/small_house_world.sdf. Spawned at the world origin, so the sensor
+  poses are world poses. The garden rig's wide camera would sit behind the
+  dining room's west wall (house x 3.56).
+-->
+<sdf version="1.8">
+  <model name="video_rig">
+    <static>true</static>
+    <link name="link">
+      <!-- Wide view from above (+y side), 13 cm inside the dining room's west
+           wall, looking back at the robot: the whole base from the start
+           pose to the table, and the bottle and gripper path clear of the
+           recorder's close-up inset (top-left 480 x 270 px). -->
+      <sensor name="wide_cam" type="camera">
+        <pose>0.95 1.45 1.90 0 0.74 -1.64</pose>
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <topic>video/wide</topic>
+        <camera>
+          <horizontal_fov>1.15</horizontal_fov>
+          <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+          <clip><near>0.05</near><far>30</far></clip>
+        </camera>
+      </sensor>
+      <!-- Close-up of the bottle and the hovering gripper (drawn as the inset):
+           the garden pose +2 cm x, +3 cm z for the taller table and bottle,
+           0.15 m beyond the table's +y end. -->
+      <sensor name="close_cam" type="camera">
+        <pose>0.97 0.75 1.03 0 0.0666 -1.5975</pose>
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <topic>video/close</topic>
+        <camera>
+          <horizontal_fov>0.95</horizontal_fov>
+          <image><width>960</width><height>540</height><format>R8G8B8</format></image>
+          <clip><near>0.02</near><far>10</far></clip>
+        </camera>
+      </sensor>
+    </link>
+  </model>
+</sdf>

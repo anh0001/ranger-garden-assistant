@@ -7,8 +7,9 @@ fine, but the cameras need GPU rendering like the robot's own sensors).
 
   ros2 launch ranger_sim record_pick_place_video.launch.py
   ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
+  ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 
-Spawns the static camera rig (models/video_rig.sdf), bridges its two
+Spawns the scene's static camera rig (models/video_rig*.sdf), bridges its two
 cameras, starts record_demo_video.py and starts pick_place_demo
 (execute:=true) only once the recorder logs its first frame. ros_gz_sim
 create exits 0 even when no Gazebo answers, so that first frame, which only
@@ -18,8 +19,14 @@ recorder finishes the file. If the recorder gives up first (no frame within
 first_frame_timeout, encoder error) everything shuts down and the demo
 never starts. The default output is ~/.ros/videos/pick_place_<time>.mp4.
 
-Garden world only: the camera poses are tuned to its table.
+Each scene names its camera rig (config/pick_place_scenes.yaml); its world
+name, object, base approach, gripper closing and waypoints come from the
+scene too, unless the matching argument is non-empty. Run sim_bringup with
+the same `scene`.
 """
+
+import importlib.util
+from pathlib import Path
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, EmitEvent, LogInfo, RegisterEventHandler
@@ -29,6 +36,11 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+
+_spec = importlib.util.spec_from_file_location(
+    "pick_place_scenes", Path(__file__).with_name("pick_place_scenes.py"))
+scenes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(scenes)
 
 # Must equal READY_MARKER in scripts/record_demo_video.py (asserted by
 # test/test_video_rig_launch.py).
@@ -52,20 +64,25 @@ def make_demo_gate(demo_actions):
 
 
 def generate_launch_description():
-    world_name = LaunchConfiguration("world_name")
-    object_name = LaunchConfiguration("object_name")
+    scene = LaunchConfiguration("scene")
     args = [
-        DeclareLaunchArgument("world_name", default_value="garden_world",
-                              description="<world name> of the running sim"),
+        DeclareLaunchArgument("scene", default_value="garden",
+                              description="Scene in config/pick_place_scenes.yaml "
+                                          "(world, object, waypoints, camera rig)"),
+        DeclareLaunchArgument("world_name", default_value="",
+                              description="<world name> of the running sim "
+                                          "(empty = from scene)"),
         DeclareLaunchArgument("output_path", default_value="",
                               description="MP4 to write (default ~/.ros/videos/...)"),
-        DeclareLaunchArgument("object_name", default_value="cup",
-                              description="Object the demo picks (and the overlay tracks)"),
-        DeclareLaunchArgument("base_approach_x", default_value="0.52",
-                              description="World x the base drives to before grasping"),
-        DeclareLaunchArgument("gripper_closed", default_value="0.025",
-                              description="joint7 travel (m) when closing on the object: "
-                                          "the cup radius"),
+        DeclareLaunchArgument("object_name", default_value="",
+                              description="Object the demo picks and the overlay tracks "
+                                          "(empty = from scene)"),
+        DeclareLaunchArgument("base_approach_x", default_value="",
+                              description="World x the base drives to before grasping "
+                                          "(empty = from scene)"),
+        DeclareLaunchArgument("gripper_closed", default_value="",
+                              description="joint7 travel (m) when closing on the object, "
+                                          "its radius (empty = from scene)"),
         DeclareLaunchArgument("first_frame_timeout", default_value="60.0",
                               description="Wall seconds to wait for the first camera frame"),
     ]
@@ -74,9 +91,11 @@ def generate_launch_description():
         package="ros_gz_sim",
         executable="create",
         arguments=[
-            "-world", world_name,
+            "-world", scenes.SceneValue(
+                scene, "world_name", override=LaunchConfiguration("world_name")
+            ),
             "-file", PathJoinSubstitution(
-                [FindPackageShare("ranger_sim"), "models", "video_rig.sdf"]
+                [FindPackageShare("ranger_sim"), "models", scenes.SceneValue(scene, "rig_file")]
             ),
             "-name", "video_rig",
         ],
@@ -100,7 +119,7 @@ def generate_launch_description():
         sigterm_timeout=RECORDER_SIGTERM_TIMEOUT_SEC,
         parameters=[{
             "output_path": ParameterValue(LaunchConfiguration("output_path"), value_type=str),
-            "grasp_object": ParameterValue(object_name, value_type=str),
+            "grasp_object": scenes.from_scene(scene, "object_name", str),
             "first_frame_timeout_sec": ParameterValue(
                 LaunchConfiguration("first_frame_timeout"), value_type=float
             ),
@@ -114,13 +133,11 @@ def generate_launch_description():
         output="screen",
         parameters=[{
             "execute": True,
-            "object_name": ParameterValue(object_name, value_type=str),
-            "base_approach_x": ParameterValue(
-                LaunchConfiguration("base_approach_x"), value_type=float
-            ),
-            "gripper_closed": ParameterValue(
-                LaunchConfiguration("gripper_closed"), value_type=float
-            ),
+            "object_name": scenes.from_scene(scene, "object_name", str),
+            "base_approach_x": scenes.from_scene(scene, "base_approach_x", float),
+            "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
+            "hover_joints": scenes.from_scene(scene, "hover_joints"),
+            "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
             "use_sim_time": True,
         }],
     )

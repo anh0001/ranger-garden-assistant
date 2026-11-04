@@ -1,0 +1,326 @@
+<?xml version="1.0" ?>
+<!--
+  Small-house dining room for the Ranger Mini 3.0 + PiPER pick-and-place demo
+  (scene `small_house`, config/pick_place_scenes.yaml). Designed for Gazebo
+  Fortress.
+
+  Assets:
+    - AWS RoboMaker Small House World furniture (Copyright 2019 Amazon.com,
+      Inc., MIT-0), via TeamSOBITS/aws_small_house_world (Humble/Fortress port);
+    - Google Scanned Objects (Copyright 2020 Google LLC, CC BY 4.0) wrapped by
+      models/{vitamin_bottle,supplement_bottle,sprinkles_jar}.
+  Fetched, not committed: python3 src/ranger_sim/tools/fetch_sim_assets.py.
+  Attribution: models/THIRD_PARTY_ASSETS.md.
+
+  The house is moved onto the robot, not the robot into the house: the robot
+  still spawns at the world origin facing +x, and the kitchen table lands in
+  front of it with its front edge at world x = 0.90, as in garden_world.
+
+  worlds/small_house_world.sdf is GENERATED from
+  tools/small_house_world.template.sdf by tools/generate_small_house_world.py,
+  which inserts the transformed house models and lights at the GENERATED
+  marker. Edit the template, then regenerate; never edit the world itself.
+-->
+<sdf version="1.8">
+  <world name="small_house">
+
+    <!-- Physics (as garden_world) -->
+    <physics name="default_physics" type="ode">
+      <max_step_size>0.004</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>250</real_time_update_rate>
+    </physics>
+
+    <!-- Required system plugins (as garden_world) -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.7 0.7 1</background>
+      <shadows>true</shadows>
+      <grid>false</grid>
+    </scene>
+
+    <!-- Lighting (as garden_world; the house's own lights follow below) -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.85 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+
+    <light type="directional" name="fill_light">
+      <cast_shadows>false</cast_shadows>
+      <pose>0 0 8 0 0 0</pose>
+      <diffuse>0.3 0.3 0.35 1</diffuse>
+      <specular>0.05 0.05 0.05 1</specular>
+      <direction>0.5 -0.3 -0.7</direction>
+    </light>
+
+    <!-- Ground plane: collision only, the house FloorB is the visible floor. -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>50 50</size></plane></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Table (work surface for pick-place)                          -->
+    <!-- ============================================================ -->
+    <model name="table">
+      <static>true</static>
+      <!-- AWS KitchenTable_01 at the robot's approach: front (visual) edge at
+           world x = 0.90, as in garden_world. Its visual top is 0.801 m but
+           its collision mesh top is 0.8185 m, so primitives replace it
+           (objects would float 1.75 cm above the visible top). Visual
+           0.70 x 1.80 m, slab 0.745..0.801 m; legs ~0.09 m square at model
+           (+-0.21, +-0.695). The generator drops the house's own
+           KitchenTable_01_001 and anchors the house to this pose. -->
+      <pose>1.25 -0.30 0 0 0 3.141593</pose>
+      <link name="link">
+        <collision name="top_collision">
+          <pose>0 0 0.773 0 0 0</pose>
+          <geometry><box><size>0.70 1.80 0.056</size></box></geometry>
+        </collision>
+        <collision name="leg1"><pose>0.21 0.695 0.3725 0 0 0</pose><geometry><box><size>0.09 0.09 0.745</size></box></geometry></collision>
+        <collision name="leg2"><pose>-0.21 0.695 0.3725 0 0 0</pose><geometry><box><size>0.09 0.09 0.745</size></box></geometry></collision>
+        <collision name="leg3"><pose>0.21 -0.695 0.3725 0 0 0</pose><geometry><box><size>0.09 0.09 0.745</size></box></geometry></collision>
+        <collision name="leg4"><pose>-0.21 -0.695 0.3725 0 0 0</pose><geometry><box><size>0.09 0.09 0.745</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><mesh><uri>model://aws_robomaker_residential_KitchenTable_01/meshes/aws_KitchenTable_01_visual.DAE</uri></mesh></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
+    <!-- Graspable objects on the table (GSO wrappers, origin = bottom) -->
+    <!-- ============================================================ -->
+    <!-- Pick target: on the robot's line (y = 0), 3.5 cm in from the table
+         edge so the bottle's near face (x 0.908) does not overhang. The pads
+         straddle it with the base at world x = 0.535
+         (config/pick_place_scenes.yaml; test_pick_place_geometry.py checks
+         the clearances). -->
+    <include>
+      <name>vitamin_bottle</name>
+      <uri>model://vitamin_bottle</uri>
+      <pose>0.935 0 0.801 0 0 0</pose>
+    </include>
+    <!-- Dressing, >= 0.30 m off the arm's plane (y = 0): clear of the fingers. -->
+    <include>
+      <name>supplement_bottle</name>
+      <uri>model://supplement_bottle</uri>
+      <pose>1.12 -0.40 0.801 0 0 0.4</pose>
+    </include>
+    <include>
+      <name>sprinkles_jar</name>
+      <uri>model://sprinkles_jar</uri>
+      <pose>1.08 0.30 0.801 0 0 0</pose>
+    </include>
+
+    <!-- GENERATED by tools/generate_small_house_world.py from tools/aws_small_house/small_house.world (MIT-0): do not edit. Dropped: KitchenTable_01_001 (replaced by the inline `table` (collision at the visual top)); ChairA_01_002 (stands in the robot's approach slot). Re-seated on the table top: Tableware_01_001. -->
+    <include><name>AirconditionerA_01_001</name><uri>model://aws_robomaker_residential_AirconditionerA_01</uri><static>true</static><pose>2.815032 15.442017 2.084550 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>AirconditionerB_01_001</name><uri>model://aws_robomaker_residential_AirconditionerB_01</uri><static>true</static><pose>-4.870600 8.298339 0.003491 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Ball_01_001</name><uri>model://aws_robomaker_residential_Ball_01</uri><static>true</static><pose>4.546142 2.935286 0.318690 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Ball_01_003</name><uri>model://aws_robomaker_residential_Ball_01</uri><static>true</static><pose>-3.832815 13.232377 0.318690 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Bed_01_001</name><uri>model://aws_robomaker_residential_Bed_01</uri><static>true</static><pose>2.414143 12.410279 -0.000004 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>NightStand_01_001</name><uri>model://aws_robomaker_residential_NightStand_01</uri><static>true</static><pose>3.254387 13.965155 0.005264 -0.000002 0.000000 -1.577463</pose></include>
+    <include><name>NightStand_01_002</name><uri>model://aws_robomaker_residential_NightStand_01</uri><static>true</static><pose>3.232267 10.647060 0.005262 0.000000 0.000002 -1.577463</pose></include>
+    <include><name>Board_01_001</name><uri>model://aws_robomaker_residential_Board_01</uri><static>true</static><pose>-5.068579 3.515823 1.538179 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>ChairA_01_001</name><uri>model://aws_robomaker_residential_ChairA_01</uri><static>true</static><pose>0.504122 -0.857510 0.024691 0.000001 0.000000 -3.133533</pose></include>
+    <include><name>ChairA_01_003</name><uri>model://aws_robomaker_residential_ChairA_01</uri><static>true</static><pose>1.982800 0.181036 0.010006 0.000000 0.000000 -0.007603</pose></include>
+    <include><name>ChairA_01_004</name><uri>model://aws_robomaker_residential_ChairA_01</uri><static>true</static><pose>1.966551 -0.754867 0.000006 0.000000 0.000000 -0.053833</pose></include>
+    <include><name>ChairA_01_005</name><uri>model://aws_robomaker_residential_ChairA_01</uri><static>true</static><pose>2.314274 14.516864 0.036656 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>ChairD_01_001</name><uri>model://aws_robomaker_residential_ChairD_01</uri><static>true</static><pose>4.456100 7.612268 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>ChairD_01_002</name><uri>model://aws_robomaker_residential_ChairD_01</uri><static>true</static><pose>4.444727 5.906317 0.000006 0.000000 0.000000 1.566982</pose></include>
+    <include><name>ChairD_01_003</name><uri>model://aws_robomaker_residential_ChairD_01</uri><static>true</static><pose>-4.106690 14.559504 0.000006 0.000000 0.000000 -0.707790</pose></include>
+    <include><name>Chandelier_01_001</name><uri>model://aws_robomaker_residential_Chandelier_01</uri><static>true</static><pose>4.490038 5.010148 1.295006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Chandelier_01_002</name><uri>model://aws_robomaker_residential_Chandelier_01</uri><static>true</static><pose>-0.306490 12.714416 1.810006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Chandelier_01_003</name><uri>model://aws_robomaker_residential_Chandelier_01</uri><static>true</static><pose>-1.299592 -1.554403 1.751006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Chandelier_01_004</name><uri>model://aws_robomaker_residential_Chandelier_01</uri><static>true</static><pose>-1.257614 5.048464 1.787306 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Carpet_01_001</name><uri>model://aws_robomaker_residential_Carpet_01</uri><static>true</static><pose>-0.769326 5.481230 0.001112 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Carpet_01_002</name><uri>model://aws_robomaker_residential_Carpet_01</uri><static>true</static><pose>3.773428 3.381900 0.000591 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>SecurityCamera_01_001</name><uri>model://aws_robomaker_residential_SecurityCamera_01</uri><static>true</static><pose>-4.659267 5.450077 0.495073 0.000000 0.000000 1.864684</pose></include>
+    <include><name>CoffeeTable_01_001</name><uri>model://aws_robomaker_residential_CoffeeTable_01</uri><static>true</static><pose>-1.400951 4.758173 0.041989 0.000000 0.000000 -1.567463</pose></include>
+    <include><name>CookingBench_01_001</name><uri>model://aws_robomaker_residential_CookingBench_01</uri><static>true</static><pose>-3.068788 -2.756957 0.903616 0.000000 0.000000 1.559670</pose></include>
+    <include><name>Curtain_01_001</name><uri>model://aws_robomaker_residential_Curtain_01</uri><static>true</static><pose>0.607433 15.429965 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>ReadingDesk_01_001</name><uri>model://aws_robomaker_residential_ReadingDesk_01</uri><static>true</static><pose>2.459454 15.232235 0.000006 0.000000 0.000000 -1.582101</pose></include>
+    <include><name>BalconyTable_01_001</name><uri>model://aws_robomaker_residential_BalconyTable_01</uri><static>true</static><pose>4.457388 6.787706 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Door_01_001</name><uri>model://aws_robomaker_residential_Door_01</uri><static>true</static><pose>-5.246356 0.294561 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Dumbbell_01_001</name><uri>model://aws_robomaker_residential_Dumbbell_01</uri><static>true</static><pose>3.043505 3.727974 0.002189 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Tablet_01_001</name><uri>model://aws_robomaker_residential_Tablet_01</uri><static>true</static><pose>-1.443772 4.697928 0.401796 -0.020625 -0.000080 -1.583780</pose></include>
+    <include><name>FitnessEquipment_01_001</name><uri>model://aws_robomaker_residential_FitnessEquipment_01</uri><static>true</static><pose>3.488334 2.753116 0.003174 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>FoldingDoor_01_001</name><uri>model://aws_robomaker_residential_FoldingDoor_01</uri><static>true</static><pose>2.203115 8.707632 0.041887 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>FoldingDoor_01_002</name><uri>model://aws_robomaker_residential_FoldingDoor_01</uri><static>true</static><pose>-3.694293 8.746947 0.041887 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Handle_01_001</name><uri>model://aws_robomaker_residential_Handle_01</uri><static>true</static><pose>-5.218505 0.571830 0.993806 0.000000 0.000000 1.564223</pose></include>
+    <include><name>HouseWallB_01_001</name><uri>model://aws_robomaker_residential_HouseWallB_01</uri><static>true</static><pose>0.342530 6.258885 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>FloorB_01_001</name><uri>model://aws_robomaker_residential_FloorB_01</uri><static>true</static><pose>0.342530 6.258885 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>FoldingDoor_02_001</name><uri>model://aws_robomaker_residential_FoldingDoor_02</uri><static>true</static><pose>2.775826 1.568329 0.000006 0.000000 0.000000 1.564127</pose></include>
+    <include><name>FoldingDoor_02_002</name><uri>model://aws_robomaker_residential_FoldingDoor_02</uri><static>true</static><pose>-4.539648 1.400123 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>KitchenCabinet_01_001</name><uri>model://aws_robomaker_residential_KitchenCabinet_01</uri><static>true</static><pose>-3.547237 -1.717371 0.012074 0.000000 0.000000 1.565722</pose></include>
+    <include><name>KitchenUtensils_01_001</name><uri>model://aws_robomaker_residential_KitchenUtensils_01</uri><static>true</static><pose>-4.740519 -2.992913 1.141811 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>LightC_01_001</name><uri>model://aws_robomaker_residential_LightC_01</uri><static>true</static><pose>-5.113516 4.525651 2.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>LightC_01_002</name><uri>model://aws_robomaker_residential_LightC_01</uri><static>true</static><pose>-5.100798 6.433421 2.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>PortraitA_01</name><uri>model://aws_robomaker_residential_PortraitA_01</uri><static>true</static><pose>-4.456820 9.003300 1.000006 0.000000 0.000000 -0.010667</pose></include>
+    <include><name>PortraitB_01</name><uri>model://aws_robomaker_residential_PortraitB_01</uri><static>true</static><pose>-5.078448 7.574735 0.000006 -0.076901 0.000000 1.589005</pose></include>
+    <include><name>PortraitB_02</name><uri>model://aws_robomaker_residential_PortraitB_02</uri><static>true</static><pose>3.384527 0.501461 0.300006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>PortraitB_03</name><uri>model://aws_robomaker_residential_PortraitB_03</uri><static>true</static><pose>-5.027192 3.223234 0.005500 -0.168428 0.000000 1.526769</pose></include>
+    <include><name>PortraitA_02</name><uri>model://aws_robomaker_residential_PortraitA_02</uri><static>true</static><pose>3.369861 -1.698490 0.300006 0.000000 0.000000 1.562537</pose></include>
+    <include><name>PortraitC_01</name><uri>model://aws_robomaker_residential_PortraitC_01</uri><static>true</static><pose>-4.121491 15.583755 1.000006 0.000000 0.000000 -0.022729</pose></include>
+    <include><name>PortraitD_01</name><uri>model://aws_robomaker_residential_PortraitD_01</uri><static>true</static><pose>-5.141338 5.505662 1.800006 0.000000 0.000000 1.561068</pose></include>
+    <include><name>PortraitD_02</name><uri>model://aws_robomaker_residential_PortraitD_02</uri><static>true</static><pose>3.376973 -0.631677 1.488445 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>PortraitE_01</name><uri>model://aws_robomaker_residential_PortraitE_01</uri><static>true</static><pose>-5.111329 12.068465 1.000006 0.000000 0.000000 1.555164</pose></include>
+    <include><name>PortraitE_02</name><uri>model://aws_robomaker_residential_PortraitE_02</uri><static>true</static><pose>-1.206358 12.462373 0.300006 0.000000 0.000000 -1.573173</pose></include>
+    <include><name>DeskPortraitA_01</name><uri>model://aws_robomaker_residential_DeskPortraitA_01</uri><static>true</static><pose>-4.767267 6.329814 0.498666 0.000000 0.000000 1.350321</pose></include>
+    <include><name>DeskPortraitA_02</name><uri>model://aws_robomaker_residential_DeskPortraitA_02</uri><static>true</static><pose>-1.563994 4.225467 0.070394 -0.018328 -0.000441 -0.001247</pose></include>
+    <include><name>DeskPortraitC_01</name><uri>model://aws_robomaker_residential_DeskPortraitC_01</uri><static>true</static><pose>3.125184 13.986884 0.694626 0.000488 -0.000359 -1.632962</pose></include>
+    <include><name>DeskPortraitC_02</name><uri>model://aws_robomaker_residential_DeskPortraitC_02</uri><static>true</static><pose>-1.250816 5.304873 0.127682 0.001614 -0.000545 3.127024</pose></include>
+    <include><name>DeskPortraitD_01</name><uri>model://aws_robomaker_residential_DeskPortraitD_01</uri><static>true</static><pose>-5.051211 3.649223 1.573744 0.000000 0.000000 1.592897</pose></include>
+    <include><name>DeskPortraitD_02</name><uri>model://aws_robomaker_residential_DeskPortraitD_02</uri><static>true</static><pose>-4.763318 6.882147 0.192151 -0.000015 -0.000174 1.593179</pose></include>
+    <include><name>DeskPortraitD_03</name><uri>model://aws_robomaker_residential_DeskPortraitD_03</uri><static>true</static><pose>-1.134496 4.441962 0.126214 0.000010 0.000006 1.591343</pose></include>
+    <include><name>DeskPortraitD_04</name><uri>model://aws_robomaker_residential_DeskPortraitD_04</uri><static>true</static><pose>-4.862602 1.991357 0.202502 0.007118 -0.000001 1.469220</pose></include>
+    <include><name>DeskPortraitB_01</name><uri>model://aws_robomaker_residential_DeskPortraitB_01</uri><static>true</static><pose>-4.764903 2.745479 -0.012654 -0.336622 -0.000001 1.469278</pose></include>
+    <include><name>DeskPortraitB_02</name><uri>model://aws_robomaker_residential_DeskPortraitB_02</uri><static>true</static><pose>-4.776456 3.806685 -0.012654 -0.336621 0.000000 1.469335</pose></include>
+    <include><name>Rangehood_01_001</name><uri>model://aws_robomaker_residential_Rangehood_01</uri><static>true</static><pose>-3.087463 -2.738243 1.507611 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Refrigerator_01_001</name><uri>model://aws_robomaker_residential_Refrigerator_01</uri><static>true</static><pose>-0.747493 -2.436773 0.000006 0.000000 0.000000 -3.140962</pose></include>
+    <include><name>SeasoningBox_01_001</name><uri>model://aws_robomaker_residential_SeasoningBox_01</uri><static>true</static><pose>-2.369853 -2.831203 0.902464 -0.000006 0.000034 -1.576173</pose></include>
+    <include><name>ShoeRack_01_001</name><uri>model://aws_robomaker_residential_ShoeRack_01</uri><static>true</static><pose>-4.859572 1.995491 0.000006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>SofaC_01_001</name><uri>model://aws_robomaker_residential_SofaC_01</uri><static>true</static><pose>-1.562424 5.940878 0.065998 0.000000 0.000000 -0.005730</pose></include>
+    <include><name>Tableware_01_001</name><uri>model://aws_robomaker_residential_Tableware_01</uri><static>true</static><pose>1.277590 -0.900677 0.801000 -0.001238 -0.000976 -0.552703</pose></include>
+    <include><name>Trash_01_001</name><uri>model://aws_robomaker_residential_Trash_01</uri><static>true</static><pose>-0.469424 3.904095 0.011006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Trash_01_002</name><uri>model://aws_robomaker_residential_Trash_01</uri><static>true</static><pose>1.401112 14.956173 0.011006 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>TV_01_001</name><uri>model://aws_robomaker_residential_TV_01</uri><static>true</static><pose>-5.045813 5.470529 0.676288 0.000000 0.000000 -3.139207</pose></include>
+    <include><name>TV_02_001</name><uri>model://aws_robomaker_residential_TV_02</uri><static>true</static><pose>-1.004865 12.465327 0.676288 0.000000 0.000000 -3.139207</pose></include>
+    <include><name>TVCabinet_01_001</name><uri>model://aws_robomaker_residential_TVCabinet_01</uri><static>true</static><pose>-4.845127 5.663945 -0.017043 0.000000 0.000000 0.001737</pose></include>
+    <include><name>Vase_01_001</name><uri>model://aws_robomaker_residential_Vase_01</uri><static>true</static><pose>-5.090799 3.239375 1.574964 0.000003 0.001700 -1.576623</pose></include>
+    <include><name>RoomWall_01_001</name><uri>model://aws_robomaker_residential_RoomWall_01</uri><static>true</static><pose>-1.112969 12.366274 0.028130 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>Wardrobe_01_001</name><uri>model://aws_robomaker_residential_Wardrobe_01</uri><static>true</static><pose>2.839656 9.389018 0.000710 0.000000 0.000000 3.136050</pose></include>
+    <include><name>RoomWindow_01_001</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>0.379033 15.677451 0.502745 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>RoomWindow_01_002</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>-1.968720 15.693102 0.502745 0.000000 0.000000 -1.577463</pose></include>
+    <include><name>RoomWindow_01_003</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>-3.094190 -3.141030 0.502745 0.000000 0.000000 1.569624</pose></include>
+    <include><name>RoomWindow_01_004</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>1.248215 -3.169920 0.496587 0.000000 0.000000 1.569624</pose></include>
+    <include><name>RoomWindow_01_005</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>4.781232 1.506873 0.502745 0.000000 0.000000 1.569624</pose></include>
+    <include><name>RoomWindow_01_006</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>5.919838 2.733107 0.502745 0.000000 0.000000 3.139449</pose></include>
+    <include><name>RoomWindow_01_007</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>5.935488 5.080626 0.502745 0.000000 0.000000 3.139449</pose></include>
+    <include><name>RoomWindow_01_008</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>5.951089 7.420863 0.502745 0.000000 0.000000 3.139449</pose></include>
+    <include><name>RoomWindow_01_009</name><uri>model://aws_robomaker_residential_RoomWindow_01</uri><static>true</static><pose>4.746016 8.626207 0.502745 0.000000 0.000000 -1.577463</pose></include>
+    <light name="LivingRoom_CeilingLight_0" type="point">
+      <pose>4.490235 5.036912 2.200006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.32</constant>
+        <linear>0.01</linear>
+        <quadratic>0.03</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="LivingRoom_CeilingLight_1" type="point">
+      <pose>-1.255355 5.075215 2.200006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.05</constant>
+        <linear>0.01</linear>
+        <quadratic>0.09</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="LivingRoom_WallLight_0" type="point">
+      <pose>-5.113515 4.525658 2.200006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.24 0.24 0.24 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.12</constant>
+        <linear>0.00</linear>
+        <quadratic>0.03</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="LivingRoom_WallLight_1" type="point">
+      <pose>-5.100797 6.433436 2.200006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.24 0.24 0.24 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.12</constant>
+        <linear>0.00</linear>
+        <quadratic>0.03</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="TV_Light_0" type="point">
+      <pose>-4.602449 5.464932 1.100006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.31372 0.31372 0.34901 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>3</range>
+        <constant>0.10</constant>
+        <linear>0.04</linear>
+        <quadratic>0.50</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="BedRoom_Portrait_Light_0" type="spot">
+      <pose>-1.445859 12.461324 1.558706 0.300000 0.000000 -1.577463</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.50</constant>
+        <linear>0.01</linear>
+        <quadratic>0.00</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1.0</outer_angle>
+        <falloff>1.0</falloff>
+      </spot>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="BedRoom_CeilingLight_0" type="point">
+      <pose>-0.306490 12.714416 2.000006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.32</constant>
+        <linear>0.01</linear>
+        <quadratic>0.03</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+    <light name="Kitchen_CeilingLight_0" type="point">
+      <pose>-1.300319 -1.588537 2.280006 0.000000 0.000000 -1.577463</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.3</constant>
+        <linear>0.01</linear>
+        <quadratic>0.01</quadratic>
+      </attenuation>
+      <direction>0 0 -1</direction>
+    </light>
+
+  </world>
+</sdf>

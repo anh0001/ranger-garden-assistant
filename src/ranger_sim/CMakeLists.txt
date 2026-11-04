@@ -76,6 +76,12 @@ if(BUILD_TESTING)
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_pick_place_geometry test/test_pick_place_geometry.py
     ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_pick_place_scenes test/test_pick_place_scenes.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_generate_small_house_world test/test_generate_small_house_world.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_fetch_sim_assets test/test_fetch_sim_assets.py
+    ENV ${RANGER_SIM_TEST_ENV})
 
   # Headless Gazebo bringup. Needs a GPU (gpu_lidar / camera sensors), so it
   # is skipped unless RANGER_SIM_GPU=1 is set in the environment.

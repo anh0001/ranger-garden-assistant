@@ -17,6 +17,11 @@ ros2 launch ranger_sim pick_place_demo.launch.py                  # plan-only (s
 ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Gazebo
 ```
 
+The same demo runs in a home dining room with `scene:=small_house` (see
+[Small-house scene](#small-house-scene)): it picks a scanned vitamin bottle
+off the kitchen table and sets it back within ~2.4 mm. `garden` stays the
+default scene.
+
 ## How the grasp works
 
 - **Simulator-native fixed joint.** `ranger_gazebo.urdf.xacro` emits one
@@ -144,17 +149,71 @@ roughly the base travel. All of it is superseded by the DetachableJoint +
 paused start + `/grasp/set` design above; `grasp_magnet.py` and the
 `/gripper/grasp` / `/gz_world_poses` bridges were deleted.
 
+## Small-house scene
+
+The dining room of the AWS RoboMaker Small House (MIT-0, via TeamSOBITS'
+Fortress port) with Google Scanned Objects on the kitchen table (CC BY 4.0;
+see `src/ranger_sim/models/THIRD_PARTY_ASSETS.md`). The assets are fetched,
+not committed (~140 MB, git-ignored), once:
+
+```bash
+python3 src/ranger_sim/tools/fetch_sim_assets.py     # pinned commit / versions + sha256
+colcon build --packages-select ranger_sim --symlink-install
+ros2 launch ranger_sim sim_bringup.launch.py scene:=small_house
+ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house                 # plan-only
+ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house execute:=true   # run it
+```
+
+Without the assets, `gazebo.launch.py` stops with the number of missing
+models and the fetch command instead of starting an empty world.
+
+- **Scenes.** `config/pick_place_scenes.yaml` holds, per scene, the world,
+  the object, the base approach, the gripper closing, the hover/grasp
+  waypoints and the video camera rig. The launch files take `scene:=`
+  (default `garden`); explicit `world:=`, `world_name:=`, `object_name:=`,
+  `base_approach_x:=` and `gripper_closed:=` still override it. An unknown
+  scene fails at launch with the list of known ones.
+- **The house is moved, not the robot.** `tools/generate_small_house_world.py`
+  transforms the committed source world
+  (`tools/aws_small_house/small_house.world`) rigidly so its kitchen table
+  stands where the garden table did: front edge at world x = 0.90, the
+  robot spawning at the origin facing +x. The demo's base drive (odom x)
+  and sim_bringup's identity `map -> odom` stay as they are. Edit
+  `tools/small_house_world.template.sdf`, then regenerate;
+  `test_generate_small_house_world.py` fails if the committed world is stale.
+- **Primitive table collisions.** The AWS KitchenTable's collision mesh tops
+  out at 0.8185 m but its visible top is at 0.801 m, so the world replaces
+  it with an inline `table` (the AWS visual, box collisions at the visible
+  top); the tableware that stood on it is re-seated on 0.801 m too. Without
+  this, everything on the table floats 1.7 cm in the video.
+- **Narrow objects only.** The PiPER opens 70 mm and the attach-before-close
+  grasp needs >= 5 mm per side, so objects must be <= 60 mm wide; every GSO
+  mug is 102-126 mm. The vitamin bottle is 54 mm, wrapped by
+  `models/vitamin_bottle` (scan as visual, cylinder collision and inertia).
+- **Waypoints.** The table is 3.1 cm higher than the garden's, so hover and
+  grasp were re-solved by FK. The bottle is 2 mm wider than the cup, so the
+  base stops 5 mm earlier (x = 0.535) to keep the palm >= 1 cm clear across
+  the ±5 mm base stop. In the house, `base_footprint` rests at -0.020 m (the
+  garden's 1 cm patio slab makes it -0.010 there); both are in the band
+  `test_pick_place_geometry.py` checks.
+- **Real-time factor:** 0.995 (min 0.990) headless on an RTX 6000 Ada with
+  the LiDAR, the front camera and the wrist RGBD rendering, measured on the
+  second start (the first one builds the ogre2 caches).
+
 ## Recording a video
 
-With the sim up (`sim_bringup.launch.py`, headless is fine):
+With the sim up (`sim_bringup.launch.py`, headless is fine, same `scene`):
 
 ```bash
 ros2 launch ranger_sim record_pick_place_video.launch.py
 ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
+ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 ```
 
-- Spawns `models/video_rig.sdf` (two static cameras, no collisions) at the
-  world origin, bridges `/video/wide` and `/video/close`, and runs
+- Spawns the scene's camera rig (`models/video_rig.sdf` for the garden,
+  `models/video_rig_small_house.sdf` for the house; two static cameras, no
+  collisions) at the world origin, bridges `/video/wide` and `/video/close`,
+  and runs
   `scripts/record_demo_video.py`. The result is a 1280×720 H.264 MP4
   (default `~/.ros/videos/pick_place_<time>.mp4`) with a close-up inset, the
   current demo step (from the `pick_place_demo` log), the grasp state and
@@ -167,16 +226,28 @@ ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.
   arm. No frame within `first_frame_timeout` (default 60 s) ends the launch
   without running the demo.
 - The launch ends when the demo exits; the recorder then closes the file.
-- Garden world only (the camera poses are tuned to its table). The cameras
-  need GPU rendering, like the robot's own sensors.
+- Each scene names its rig (`rig_file` in `config/pick_place_scenes.yaml`);
+  the poses are tuned to that scene's table and keep the object and the
+  gripper path clear of the close-up inset (top left). The cameras need GPU
+  rendering, like the robot's own sensors.
+- The status bar right-aligns the grasp state and the sim time and cuts the
+  step caption to the space left, so long object names fit.
+- In the house, the 29 s of sim time of a recorded demo took ~105 s of wall
+  time (measured once; the sim runs at ~0.93 with the rig cameras streaming
+  and the arm idle).
 
 ## Known limitations
 
 - `colcon test` with `RANGER_SIM_GPU=1` can leave an orphaned headless
   `ign gazebo` server behind: launch_testing stops the `ruby ign` wrapper
   with SIGTERM when the server takes longer than 5 s to exit, and the
-  server process survives. Check with `pgrep -af "ign gazebo"` after the
-  test and stop it (`kill -INT <pid>`). The tests themselves run isolated
+  server process survives. Stopping `ros2 launch ranger_sim
+  sim_bringup.launch.py` with Ctrl-C leaves it behind the same way. Check
+  with `pgrep -af "ign gazebo"` afterwards and stop it (`kill -INT <pid>`).
+  An orphan keeps serving `/controller_manager` on its `ROS_DOMAIN_ID`: a new
+  sim on the same domain fails with "Controller already loaded … Failed to
+  configure controller". `tr '\0' '\n' < /proc/<pid>/environ | grep
+  ROS_DOMAIN_ID` shows which domain to avoid. The tests themselves run isolated
   (`ROS_LOCALHOST_ONLY=1`, `ROS_DOMAIN_ID=99`, gz partition
   `ranger_sim_test`, set in `CMakeLists.txt`); without `RANGER_SIM_GPU=1`
   the smoke test is skipped.
@@ -185,14 +256,30 @@ ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.
   base starting at y = 0, yaw = 0, which the steering lock now keeps.
 - The sim base has no drivetrain: lateral `vy` skids the wheels, and the
   wheel collisions differ from the hardware description (concentric).
-- The grasp waypoints are joint-space and solved for the garden-world cup;
-  moving the cup means re-solving them (see `test_pick_place_geometry.py`).
+- The waypoints are joint-space and per scene in
+  `config/pick_place_scenes.yaml`; re-solve them with FK when moving an
+  object (see `test_pick_place_geometry.py`, which checks every scene).
+- The wrist RGBD camera renders in Gazebo on `/piper/wrist_camera/image` and
+  `/piper/wrist_camera/depth_image`, but `config/gz_bridge.yaml` bridges
+  `/piper/wrist_camera/color/image_raw` and `/depth/image_rect_raw` without
+  a `gz_topic_name`, so no wrist images reach ROS (true in both scenes).
 
 ## Key files
 
-- `src/ranger_sim/launch/sim_bringup.launch.py` — full sim (`paused`,
-  `world_name` args)
-- `src/ranger_sim/launch/gazebo.launch.py` — paused start
+- `src/ranger_sim/launch/sim_bringup.launch.py` — full sim (`scene`,
+  `paused`, `world_name` args)
+- `src/ranger_sim/launch/gazebo.launch.py` — paused start, model resource
+  paths, missing-asset check
+- `src/ranger_sim/config/pick_place_scenes.yaml`,
+  `src/ranger_sim/launch/pick_place_scenes.py` — scenes and the launch
+  helper that reads them (`SceneValue`, `from_scene`)
+- `src/ranger_sim/tools/fetch_sim_assets.py`, `tools/sim_assets.yaml` —
+  pinned third-party asset download (`models/third_party/`, git-ignored)
+- `src/ranger_sim/tools/generate_small_house_world.py`,
+  `tools/small_house_world.template.sdf`, `tools/aws_small_house/` —
+  generator, template and source of `worlds/small_house_world.sdf`
+- `src/ranger_sim/models/{vitamin_bottle,supplement_bottle,sprinkles_jar}`,
+  `src/ranger_sim/models/THIRD_PARTY_ASSETS.md` — GSO wrappers, attribution
 - `src/ranger_sim/launch/spawn_robot.launch.py` — bridges, grasp manager,
   mimic relay, controller spawners
 - `src/ranger_sim/config/graspable_objects.yaml` — graspable objects (single
@@ -213,9 +300,14 @@ ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.
 - `src/ranger_sim/worlds/garden_world.sdf` — 5 cm cup at the table front
   edge
 - `src/ranger_sim/test/test_pick_place_geometry.py` — FK clearances of the
-  grasp waypoints, steering-lock / bridge / relay consistency
+  grasp waypoints for every scene, steering-lock / bridge / relay
+  consistency
+- `src/ranger_sim/test/test_pick_place_scenes.py`,
+  `test_generate_small_house_world.py`, `test_fetch_sim_assets.py` —
+  scenes and launch helper, world generator, fetch tool (offline)
 - `src/ranger_sim/test/test_sim_smoke.py` — headless bringup incl. the
-  drive-straight check (`RANGER_SIM_GPU=1`)
+  drive-straight check (`RANGER_SIM_GPU=1`, `RANGER_SIM_SCENE=small_house`)
 - `src/ranger_sim/launch/record_pick_place_video.launch.py`,
   `src/ranger_sim/scripts/record_demo_video.py`,
-  `src/ranger_sim/models/video_rig.sdf` — demo video recording
+  `src/ranger_sim/models/video_rig.sdf`,
+  `src/ranger_sim/models/video_rig_small_house.sdf` — demo video recording

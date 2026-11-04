@@ -6,7 +6,14 @@ Usage:
   ros2 launch ranger_sim sim_bringup.launch.py
   ros2 launch ranger_sim sim_bringup.launch.py headless:=true   # CI mode
   ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true  # with Nav2
+  ros2 launch ranger_sim sim_bringup.launch.py scene:=small_house  # house dining room
+
+`scene` (config/pick_place_scenes.yaml) sets the `world` / `world_name`
+defaults; explicit `world:=` / `world_name:=` still override it.
 """
+
+import importlib.util
+from pathlib import Path
 
 from launch import LaunchDescription
 from launch.actions import (
@@ -21,8 +28,14 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node, SetParameter
 from launch_ros.substitutions import FindPackageShare
 
+_spec = importlib.util.spec_from_file_location(
+    "pick_place_scenes", Path(__file__).with_name("pick_place_scenes.py"))
+scenes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(scenes)
+
 
 def generate_launch_description():
+    scene = LaunchConfiguration("scene")
     use_sim_time = LaunchConfiguration("use_sim_time")
     headless = LaunchConfiguration("headless")
     world = LaunchConfiguration("world")
@@ -34,18 +47,28 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration("use_rviz")
 
     declared_arguments = [
+        # Before `world` / `world_name`: their defaults are performed in
+        # declaration order and read it.
+        DeclareLaunchArgument(
+            "scene", default_value="garden",
+            description="Scene in config/pick_place_scenes.yaml; sets the "
+                        "world/world_name defaults.",
+        ),
         DeclareLaunchArgument("use_sim_time", default_value="true"),
         DeclareLaunchArgument("headless", default_value="false",
                               description="Run Gazebo without GUI (CI mode)."),
         DeclareLaunchArgument(
             "world",
             default_value=PathJoinSubstitution([
-                FindPackageShare("ranger_sim"), "worlds", "garden_world.sdf"
+                FindPackageShare("ranger_sim"), "worlds",
+                scenes.SceneValue(scene, "world_file"),
             ]),
+            description="Path to the SDF world file (default: the scene's).",
         ),
         DeclareLaunchArgument(
-            "world_name", default_value="garden_world",
-            description="<world name> inside the SDF given as `world`.",
+            "world_name", default_value=scenes.SceneValue(scene, "world_name"),
+            description="<world name> inside the SDF given as `world` "
+                        "(default: the scene's).",
         ),
         DeclareLaunchArgument(
             "paused", default_value="true",
