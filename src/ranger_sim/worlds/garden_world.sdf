@@ -119,6 +119,43 @@
     </model>
 
     <!-- ============================================================ -->
+    <!-- Table B: place target of the transfer demo                   -->
+    <!-- ============================================================ -->
+    <!-- A copy of `table` (same top height, so the same HOVER/GRASP
+         waypoints set the cup down). The base turns to yaw pi/2 at the
+         origin and stops at y 1.07 (config/pick_place_scenes.yaml); the cup
+         is set down at (0, 1.465), 1.5 cm in from the front edge, as at
+         table A. test_pick_place_geometry.py checks the place spot. -->
+    <model name="table_b">
+      <static>true</static>
+      <pose>0.0 1.75 0 0 0 0</pose>
+      <link name="link">
+        <!-- Table top -->
+        <collision name="top_collision">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry><box><size>1.2 0.6 0.04</size></box></geometry>
+        </collision>
+        <visual name="top_visual">
+          <pose>0 0 0.75 0 0 0</pose>
+          <geometry><box><size>1.2 0.6 0.04</size></box></geometry>
+          <material>
+            <ambient>0.5 0.35 0.2 1</ambient>
+            <diffuse>0.6 0.4 0.25 1</diffuse>
+          </material>
+        </visual>
+        <!-- Legs -->
+        <collision name="leg1"><pose>0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg1_v"><pose>0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg2"><pose>-0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg2_v"><pose>-0.55 0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg3"><pose>0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg3_v"><pose>0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+        <collision name="leg4"><pose>-0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry></collision>
+        <visual name="leg4_v"><pose>-0.55 -0.25 0.365 0 0 0</pose><geometry><box><size>0.05 0.05 0.73</size></box></geometry><material><diffuse>0.4 0.3 0.2 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
     <!-- Graspable objects on table                                   -->
     <!-- ============================================================ -->
     <!-- Small cup (5 cm diameter, 10 cm tall) -->
@@ -183,9 +220,10 @@
       </link>
     </model>
 
+    <!-- Moved from (0, 1.5), where table_b stands: 0.35 m clear of it. -->
     <model name="planter_2">
       <static>true</static>
-      <pose>0.0 1.5 0.2 0 0 0</pose>
+      <pose>1.2 1.5 0.2 0 0 0</pose>
       <link name="link">
         <collision name="collision"><geometry><box><size>0.5 0.5 0.4</size></box></geometry></collision>
         <visual name="visual"><geometry><box><size>0.5 0.5 0.4</size></box></geometry>

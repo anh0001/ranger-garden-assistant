@@ -9,20 +9,22 @@ fine, but the cameras need GPU rendering like the robot's own sensors).
   ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
   ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 
-Spawns the scene's static camera rig (models/video_rig*.sdf), bridges its two
-cameras, starts record_demo_video.py and starts pick_place_demo
-(execute:=true) only once the recorder logs its first frame. ros_gz_sim
-create exits 0 even when no Gazebo answers, so that first frame, which only
-a running sim with the rig can produce, is what keeps this launch from
-moving a real arm. When the demo exits the launch shuts down and the
-recorder finishes the file. If the recorder gives up first (no frame within
-first_frame_timeout, encoder error) everything shuts down and the demo
-never starts. The default output is ~/.ros/videos/pick_place_<time>.mp4.
+Spawns the scene's static camera rig (models/video_rig*.sdf: one wide
+camera), bridges it, starts record_demo_video.py, which draws the robot's
+wrist camera (bridged by spawn_robot via config/gz_bridge.yaml) as the inset,
+and starts pick_place_demo (execute:=true: pick, transfer, place, return)
+only once the recorder logs its first frame. ros_gz_sim create exits 0 even
+when no Gazebo answers, so that first frame, which only a running sim with
+the rig can produce, is what keeps this launch from moving a real arm. When
+the demo exits the launch shuts down and the recorder finishes the file. If
+the recorder gives up first (no frame within first_frame_timeout, encoder
+error) everything shuts down and the demo never starts. The default output
+is ~/.ros/videos/pick_place_<time>.mp4.
 
 Each scene names its camera rig (config/pick_place_scenes.yaml); its world
 name, object, base approach, gripper closing and waypoints come from the
-scene too, unless the matching argument is non-empty. Run sim_bringup with
-the same `scene`.
+scene too (as do the standoff, place pose and route), unless the matching
+argument is non-empty. Run sim_bringup with the same `scene`.
 """
 
 import importlib.util
@@ -105,10 +107,7 @@ def generate_launch_description():
         package="ros_gz_bridge",
         executable="parameter_bridge",
         name="video_rig_bridge",
-        arguments=[
-            "/video/wide@sensor_msgs/msg/Image[ignition.msgs.Image",
-            "/video/close@sensor_msgs/msg/Image[ignition.msgs.Image",
-        ],
+        arguments=["/video/wide@sensor_msgs/msg/Image[ignition.msgs.Image"],
         output="screen",
     )
     recorder = Node(
@@ -138,6 +137,9 @@ def generate_launch_description():
             "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
             "hover_joints": scenes.from_scene(scene, "hover_joints"),
             "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
+            "standoff_m": scenes.from_scene(scene, "standoff_m", float),
+            "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
+            "place_route": scenes.from_scene(scene, "place_route"),
             "use_sim_time": True,
         }],
     )
