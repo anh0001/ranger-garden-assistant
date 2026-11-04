@@ -1,0 +1,15 @@
+# Pinned third-party sim assets, fetched into models/third_party/ (git-ignored).
+# Run: python3 src/ranger_sim/tools/fetch_sim_assets.py   (then rebuild ranger_sim)
+# Attribution: models/THIRD_PARTY_ASSETS.md.
+target_dir: models/third_party        # relative to the ranger_sim package root
+texture_max_px: 1024                  # GSO textures are 4096^2; downscaled copy for ogre2
+aws_small_house:
+  repo: https://github.com/TeamSOBITS/aws_small_house_world.git
+  commit: e2f90621f0fd1a0c496f4e7fcca06138808bc2ec   # humble-devel, 2025-09-05, MIT-0
+gso:   # Google Scanned Objects (Gazebo Fuel, owner GoogleResearch), CC BY 4.0
+  - {name: AllergenFree_JarroDophilus, version: 1, wrapper: vitamin_bottle,
+     sha256: 7284b0f731babfc954fc97eaa91fe1866b910eb016d7a507f0f123f7b99dad3c}
+  - {name: Beta_Glucan, version: 1, wrapper: supplement_bottle,
+     sha256: dceb139a8d495e62c74da9f68b88b45331aeeef9146301ee3c5eda41278bb654}
+  - {name: Wilton_Pearlized_Sugar_Sprinkles_525_oz_Gold, version: 1, wrapper: sprinkles_jar,
+     sha256: 6d7ebaec46d47c3d2067d8504a20a1c2ceab600b9032721af3ffffbadab3c284}

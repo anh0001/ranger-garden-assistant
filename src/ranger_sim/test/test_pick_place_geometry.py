@@ -1,17 +1,20 @@
 """
 Geometry checks for the pick-and-place demo (no simulator required).
 
-The arm waypoints of scripts/pick_place_demo.py are checked against the cup
-and the table of worlds/garden_world.sdf with forward kinematics built from
-the robot URDF; the sim-only steering lock and base joint-state plugins of
-urdf/ranger_gazebo.urdf.xacro are checked against config/gz_bridge.yaml and
+For every scene of config/pick_place_scenes.yaml, the arm waypoints and the
+base approach are checked against the object and the table of the scene's
+world with forward kinematics built from the robot URDF; the sim-only
+steering lock and base joint-state plugins of urdf/ranger_gazebo.urdf.xacro
+are checked against config/gz_bridge.yaml and
 scripts/base_joint_state_publisher.py.
 
 Needs the install space sourced: the xacro files resolve $(find ...).
 """
 
 from dataclasses import dataclass
+import functools
 import importlib.util
+import math
 from pathlib import Path
 from types import SimpleNamespace
 import xml.etree.ElementTree as ET
@@ -26,7 +29,7 @@ from sensor_msgs.msg import JointState
 from urdf_parser_py.urdf import URDF
 
 PKG = Path(__file__).resolve().parents[1]
-WORLD = PKG / "worlds" / "garden_world.sdf"
+SCENES = yaml.safe_load((PKG / "config" / "pick_place_scenes.yaml").read_text())
 SIM_XACRO = PKG / "urdf" / "ranger_gazebo.urdf.xacro"
 BRIDGE = PKG / "config" / "gz_bridge.yaml"
 DEMO_LAUNCHES = ("pick_place_demo.launch.py", "record_pick_place_video.launch.py")
@@ -41,11 +44,13 @@ PALM_Z = 0.063
 PALM_X = (-0.04, 0.0305)
 
 TABLE_CLEARANCE_M = 0.02  # pads above the table top at GRASP
-RIM_CLEARANCE_M = 0.01  # pads above the cup rim at HOVER
-BODY_MARGIN_M = 0.005  # pads below the cup rim at GRASP
-PALM_CLEARANCE_M = 0.01  # palm to the cup's near face at GRASP
-FINGER_CLEARANCE_M = 0.005  # open finger to the cup surface, per side
+RIM_CLEARANCE_M = 0.01  # pads above the object's rim at HOVER
+BODY_MARGIN_M = 0.005  # pads below the object's rim at GRASP
+PALM_CLEARANCE_M = 0.01  # palm to the object's near face at GRASP
+FINGER_CLEARANCE_M = 0.005  # open finger to the object's surface, per side
 MAX_DESCENT_WANDER_M = 0.005  # link6 x drift along the hover -> grasp path
+RESTING_TOLERANCE_M = 0.001  # object bottom vs. the table top
+MIN_SUPPORT_M = 0.01  # object centre (its centre of mass) in from the table's front edge
 
 # Gazebo rests base_footprint 10 mm below the ground (measured with
 # `ign model -m ranger -p`: steering locked, concentric wheel collisions);
@@ -82,9 +87,6 @@ def _launch_default(launch_name, arg_name):
         e for e in entities if isinstance(e, DeclareLaunchArgument) and e.name == arg_name
     )
     return arg.default_value[0].text
-
-
-BASE_APPROACH_X = float(_launch_default("pick_place_demo.launch.py", "base_approach_x"))
 
 
 # ---- forward kinematics ----------------------------------------------------
@@ -157,26 +159,66 @@ def _palm_front_x(t):
 
 @dataclass(frozen=True)
 class Scene:
-    """Cup and table top in base_footprint, base at world (base_x, 0)."""
+    """Object (an upright cylinder) and table top in base_footprint, base at world (base_x, 0)."""
 
-    cup_x: float
-    cup_y: float
-    cup_z: float
-    cup_radius: float
-    cup_height: float
+    obj_x: float
+    obj_y: float
+    obj_z: float  # centre
+    obj_radius: float
+    obj_height: float
     table_top: float
 
     @property
     def rim(self):
-        return self.cup_z + self.cup_height / 2
+        return self.obj_z + self.obj_height / 2
 
 
-def _world_model(name):
-    return next(m for m in ET.parse(WORLD).getroot().iter("model") if m.get("name") == name)
+@functools.lru_cache(maxsize=None)
+def _world_root(world_file):
+    return ET.parse(PKG / "worlds" / world_file).getroot()
+
+
+def _world_model(root, name):
+    return next(m for m in root.iter("model") if m.get("name") == name)
 
 
 def _xyz(element):
-    return [float(v) for v in element.findtext("pose").split()[:3]]
+    pose = element.findtext("pose")
+    return [float(v) for v in pose.split()[:3]] if pose else [0.0, 0.0, 0.0]
+
+
+def _object(root, name):
+    """
+    Return (x, y, centre_z, radius, height) in the world of the cylinder `name`.
+
+    The object is an inline <model> or an <include> of a models/<X> wrapper
+    (model://X); its collision cylinder may be offset in the link.
+    """
+    model = next((m for m in root.iter("model") if m.get("name") == name), None)
+    if model is not None:
+        origin = _xyz(model)
+    else:
+        include = next(i for i in root.iter("include") if i.findtext("name") == name)
+        origin = _xyz(include)
+        uri = include.findtext("uri").strip()
+        assert uri.startswith("model://"), uri
+        wrapper = PKG / "models" / uri[len("model://"):] / "model.sdf"
+        model = ET.parse(wrapper).getroot().find("model")
+    collision = model.find("link/collision")
+    cylinder = collision.find("geometry/cylinder")
+    x, y, z = np.add(origin, _xyz(collision))
+    return x, y, z, float(cylinder.findtext("radius")), float(cylinder.findtext("length"))
+
+
+def _table_top(root):
+    """World z of the `table`'s top_collision and the world x of its front edge."""
+    table = _world_model(root, "table")
+    top = next(c for c in table.iter("collision") if c.get("name") == "top_collision")
+    size_x, size_y, thickness = (float(v) for v in top.findtext("geometry/box/size").split())
+    yaw = float(table.findtext("pose").split()[5])
+    half_x = (abs(math.cos(yaw)) * size_x + abs(math.sin(yaw)) * size_y) / 2
+    table_x = _xyz(table)[0] + _xyz(top)[0]
+    return _xyz(table)[2] + _xyz(top)[2] + thickness / 2, table_x - half_x
 
 
 def _wheel_footprint_height(robot):
@@ -189,23 +231,25 @@ def _wheel_footprint_height(robot):
     return -min(bottoms)
 
 
-def _scene(robot, base_x, ground):
-    """Scene seen from a base at world x `base_x` whose footprint is at z `ground`."""
-    cup = _world_model("cup")
-    cup_x, cup_y, cup_z = _xyz(cup)
-    cylinder = cup.find("link/collision/geometry/cylinder")
-    table = _world_model("table")
-    top = next(c for c in table.iter("collision") if c.get("name") == "top_collision")
-    top_thickness = float(top.findtext("geometry/box/size").split()[2])
-    table_top = _xyz(table)[2] + _xyz(top)[2] + top_thickness / 2
+def _scene(cfg, base_x, ground):
+    """Scene `cfg` seen from a base at world x `base_x` whose footprint is at z `ground`."""
+    root = _world_root(cfg.world_file)
+    x, y, z, radius, height = _object(root, cfg.object_name)
+    table_top, _ = _table_top(root)
     return Scene(
-        cup_x=cup_x - base_x,
-        cup_y=cup_y,
-        cup_z=cup_z - ground,
-        cup_radius=float(cylinder.findtext("radius")),
-        cup_height=float(cylinder.findtext("length")),
+        obj_x=x - base_x,
+        obj_y=y,
+        obj_z=z - ground,
+        obj_radius=radius,
+        obj_height=height,
         table_top=table_top - ground,
     )
+
+
+@pytest.fixture(scope="module", params=sorted(SCENES))
+def scene_cfg(request):
+    """One scene of config/pick_place_scenes.yaml."""
+    return SimpleNamespace(name=request.param, **SCENES[request.param])
 
 
 @pytest.fixture(scope="module")
@@ -227,9 +271,8 @@ def ground(request, robot):
 
 
 # The base stops anywhere within BASE_TOLERANCE_M of the approach pose.
-BASE_POSES = pytest.mark.parametrize(
-    "base_x",
-    [BASE_APPROACH_X + k * demo.BASE_TOLERANCE_M for k in (-1, 0, 1)],
+BASE_OFFSETS = pytest.mark.parametrize(
+    "base_offset", [k * demo.BASE_TOLERANCE_M for k in (-1, 0, 1)]
 )
 
 
@@ -248,43 +291,43 @@ def test_fk_reproduces_the_documented_tcps(robot):
         np.testing.assert_allclose(_fk(robot, "piper_tcp", joints)[:3, 3], tcp, atol=2e-3)
 
 
-@pytest.mark.parametrize("name", ["HOVER", "GRASP"])
-def test_grasp_approach_is_level_and_planar(robot, name):
-    t = _fk(robot, "piper_link6", getattr(demo, name))
+@pytest.mark.parametrize("waypoint", ["hover_joints", "grasp_joints"])
+def test_grasp_approach_is_level_and_planar(robot, scene_cfg, waypoint):
+    t = _fk(robot, "piper_link6", getattr(scene_cfg, waypoint))
 
     np.testing.assert_allclose(t[:3, 2], (1.0, 0.0, 0.0), atol=0.02)  # approach
     np.testing.assert_allclose(abs(t[1, 1]), 1.0, atol=0.02)  # fingers close along y
     assert abs(t[1, 3]) < 1e-3
 
 
-@BASE_POSES
-def test_grasp_pads_straddle_the_cup_body(robot, ground, base_x):
-    scene = _scene(robot, base_x, ground)
-    t = _fk(robot, "piper_link6", demo.GRASP)
+@BASE_OFFSETS
+def test_grasp_pads_straddle_the_cup_body(robot, scene_cfg, ground, base_offset):
+    scene = _scene(scene_cfg, scene_cfg.base_approach_x + base_offset, ground)
+    t = _fk(robot, "piper_link6", scene_cfg.grasp_joints)
     x_min, x_max, z_min, z_max = _pads(t)
 
-    assert x_min <= scene.cup_x <= x_max, "pads do not reach across the cup centre"
+    assert x_min <= scene.obj_x <= x_max, "pads do not reach across the object centre"
     assert z_min >= scene.table_top + TABLE_CLEARANCE_M, "pads too close to the table"
-    assert z_max <= scene.rim - BODY_MARGIN_M, "pads above the cup body"
-    assert _palm_front_x(t) <= scene.cup_x - scene.cup_radius - PALM_CLEARANCE_M, (
-        "palm hits the cup"
+    assert z_max <= scene.rim - BODY_MARGIN_M, "pads above the object body"
+    assert _palm_front_x(t) <= scene.obj_x - scene.obj_radius - PALM_CLEARANCE_M, (
+        "palm hits the object"
     )
 
 
-@BASE_POSES
-def test_hover_clears_the_cup_rim(robot, ground, base_x):
-    scene = _scene(robot, base_x, ground)
-    hover = _fk(robot, "piper_link6", demo.HOVER)
-    grasp = _fk(robot, "piper_link6", demo.GRASP)
+@BASE_OFFSETS
+def test_hover_clears_the_cup_rim(robot, scene_cfg, ground, base_offset):
+    scene = _scene(scene_cfg, scene_cfg.base_approach_x + base_offset, ground)
+    hover = _fk(robot, "piper_link6", scene_cfg.hover_joints)
+    grasp = _fk(robot, "piper_link6", scene_cfg.grasp_joints)
 
     assert _pads(hover)[2] >= scene.rim + RIM_CLEARANCE_M, "hover pads too close to the rim"
     assert abs(hover[0, 3] - grasp[0, 3]) <= MAX_DESCENT_WANDER_M, "hover is not above grasp"
 
 
-def test_descent_from_hover_to_grasp_is_vertical(robot):
+def test_descent_from_hover_to_grasp_is_vertical(robot, scene_cfg):
     # A straight joint-space path between the two waypoints keeps the
-    # gripper over the cup (the cup is not in the MoveIt planning scene).
-    hover, grasp = np.array(demo.HOVER), np.array(demo.GRASP)
+    # gripper over the object (it is not in the MoveIt planning scene).
+    hover, grasp = np.array(scene_cfg.hover_joints), np.array(scene_cfg.grasp_joints)
     poses = [_fk(robot, "piper_link6", hover + s * (grasp - hover)) for s in np.linspace(0, 1, 21)]
     xs = [t[0, 3] for t in poses]
 
@@ -292,16 +335,39 @@ def test_descent_from_hover_to_grasp_is_vertical(robot):
     assert all(abs(t[2, 2]) < 0.02 for t in poses), "approach tilts during the descent"
 
 
-def test_open_gripper_clears_the_cup_and_closes_on_it(robot):
-    scene = _scene(robot, BASE_APPROACH_X, GAZEBO_FOOTPRINT_HEIGHT_M)
+def test_open_gripper_clears_the_cup_and_closes_on_it(scene_cfg):
+    scene = _scene(scene_cfg, scene_cfg.base_approach_x, GAZEBO_FOOTPRINT_HEIGHT_M)
 
-    assert demo.GRIPPER_OPEN - scene.cup_radius >= FINGER_CLEARANCE_M
-    assert abs(demo.GRIPPER_CLOSED - scene.cup_radius) <= 0.002
+    assert demo.GRIPPER_OPEN - scene.obj_radius >= FINGER_CLEARANCE_M
+    assert abs(scene_cfg.gripper_closed - scene.obj_radius) <= 0.002
+
+
+def test_object_stands_on_the_table(scene_cfg):
+    # The garden cup's near face overhangs the edge by 1 cm (centre 1.5 cm
+    # in); what keeps an upright cylinder standing is its centre of mass.
+    root = _world_root(scene_cfg.world_file)
+    x, _, centre_z, _, height = _object(root, scene_cfg.object_name)
+    table_top, front_edge = _table_top(root)
+
+    assert abs((centre_z - height / 2) - table_top) <= RESTING_TOLERANCE_M, (
+        "the object does not rest on the table top"
+    )
+    assert x - front_edge >= MIN_SUPPORT_M, "the object's centre is too close to the edge"
+
+
+def test_garden_scene_matches_the_demo_defaults():
+    # The node's own defaults (used without a launch file) are the garden's.
+    garden = SCENES["garden"]
+
+    assert garden["hover_joints"] == demo.HOVER
+    assert garden["grasp_joints"] == demo.GRASP
+    assert garden["gripper_closed"] == demo.GRIPPER_CLOSED
+    assert garden["base_approach_x"] == demo.BASE_APPROACH_X
 
 
 @pytest.mark.parametrize("launch_name", DEMO_LAUNCHES)
-def test_launch_files_close_the_gripper_like_the_demo(launch_name):
-    assert float(_launch_default(launch_name, "gripper_closed")) == demo.GRIPPER_CLOSED
+def test_demo_launches_default_to_the_garden_scene(launch_name):
+    assert _launch_default(launch_name, "scene") == "garden"
 
 
 # ---- sim-only base plugins -------------------------------------------------

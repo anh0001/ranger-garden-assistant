@@ -1,0 +1,33 @@
+# Single source of truth for the pick-and-place demo per scene. Read by
+# launch/{sim_bringup,pick_place_demo,record_pick_place_video}.launch.py (via
+# launch/pick_place_scenes.py) and test/test_pick_place_geometry.py, which checks the
+# waypoints against the world with forward kinematics. Floats must be written as floats.
+#
+#   world_file / world_name   worlds/<file> and its <world name>
+#   object_name               graspable model (config/graspable_objects.yaml)
+#   base_approach_x           world x the base drives to before grasping
+#   gripper_closed            joint7 travel (m) when closing on the object: its radius
+#   hover_joints/grasp_joints PiPER joints 1-6 (rad): level gripper above / around it
+#   rig_file                  models/<file>: camera rig of record_pick_place_video
+garden:
+  world_file: garden_world.sdf
+  world_name: garden_world
+  object_name: cup
+  base_approach_x: 0.52             # cup centre at world x 0.915 = 0.52 + 0.395
+  gripper_closed: 0.025             # cup radius
+  hover_joints: [0.0, 0.9, -1.413, 0.0, 0.601, 0.0]    # TCP (0.430, 0, 0.935)
+  grasp_joints: [0.0, 0.732, -0.943, 0.0, 0.298, 0.0]  # TCP (0.430, 0, 0.842)
+  rig_file: video_rig.sdf
+small_house:
+  world_file: small_house_world.sdf
+  world_name: small_house
+  object_name: vitamin_bottle
+  # Bottle centre at world x 0.935 = 0.535 + 0.400: 5 mm deeper in the grasp
+  # than the garden cup (0.395) because the bottle is 2 mm wider, so the palm
+  # keeps >= 1 cm + 4.8 mm to it across the +-5 mm base stop.
+  base_approach_x: 0.535
+  gripper_closed: 0.027             # bottle radius
+  # Table top 0.801 m (garden 0.77 m): link6 z +2.95 cm, same link6 x = 0.290, level.
+  hover_joints: [0.0, 0.965, -1.576, 0.0, 0.698, 0.0]  # TCP (0.430, 0, 0.962)
+  grasp_joints: [0.0, 0.777, -1.081, 0.0, 0.392, 0.0]  # TCP (0.430, 0, 0.871)
+  rig_file: video_rig_small_house.sdf

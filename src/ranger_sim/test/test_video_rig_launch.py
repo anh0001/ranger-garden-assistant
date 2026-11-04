@@ -1,4 +1,4 @@
-"""Tests for the demo-video camera rig and its launch file (no simulator required)."""
+"""Tests for the demo-video camera rigs and their launch file (no simulator required)."""
 
 import importlib.util
 from pathlib import Path
@@ -7,9 +7,15 @@ import xml.etree.ElementTree as ET
 
 from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
+import pytest
+import yaml
 
 PKG = Path(__file__).resolve().parents[1]
-RIG_SDF = PKG / "models" / "video_rig.sdf"
+SCENES = yaml.safe_load((PKG / "config" / "pick_place_scenes.yaml").read_text())
+# Every scene's rig (config/pick_place_scenes.yaml: rig_file).
+RIGS = pytest.mark.parametrize(
+    "rig_file", sorted({cfg["rig_file"] for cfg in SCENES.values()})
+)
 
 
 def _load(name, path):
@@ -25,8 +31,8 @@ launch_file = _load(
 )
 
 
-def _rig():
-    model = ET.parse(RIG_SDF).getroot().find("model")
+def _rig(rig_file):
+    model = ET.parse(PKG / "models" / rig_file).getroot().find("model")
     cameras = {s.get("name"): s for s in model.iter("sensor") if s.get("type") == "camera"}
     return model, cameras
 
@@ -36,30 +42,34 @@ def _size(sensor):
     return int(image.findtext("width")), int(image.findtext("height"))
 
 
-# ---- camera rig -----------------------------------------------------------
+# ---- camera rigs ----------------------------------------------------------
 
 
-def test_rig_is_a_static_model_named_video_rig():
-    model, _ = _rig()
+@RIGS
+def test_rig_is_a_static_model_named_video_rig(rig_file):
+    model, _ = _rig(rig_file)
     assert model.get("name") == "video_rig"
     assert model.findtext("static") == "true"
 
 
-def test_rig_has_no_collisions():
-    model, _ = _rig()
+@RIGS
+def test_rig_has_no_collisions(rig_file):
+    model, _ = _rig(rig_file)
     assert list(model.iter("collision")) == []
 
 
-def test_rig_wide_camera_matches_the_recorder_defaults():
-    _, cameras = _rig()
+@RIGS
+def test_rig_wide_camera_matches_the_recorder_defaults(rig_file):
+    _, cameras = _rig(rig_file)
     wide = cameras["wide_cam"]
     assert "/" + wide.findtext("topic") == recorder.DEFAULT_WIDE_TOPIC
     assert _size(wide) == (recorder.DEFAULT_WIDTH, recorder.DEFAULT_HEIGHT)
     assert int(wide.findtext("update_rate")) >= recorder.DEFAULT_FPS
 
 
-def test_rig_close_camera_matches_the_recorder_defaults():
-    _, cameras = _rig()
+@RIGS
+def test_rig_close_camera_matches_the_recorder_defaults(rig_file):
+    _, cameras = _rig(rig_file)
     close = cameras["close_cam"]
     assert "/" + close.findtext("topic") == recorder.DEFAULT_CLOSE_TOPIC
     width, height = _size(close)
@@ -76,6 +86,7 @@ def _entities():
 def test_launch_declares_its_arguments():
     names = {e.name for e in _entities() if isinstance(e, DeclareLaunchArgument)}
     assert names == {
+        "scene",
         "world_name",
         "output_path",
         "object_name",

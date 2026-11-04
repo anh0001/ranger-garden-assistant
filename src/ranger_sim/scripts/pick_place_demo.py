@@ -56,6 +56,11 @@ test/test_pick_place_geometry.py re-derives all of this from the URDF and
 the world; re-solve `*_joints` / `base_approach_x` there if you move the
 cup.
 
+Per-scene values (world, object, approach, waypoints) live in
+config/pick_place_scenes.yaml; the constants here are the garden defaults.
+small_house: table top 0.801, vitamin bottle r 0.027 h 0.096 at
+(0.935, 0, 0.801), base at x 0.535, hover/grasp TCP z 0.962/0.871.
+
 Safety
 ------
 `execute` defaults to **False** (plan-only). In plan-only mode the node
@@ -93,6 +98,7 @@ HOME = [0.0, 1.2, -0.2, 0.0, -0.8, 0.0]
 HOVER = [0.0, 0.9, -1.413, 0.0, 0.601, 0.0]
 GRASP = [0.0, 0.732, -0.943, 0.0, 0.298, 0.0]
 LIFT = [0.0, 0.9, -1.4, 0.0, -0.3, 0.0]
+BASE_APPROACH_X = 0.52  # world x the base drives to (garden scene)
 # The grasp leaves ~1 cm between palm and cup: the base must stop within
 # a few millimetres of the approach pose (a 3 cm band left the fingers on
 # the near edge of the cup).
@@ -132,7 +138,7 @@ class PickPlaceDemo(Node):
         p("execute", False)  # False => plan only (safe)
         p("planning_group", "piper_arm")
         p("object_name", "cup")  # must be in config/graspable_objects.yaml
-        p("base_approach_x", 0.52)  # world x to drive base to
+        p("base_approach_x", BASE_APPROACH_X)  # world x to drive base to
         p("base_speed", 0.25)  # m/s open-loop drive
         p("home_joints", HOME)
         p("hover_joints", HOVER)
@@ -223,10 +229,10 @@ class PickPlaceDemo(Node):
     def drive_base_to(self, world_x: float) -> bool:
         if not self.execute:
             self.get_logger().info(
-                f"[plan-only] would drive base to world x={world_x:.2f} (skipped)"
+                f"[plan-only] would drive base to world x={world_x:.3f} (skipped)"
             )
             return True
-        self.get_logger().info(f"Driving base to world x={world_x:.2f} ...")
+        self.get_logger().info(f"Driving base to world x={world_x:.3f} ...")
         deadline = time.time() + BASE_DRIVE_TIMEOUT_SEC
         speed = float(self.get_parameter("base_speed").value)
         reached = False
@@ -245,7 +251,7 @@ class PickPlaceDemo(Node):
             self._cmd_vel.publish(tw)
         self._cmd_vel.publish(Twist())  # stop
         if not reached:
-            self.get_logger().error(f"base did not reach world x={world_x:.2f}")
+            self.get_logger().error(f"base did not reach world x={world_x:.3f}")
             return False
         self.get_logger().info("Base drive done.")
         return True
@@ -379,23 +385,23 @@ class PickPlaceDemo(Node):
             # end up under the table top and jam against it.
             ("carry pose", lambda: self.move_to_joint_state("lift", lift)),
             ("approach table", lambda: self.drive_base_to(approach_x)),
-            ("hover above cup", lambda: self.move_to_joint_state("hover", hover)),
+            ("hover above object", lambda: self.move_to_joint_state("hover", hover)),
             # Straight descent: HOVER and GRASP share link6 x and a level
             # approach, so the joint-space path stays vertical.
             ("descend to grasp", lambda: self.move_to_joint_state("grasp", grasp_pose)),
             # Attach before closing so the fixed joint is never created
-            # while the fingers interpenetrate the cup (1 cm clearance per
-            # side when open).
-            ("attach cup", lambda: self.grasp(True)),
+            # while the fingers interpenetrate the object (>= 5 mm
+            # clearance per side when open).
+            ("attach object", lambda: self.grasp(True)),
             ("close gripper", lambda: self.set_gripper(closed, "close")),
             ("raise", lambda: self.move_to_joint_state("hover", hover)),
             ("lift", lambda: self.move_to_joint_state("lift", lift)),
-            # Place: back down the same way; the attach kept the cup's pose
-            # relative to the wrist, so GRASP sets it on its original spot.
+            # Place: back down the same way; the attach kept the object's
+            # pose relative to the wrist, so GRASP sets it on its original spot.
             ("hover above table", lambda: self.move_to_joint_state("hover", hover)),
             ("place", lambda: self.move_to_joint_state("place", grasp_pose)),
             ("open gripper", lambda: self.set_gripper(GRIPPER_OPEN, "open")),
-            ("release cup", lambda: self.grasp(False)),
+            ("release object", lambda: self.grasp(False)),
             ("clear (hover)", lambda: self.move_to_joint_state("hover", hover)),
             ("clear (lift)", lambda: self.move_to_joint_state("lift", lift)),
             # 'home' is below the table top: back away before retracting.

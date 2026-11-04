@@ -161,3 +161,39 @@
   ros_type_name: std_msgs/msg/String
   gz_type_name: ignition.msgs.StringMsg
   direction: GZ_TO_ROS
+- topic_name: /grasp/vitamin_bottle/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/vitamin_bottle/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/vitamin_bottle/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/supplement_bottle/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/supplement_bottle/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/supplement_bottle/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS
+- topic_name: /grasp/sprinkles_jar/attach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/sprinkles_jar/detach
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: ignition.msgs.Empty
+  direction: ROS_TO_GZ
+- topic_name: /grasp/sprinkles_jar/state
+  ros_type_name: std_msgs/msg/String
+  gz_type_name: ignition.msgs.StringMsg
+  direction: GZ_TO_ROS

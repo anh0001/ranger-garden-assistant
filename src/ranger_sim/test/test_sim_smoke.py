@@ -5,14 +5,17 @@ Headless smoke test for the Gazebo Fortress simulation.
 Boots the sim, spawns the robot, and checks that core topics/actions are alive.
 Needs a GPU (gpu_lidar / camera sensors), so it only runs with RANGER_SIM_GPU=1:
   RANGER_SIM_GPU=1 launch_test src/ranger_sim/test/test_sim_smoke.py
-Run it in an isolated ROS domain (e.g. ROS_DOMAIN_ID=88 ROS_LOCALHOST_ONLY=1)
-so it can never talk to a real robot on the network.
+  RANGER_SIM_GPU=1 RANGER_SIM_SCENE=small_house launch_test src/ranger_sim/test/test_sim_smoke.py
+RANGER_SIM_SCENE picks the scene of config/pick_place_scenes.yaml (default
+garden). Run it in an isolated ROS domain (e.g. ROS_DOMAIN_ID=88
+ROS_LOCALHOST_ONLY=1) so it can never talk to a real robot on the network.
 """
 
 import os
 import time
 import unittest
 
+from ament_index_python.packages import get_package_share_directory
 import launch
 import launch_testing
 import launch_testing.actions
@@ -28,16 +31,24 @@ from rclpy.node import Node
 from ranger_sim.srv import SetGrasp
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import JointState
+import yaml
 
 # Humble's launch_testing aborts if ReadyToTest is not emitted within 15 s
 # (hard-coded), so signal readiness early and let the per-test waits absorb
 # the rest of the startup (paused start, startup detach, controller
 # activation after the unpause).
 READY_DELAY_SEC = 10.0
-WAIT_SEC = 30.0
+SCENE = os.environ.get("RANGER_SIM_SCENE", "garden")
+with open(
+    os.path.join(get_package_share_directory("ranger_sim"), "config", "pick_place_scenes.yaml"),
+    encoding="utf-8",
+) as _scenes:
+    GRASP_OBJECT = yaml.safe_load(_scenes)[SCENE]["object_name"]
+# The house loads ~90 meshes: give its startup more time.
+WAIT_SEC = 30.0 if SCENE == "garden" else 60.0
 
-# Drive test: forward until odom reports DRIVE_DISTANCE_M (the table edge is
-# 0.9 m ahead of the spawn pose, so stay well short of it).
+# Drive test: forward until odom reports DRIVE_DISTANCE_M (both scenes put
+# the table edge 0.9 m ahead of the spawn pose, so stay well short of it).
 STEERING_JOINTS = [
     "fl_steering_joint",
     "fr_steering_joint",
@@ -64,6 +75,7 @@ def generate_test_description():
             ])
         ),
         launch_arguments={
+            "scene": SCENE,
             "headless": "true",
             "launch_moveit": "false",
             "launch_nav": "false",
@@ -227,14 +239,14 @@ class TestSimSmoke(unittest.TestCase):
 
     def _call_grasp(self, client, attach):
         request = SetGrasp.Request()
-        request.object = "cup"
+        request.object = GRASP_OBJECT
         request.attach = attach
         future = client.call_async(request)
         rclpy.spin_until_future_complete(self.node, future, timeout_sec=10.0)
         return future.result()
 
-    def test_grasp_round_trip_on_cup(self):
-        """Attach and release the cup through /grasp/set against the real plugin."""
+    def test_grasp_round_trip_on_the_scene_object(self):
+        """Attach and release the scene's object through /grasp/set against the real plugin."""
         self.assertTrue(self._wait_for_service("/grasp/set"), "/grasp/set not found")
         client = self.node.create_client(SetGrasp, "/grasp/set")
         self.assertTrue(client.wait_for_service(timeout_sec=WAIT_SEC))

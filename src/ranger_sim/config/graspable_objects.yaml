@@ -16,3 +16,6 @@ objects:
   - {name: ycb_mustard_bottle, link: link}
   - {name: ycb_bowl,           link: link}
   - {name: low_drawer_cabinet, link: drawer}    # articulated drawer (Phase 2)
+  - {name: vitamin_bottle,     link: link}      # small_house world (GSO wrappers)
+  - {name: supplement_bottle,  link: link}
+  - {name: sprinkles_jar,      link: link}

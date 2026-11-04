@@ -59,6 +59,10 @@ STATUS_BAR_H = 52
 MARGIN = 16
 INSET_W, INSET_H = 480, 270
 FONT = cv2.FONT_HERSHEY_SIMPLEX
+TEXT_THICKNESS = 2
+STATUS_SCALE = 0.75  # step caption and grasp state
+SIM_SCALE = 0.65  # sim time
+STATUS_GAP_PX = 24  # between the status-bar texts
 WHITE = (255, 255, 255)
 GREY = (210, 210, 210)
 GREEN = (60, 220, 60)
@@ -135,6 +139,34 @@ def grasp_label(obj: str, state: str) -> tuple[str, bool]:
     return f"{obj}: {state.upper()}", state == "attached"
 
 
+def text_width(text: str, scale: float) -> int:
+    """Width in pixels of ``text`` drawn by cv2.putText in FONT at ``scale``."""
+    return cv2.getTextSize(text, FONT, scale, TEXT_THICKNESS)[0][0]
+
+
+def fit_text(text: str, max_px: int, scale: float) -> str:
+    """``text``, cut with '...' until it is at most ``max_px`` wide."""
+    if text_width(text, scale) <= max_px:
+        return text
+    while text and text_width(text + "...", scale) > max_px:
+        text = text[:-1]
+    return text + "..."
+
+
+def status_layout(width: int, step: str, grasp_text: str, sim_text: str) -> tuple[str, int, int]:
+    """
+    Lay out the status bar of a ``width``-pixel frame.
+
+    The sim time and the grasp state are right-aligned, so an object name of
+    any length fits; the step caption gets the space left of them and is cut
+    to it. Returns (step caption, grasp state x, sim time x).
+    """
+    sim_x = width - MARGIN - text_width(sim_text, SIM_SCALE)
+    grasp_x = sim_x - STATUS_GAP_PX - text_width(grasp_text, STATUS_SCALE)
+    step = fit_text(step, grasp_x - STATUS_GAP_PX - MARGIN, STATUS_SCALE)
+    return step, grasp_x, sim_x
+
+
 def _shade(frame: np.ndarray, x0: int, y0: int, x1: int, y1: int) -> None:
     roi = frame[y0:y1, x0:x1]
     frame[y0:y1, x0:x1] = (roi * (1.0 - SHADE_ALPHA)).astype(np.uint8)
@@ -172,12 +204,21 @@ def compose_frame(
         _draw_inset(frame, close)
     base = height - 18
     _shade(frame, 0, height - STATUS_BAR_H, width, height)
-    step = format_caption(f"step: {caption}")
-    cv2.putText(frame, step, (16, base), FONT, 0.75, WHITE, 2, cv2.LINE_AA)
-    grasp_color = GREEN if grasp_attached else GREY
-    cv2.putText(frame, grasp_text, (width - 420, base), FONT, 0.75, grasp_color, 2, cv2.LINE_AA)
     sim_text = f"sim t = {sim_sec:5.1f} s"
-    cv2.putText(frame, sim_text, (width - 200, base), FONT, 0.65, GREY, 2, cv2.LINE_AA)
+    step, grasp_x, sim_x = status_layout(
+        width, format_caption(f"step: {caption}"), grasp_text, sim_text
+    )
+    cv2.putText(
+        frame, step, (MARGIN, base), FONT, STATUS_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_AA
+    )
+    grasp_color = GREEN if grasp_attached else GREY
+    cv2.putText(
+        frame, grasp_text, (grasp_x, base), FONT, STATUS_SCALE, grasp_color, TEXT_THICKNESS,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame, sim_text, (sim_x, base), FONT, SIM_SCALE, GREY, TEXT_THICKNESS, cv2.LINE_AA
+    )
     return frame
 
 
