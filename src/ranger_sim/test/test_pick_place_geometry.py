@@ -3,7 +3,7 @@ Geometry checks for the pick-and-place demo (no simulator required).
 
 For every scene of config/pick_place_scenes.yaml, the arm waypoints, the
 base approach, the wrist camera's view at the standoff and the place spot of
-the transfer are checked against the object and the tables of the scene's
+the transfer are checked against the object and the surfaces of the scene's
 world with forward kinematics built from the robot URDF; the sim-only
 steering lock and base joint-state plugins of urdf/ranger_gazebo.urdf.xacro
 are checked against config/gz_bridge.yaml and
@@ -15,6 +15,7 @@ Needs the install space sourced: the xacro files resolve $(find ...).
 from dataclasses import dataclass
 import functools
 import importlib.util
+import itertools
 import math
 from pathlib import Path
 import sys
@@ -36,6 +37,8 @@ SIM_XACRO = PKG / "urdf" / "ranger_gazebo.urdf.xacro"
 BRIDGE = PKG / "config" / "gz_bridge.yaml"
 GRASPABLE = PKG / "config" / "graspable_objects.yaml"
 DEMO_LAUNCHES = ("pick_place_demo.launch.py", "record_pick_place_video.launch.py")
+# Optional scene keys: a scene without them places with the pick's hover/grasp.
+PLACE_WAYPOINTS = ("place_hover_joints", "place_grasp_joints")
 
 # Gripper geometry in the piper_link6 (= gripper_base) frame, measured from
 # piper_description/meshes/{link7,link8,gripper_base}.STL: finger pads span
@@ -54,7 +57,16 @@ FINGER_CLEARANCE_M = 0.005  # open finger to the object's surface, per side
 MAX_DESCENT_WANDER_M = 0.005  # link6 x drift along the hover -> grasp path
 RESTING_TOLERANCE_M = 0.001  # object bottom vs. the table top
 MIN_SUPPORT_M = 0.01  # object centre (its centre of mass) in from the table's front edge
-CARRY_CLEARANCE_M = 0.05  # held object above the table tops in the carry pose
+CARRY_CLEARANCE_M = 0.05  # held object above the pick table top in the carry pose
+PLACE_HOVER_MIN_M = 0.05  # place hover above the place grasp: the held object clears the surface
+# Base collisions (wheels, lidar, camera, body) to the collision boxes of the
+# surface it drives up to: the house counter is a cabinet down to the floor,
+# and the lidar sticks out 0.394 m ahead of base_footprint.
+BASE_CLEARANCE_M = 0.03
+# AWS CookingBench_01 on the house counter: half its length along world x,
+# measured from its visual mesh (x -3.572..-2.566 at the generated pose).
+COOKTOP_HALF_LENGTH_M = 0.503
+COOKTOP_CLEARANCE_M = 0.10  # house place spot to the cooktop: open fingers (6 cm) + margin
 LEVEL_TOLERANCE = 0.02  # |approach z| of a level gripper (about 1 deg)
 CAMERA_CENTRE_MAX_DEG = 15.0  # object off the wrist camera's optical axis at the standoff
 D405_RANGE_M = (0.07, 0.50)  # RealSense D405 depth range
@@ -89,6 +101,7 @@ def _load(name, path):
 
 demo = _load("pick_place_demo", PKG / "scripts" / "pick_place_demo.py")
 bjsp = _load("base_joint_state_publisher", PKG / "scripts" / "base_joint_state_publisher.py")
+house_gen = _load("generate_small_house_world", PKG / "tools" / "generate_small_house_world.py")
 
 
 def _launch_default(launch_name, arg_name):
@@ -329,6 +342,20 @@ def test_wheel_geometry_and_gazebo_agree_within_a_centimetre(robot):
     assert abs(_wheel_footprint_height(robot) - GAZEBO_FOOTPRINT_HEIGHT_M) <= 0.011
 
 
+def _waypoint(scene_cfg, name):
+    """
+    Arm joints of the waypoint `name`: "carry", or a scene key.
+
+    A place_* key the scene lacks falls back to the pick's waypoint, as
+    launch/pick_place_scenes.py does (OPTIONAL_KEYS).
+    """
+    if name == "carry":
+        return demo.CARRY
+    if name in PLACE_WAYPOINTS:
+        return getattr(scene_cfg, name, getattr(scene_cfg, name[len("place_"):]))
+    return getattr(scene_cfg, name)
+
+
 # ---- arm waypoints vs. the world -------------------------------------------
 
 
@@ -338,9 +365,9 @@ def test_fk_reproduces_the_documented_tcps(robot):
         np.testing.assert_allclose(_fk(robot, "piper_tcp", joints)[:3, 3], tcp, atol=2e-3)
 
 
-@pytest.mark.parametrize("waypoint", ["hover_joints", "grasp_joints"])
+@pytest.mark.parametrize("waypoint", ["hover_joints", "grasp_joints", *PLACE_WAYPOINTS])
 def test_grasp_approach_is_level_and_planar(robot, scene_cfg, waypoint):
-    t = _fk(robot, "piper_link6", getattr(scene_cfg, waypoint))
+    t = _fk(robot, "piper_link6", _waypoint(scene_cfg, waypoint))
 
     np.testing.assert_allclose(t[:3, 2], (1.0, 0.0, 0.0), atol=0.02)  # approach
     np.testing.assert_allclose(abs(t[1, 1]), 1.0, atol=0.02)  # fingers close along y
@@ -371,15 +398,17 @@ def test_hover_clears_the_cup_rim(robot, scene_cfg, ground, base_offset):
     assert abs(hover[0, 3] - grasp[0, 3]) <= MAX_DESCENT_WANDER_M, "hover is not above grasp"
 
 
-def test_descent_from_hover_to_grasp_is_vertical(robot, scene_cfg):
+@pytest.mark.parametrize("hover, grasp", [("hover_joints", "grasp_joints"), PLACE_WAYPOINTS])
+def test_descent_from_hover_to_grasp_is_vertical(robot, scene_cfg, hover, grasp):
     # A straight joint-space path between the two waypoints keeps the
     # gripper over the object (it is not in the MoveIt planning scene).
-    hover, grasp = np.array(scene_cfg.hover_joints), np.array(scene_cfg.grasp_joints)
-    poses = [_fk(robot, "piper_link6", hover + s * (grasp - hover)) for s in np.linspace(0, 1, 21)]
+    path = _path(_waypoint(scene_cfg, hover), _waypoint(scene_cfg, grasp))
+    poses = [_fk(robot, "piper_link6", arm) for arm in path]
     xs = [t[0, 3] for t in poses]
 
     assert max(xs) - min(xs) <= MAX_DESCENT_WANDER_M
     assert all(abs(t[2, 2]) < 0.02 for t in poses), "approach tilts during the descent"
+    assert poses[0][2, 3] - poses[-1][2, 3] >= PLACE_HOVER_MIN_M, "hover not above the grasp"
 
 
 def test_open_gripper_clears_the_cup_and_closes_on_it(scene_cfg):
@@ -431,15 +460,12 @@ def _held_centre(robot, scene, grasp_joints, arm):
     return (_fk(robot, "piper_link6", arm) @ np.linalg.solve(grasp, centre))[:3]
 
 
-def _waypoint(scene_cfg, name):
-    return demo.CARRY if name == "carry" else getattr(scene_cfg, name)
-
-
-def test_carry_pose_is_level_retracted_and_clears_the_tables(robot, scene_cfg, ground):
+def test_carry_pose_is_level_retracted_and_clears_the_pick_table(robot, scene_cfg, ground):
+    # The place surface may be higher (the house counter): at the place the
+    # carry pose only has to stay behind its edge, see
+    # test_place_standoff_path_stays_behind_the_surface_edge.
     scene = _scene(scene_cfg, scene_cfg.base_approach_x, ground)
-    root = _world_root(scene_cfg.world_file)
-    _, front_edge = _table_top(root)
-    place_top = _surface(root, scene_cfg.place_surface).top_z - ground
+    _, front_edge = _table_top(_world_root(scene_cfg.world_file))
     carry = _fk(robot, "piper_link6", demo.CARRY)
     centre = _held_centre(robot, scene, scene_cfg.grasp_joints, demo.CARRY)
 
@@ -448,13 +474,14 @@ def test_carry_pose_is_level_retracted_and_clears_the_tables(robot, scene_cfg, g
         _fk(robot, "piper_tcp", demo.CARRY)[0, 3]
         <= _fk(robot, "piper_tcp", scene_cfg.grasp_joints)[0, 3]
     ), "the carry pose is not retracted"
-    assert centre[2] - scene.obj_height / 2 >= max(scene.table_top, place_top) + CARRY_CLEARANCE_M
+    assert centre[2] - scene.obj_height / 2 >= scene.table_top + CARRY_CLEARANCE_M
     # Behind the table edge: the base can turn and back away with it.
     assert centre[0] + scene.obj_radius < front_edge - scene_cfg.base_approach_x
 
 
 @pytest.mark.parametrize("pair", [
     ("hover_joints", "grasp_joints"), ("hover_joints", "carry"), ("grasp_joints", "carry"),
+    ("place_hover_joints", "carry"),
 ])
 def test_level_waypoints_stay_level_in_between(robot, scene_cfg, pair):
     # Joints 2, 3 and 5 pitch about parallel axes and the three waypoints
@@ -465,8 +492,9 @@ def test_level_waypoints_stay_level_in_between(robot, scene_cfg, pair):
 
 
 def test_held_object_clears_the_table_into_the_carry_pose(robot, scene_cfg, ground):
-    # Lift (straight up to HOVER), then retract to CARRY over the pick table;
-    # the place runs the same path backwards over a table as high.
+    # Lift (straight up to HOVER), then retract to CARRY over the pick table.
+    # At the place the arm rises from CARRY at the standoff, away from the
+    # surface (test_place_standoff_path_stays_behind_the_surface_edge).
     scene = _scene(scene_cfg, scene_cfg.base_approach_x, ground)
     for arm in _path(scene_cfg.hover_joints, demo.CARRY):
         centre = _held_centre(robot, scene, scene_cfg.grasp_joints, arm)
@@ -486,6 +514,50 @@ def test_standoff_paths_clear_the_table(robot, scene_cfg, ground, waypoint):
 
         assert max(pads_x_max, _palm_front_x(t)) < front_edge - standoff_x
         assert pads_z_min >= scene.table_top + TABLE_CLEARANCE_M
+
+
+def _edge_distance(surface, pose):
+    """Distance along the heading of base pose `pose` to where its centre line meets `surface`."""
+    x, y, yaw = pose
+    origin = surface.local(x, y)
+    heading = (math.cos(yaw - surface.yaw), math.sin(yaw - surface.yaw))
+    entry, leave = -math.inf, math.inf
+    for p, d, half in zip(origin, heading, (surface.size_x / 2, surface.size_y / 2)):
+        if abs(d) < 1e-12:
+            if abs(p) > half:
+                return math.inf
+            continue
+        near, far = sorted(((-half - p) / d, (half - p) / d))
+        entry, leave = max(entry, near), min(leave, far)
+    return entry if entry <= leave and leave >= 0.0 else math.inf
+
+
+def test_place_standoff_path_stays_behind_the_surface_edge(robot, scene_cfg):
+    # At the place standoff the arm rises from CARRY to the place hover with
+    # the object held. The house counter is 10 cm above the pick table, so in
+    # CARRY the object is below its top: gripper and object must stay short
+    # of its edge until the base slides in.
+    scene = _scene(scene_cfg, scene_cfg.base_approach_x, GAZEBO_FOOTPRINT_HEIGHT_M)
+    surface = _surface(_world_root(scene_cfg.world_file), scene_cfg.place_surface)
+    standoff = demo.standoff_pose(tuple(scene_cfg.place_base_pose), scene_cfg.standoff_m)
+    edge = _edge_distance(surface, standoff)
+    for arm in _path(demo.CARRY, _waypoint(scene_cfg, "place_hover_joints")):
+        t = _fk(robot, "piper_link6", arm)
+        centre = _held_centre(robot, scene, scene_cfg.grasp_joints, arm)
+
+        assert max(_pads(t)[1], _palm_front_x(t), centre[0] + scene.obj_radius) < edge
+
+
+def test_held_object_clears_the_place_surface_at_the_place_hover(robot, scene_cfg, ground):
+    # The base slides in with the arm at the place hover: the held object
+    # and the pads pass over the place surface's edge.
+    top = _surface(_world_root(scene_cfg.world_file), scene_cfg.place_surface).top_z - ground
+    scene = _scene(scene_cfg, scene_cfg.base_approach_x, ground)
+    arm = _waypoint(scene_cfg, "place_hover_joints")
+    centre = _held_centre(robot, scene, scene_cfg.grasp_joints, arm)
+
+    assert centre[2] - scene.obj_height / 2 >= top + TABLE_CLEARANCE_M
+    assert _pads(_fk(robot, "piper_link6", arm))[2] >= top + TABLE_CLEARANCE_M
 
 
 # ---- the wrist camera's view -----------------------------------------------
@@ -538,10 +610,22 @@ def test_object_stays_in_view_halfway_through_the_slide_in(robot, sim_urdf, scen
 # ---- the place spot of the transfer ----------------------------------------
 
 
-def _place_spot(scene_cfg):
-    """World (x, y) the place sets the object down at: as far ahead of the base as at the pick."""
+def _place_reach(robot, scene_cfg):
+    """How much further ahead of the base the place grasp holds the object than the pick grasp."""
+    place = _fk(robot, "piper_tcp", _waypoint(scene_cfg, "place_grasp_joints"))
+    return place[0, 3] - _fk(robot, "piper_tcp", scene_cfg.grasp_joints)[0, 3]
+
+
+def _place_spot(robot, scene_cfg):
+    """
+    Return the world (x, y) the place sets the object down at.
+
+    The object keeps its pose in the level gripper: it lands as far ahead of
+    the base as it was picked, plus the place grasp's extra reach.
+    """
     x, y, *_ = _object(_world_root(scene_cfg.world_file), scene_cfg.object_name)
-    ahead, side = x - scene_cfg.base_approach_x, y  # in the base frame at the pick
+    ahead = x - scene_cfg.base_approach_x + _place_reach(robot, scene_cfg)
+    side = y  # in the base frame at the pick
     px, py, yaw = scene_cfg.place_base_pose
     c, s = math.cos(yaw), math.sin(yaw)
     return px + c * ahead - s * side, py + s * ahead + c * side
@@ -555,22 +639,26 @@ def _base_box(robot):
     return centre[0, 3] + size_x / 2, size_y / 2
 
 
-def test_place_spot_rests_on_the_surface(scene_cfg):
+def test_place_spot_rests_on_the_surface(robot, scene_cfg):
     root = _world_root(scene_cfg.world_file)
     surface = _surface(root, scene_cfg.place_surface)
     pick_top, _ = _table_top(root)
+    lift = (_fk(robot, "piper_tcp", _waypoint(scene_cfg, "place_grasp_joints"))[2, 3]
+            - _fk(robot, "piper_tcp", scene_cfg.grasp_joints)[2, 3])
 
-    assert surface.contains(*_place_spot(scene_cfg), margin=MIN_SUPPORT_M)
-    # The same GRASP waypoint sets the object down: the tops must match.
-    assert abs(surface.top_z - pick_top) <= RESTING_TOLERANCE_M
+    assert surface.contains(*_place_spot(robot, scene_cfg), margin=MIN_SUPPORT_M)
+    # The held object keeps its pose in the gripper: the place grasp must be
+    # as much higher than the pick grasp as the place surface is above the
+    # pick table, or the object is pushed into it or dropped onto it.
+    assert abs(lift - (surface.top_z - pick_top)) <= RESTING_TOLERANCE_M
 
 
-def test_place_spot_is_free(scene_cfg):
+def test_place_spot_is_free(robot, scene_cfg):
     root = _world_root(scene_cfg.world_file)
     present = {m.get("name") for m in root.iter("model")}
     present |= {i.findtext("name") for i in root.iter("include")}
     graspable = {o["name"] for o in yaml.safe_load(GRASPABLE.read_text())["objects"]}
-    spot_x, spot_y = _place_spot(scene_cfg)
+    spot_x, spot_y = _place_spot(robot, scene_cfg)
 
     for name in sorted((graspable & present) - {scene_cfg.object_name}):
         x, y, _, radius, _ = _object(root, name)
@@ -589,10 +677,112 @@ def test_place_approach_keeps_the_base_off_the_surface(robot, scene_cfg):
             assert not surface.contains(x + c * front - s * side, y + s * front + c * side)
 
 
+def _pose_tf(element):
+    """4x4 transform of an SDF element's <pose> (identity without one)."""
+    text = element.findtext("pose")
+    values = [float(v) for v in text.split()] if text else [0.0] * 6
+    return _tf(values[:3], values[3:])
+
+
+def _corners(half):
+    """Return the 8 corners of the box from -`half` to `half`."""
+    return [half * np.array(signs) for signs in itertools.product((-1.0, 1.0), repeat=3)]
+
+
+def _shape_points(geometry):
+    """Points (own frame) whose bounding box in any frame contains the collision `geometry`."""
+    kind = type(geometry).__name__
+    if kind == "Box":
+        return _corners(np.asarray(geometry.size) / 2)
+    if kind == "Cylinder":
+        # 72 rim points per cap, pushed out to the circumscribed polygon.
+        r = geometry.radius / math.cos(math.pi / 72)
+        return [(r * math.cos(a), r * math.sin(a), h * geometry.length / 2)
+                for a in np.linspace(0, 2 * math.pi, 72, endpoint=False) for h in (-1, 1)]
+    if kind == "Sphere":
+        return _corners(np.full(3, geometry.radius))
+    raise AssertionError(f"no sampling for a {kind} base collision")
+
+
+def _base_parts(robot):
+    """{name: points in base_footprint} of every base collision (the arm is checked on its own)."""
+    parts = {}
+    for link in robot.links:
+        if link.name.startswith("piper"):
+            continue
+        for k, collision in enumerate(link.collisions):
+            t = _fk(robot, link.name)
+            if collision.origin is not None:
+                t = t @ _tf(collision.origin.xyz, collision.origin.rpy)
+            points = np.array([(*p, 1.0) for p in _shape_points(collision.geometry)])
+            parts[f"{link.name}[{k}]"] = (t @ points.T).T[:, :3]
+    return parts
+
+
+def _model_boxes(root, name):
+    """[(name, world -> box transform, half size)] of the box collisions of world model `name`."""
+    model = _world_model(root, name)
+    boxes = []
+    for link in model.findall("link"):
+        for collision in link.findall("collision"):
+            size = collision.findtext("geometry/box/size")
+            assert size, f"{name}/{collision.get('name')}: only box collisions are checked"
+            t = _pose_tf(model) @ _pose_tf(link) @ _pose_tf(collision)
+            half = np.array([float(v) for v in size.split()]) / 2
+            boxes.append((collision.get("name"), np.linalg.inv(t), half))
+    return boxes
+
+
+def _approach(scene_cfg, which):
+    """(surface model, base pose) of the "pick" or the "place" approach."""
+    if which == "pick":
+        return "table", (scene_cfg.base_approach_x, 0.0, 0.0)
+    return scene_cfg.place_surface, tuple(scene_cfg.place_base_pose)
+
+
+@pytest.mark.parametrize("which", ["pick", "place"])
+@BASE_OFFSETS
+def test_base_clears_the_surface_it_drives_up_to(robot, scene_cfg, ground, which, base_offset):
+    # The tables are open below their tops, but the house counter is a
+    # cabinet down to the floor: every base collision (the lidar sticks out
+    # 0.394 m) must stop short of every collision box of the surface.
+    root = _world_root(scene_cfg.world_file)
+    surface, (x, y, yaw) = _approach(scene_cfg, which)
+    c, s = math.cos(yaw), math.sin(yaw)
+    x, y = x + c * base_offset, y + s * base_offset  # overshoot along the heading
+    base = _tf((x, y, ground), (0.0, 0.0, yaw))
+    for part, points in _base_parts(robot).items():
+        world = base @ np.c_[points, np.ones(len(points))].T
+        for box, to_box, half in _model_boxes(root, surface):
+            local = (to_box @ world)[:3]
+            # Per box axis, how far the part's bounding box is from the box (> 0: apart).
+            gaps = np.maximum(local.min(axis=1) - half, -half - local.max(axis=1))
+            assert gaps.max() >= BASE_CLEARANCE_M, (
+                f"{part} {gaps.max():.3f} m from {surface}/{box}"
+            )
+
+
+def test_house_place_spot_is_clear_of_the_cooktop(robot):
+    cfg = SimpleNamespace(name="small_house", **SCENES["small_house"])
+    root = _world_root(cfg.world_file)
+    bench = next(i for i in root.iter("include") if i.findtext("name") == "CookingBench_01_001")
+    spot_x, _ = _place_spot(robot, cfg)
+
+    # The cooktop stands east (+x) of the spot, on the same counter.
+    assert _xyz(bench)[0] - COOKTOP_HALF_LENGTH_M - spot_x >= COOKTOP_CLEARANCE_M
+
+
+def test_house_place_surface_top_is_the_generator_constant():
+    house = SCENES["small_house"]
+    surface = _surface(_world_root(house["world_file"]), house["place_surface"])
+
+    assert surface.top_z == pytest.approx(house_gen.COUNTER_TOP_M, abs=1e-6)
+
+
 # ---- tools/solve_level_waypoint.py -----------------------------------------
 
 
-@pytest.mark.parametrize("waypoint", ["hover_joints", "grasp_joints", "carry"])
+@pytest.mark.parametrize("waypoint", ["hover_joints", "grasp_joints", "carry", *PLACE_WAYPOINTS])
 def test_level_waypoint_solver_reproduces_the_waypoints(robot, scene_cfg, waypoint):
     pytest.importorskip("scipy")
     solver = _load("solve_level_waypoint", PKG / "tools" / "solve_level_waypoint.py")
@@ -606,8 +796,8 @@ def test_level_waypoint_solver_reproduces_the_waypoints(robot, scene_cfg, waypoi
 
 
 @pytest.mark.parametrize("launch_name", DEMO_LAUNCHES)
-def test_demo_launches_default_to_the_garden_scene(launch_name):
-    assert _launch_default(launch_name, "scene") == "garden"
+def test_demo_launches_default_to_the_small_house_scene(launch_name):
+    assert _launch_default(launch_name, "scene") == "small_house"
 
 
 # ---- sim-only base plugins -------------------------------------------------

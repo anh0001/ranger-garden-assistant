@@ -15,11 +15,20 @@ import pytest
 
 PKG = Path(__file__).resolve().parents[1]
 
-# Where the robot drives and works: from behind the spawn pose to the table
-# edge (world x 0.90), one base width either side of its line (y = 0).
-CORRIDOR_X = (-0.45, 0.85)
-CORRIDOR_Y = (-0.45, 0.45)
+# Where the robot drives and works, ((x_min, x_max), (y_min, y_max)) in the
+# world, one base width either side of its line: from the kitchen turn at
+# x = -4.0 along y = 0 to the table edge (world x 0.90), and from that turn
+# south along x = -4.0 to the kitchen counter's front face (y -2.416).
+CORRIDORS = (
+    ((-4.45, 0.85), (-0.45, 0.45)),
+    ((-4.45, -3.55), (-2.40, 0.45)),
+)
 GRASPABLES = ("vitamin_bottle", "supplement_bottle", "sprinkles_jar")  # the template's objects
+# Static house models standing on the counter, origin at their bottom. The
+# AWS world sets them up to 1.6 mm into its visible top (0.9044 m).
+ON_COUNTER_MODELS = ("SeasoningBox_01_001", "CookingBench_01_001")
+COUNTER_RESTING_TOLERANCE_M = 0.002
+COUNTER_VISUAL = "aws_KitchenCabinet_01_visual.DAE"
 
 
 def _load(name, path):
@@ -112,28 +121,71 @@ def test_an_unknown_drop_is_an_error(monkeypatch):
         gen.build_world(gen.SOURCE_WORLD.read_text(), gen.TEMPLATE.read_text())
 
 
-def test_no_house_model_origin_in_the_robot_corridor(generated):
+@pytest.mark.parametrize("corridor", CORRIDORS, ids=["west", "kitchen"])
+def test_no_house_model_origin_in_the_robot_corridor(generated, corridor):
+    (x_min, x_max), (y_min, y_max) = corridor
     poses = _poses(generated, "include")
     for name in set(poses) - set(GRASPABLES):
         x, y = poses[name][:2]
-        inside = CORRIDOR_X[0] <= x <= CORRIDOR_X[1] and CORRIDOR_Y[0] <= y <= CORRIDOR_Y[1]
+        inside = x_min <= x <= x_max and y_min <= y <= y_max
         assert not inside, f"{name} stands in the robot's corridor at ({x:.2f}, {y:.2f})"
 
 
-def _table_top(world):
-    """World z of the inline `table`'s top_collision surface."""
-    table = next(m for m in world.findall("model") if m.get("name") == "table")
-    top = next(c for c in table.iter("collision") if c.get("name") == "top_collision")
+def _model(world, name):
+    return next(m for m in world.findall("model") if m.get("name") == name)
+
+
+def _top(world, name):
+    """World z of the inline model `name`'s top_collision surface."""
+    model = _model(world, name)
+    top = next(c for c in model.iter("collision") if c.get("name") == "top_collision")
     thickness = float(top.findtext("geometry/box/size").split()[2])
-    return (float(table.findtext("pose").split()[2]) + float(top.findtext("pose").split()[2])
+    return (float(model.findtext("pose").split()[2]) + float(top.findtext("pose").split()[2])
             + thickness / 2)
 
 
 @pytest.mark.parametrize("name", [*gen.ON_TABLE_MODELS, *GRASPABLES])
 def test_everything_on_the_table_rests_on_its_top(generated, name):
     # Origins at the bottom: the GSO wrappers and the re-seated AWS tableware.
-    assert _poses(generated, "include")[name][2] == pytest.approx(_table_top(generated), abs=1e-6)
-    assert gen.TABLE_TOP_M == pytest.approx(_table_top(generated), abs=1e-6)
+    top = _top(generated, "table")
+    assert _poses(generated, "include")[name][2] == pytest.approx(top, abs=1e-6)
+    assert gen.TABLE_TOP_M == pytest.approx(top, abs=1e-6)
+
+
+def test_kitchen_counter_is_inline_and_the_cabinet_dropped(generated):
+    counter = _model(generated, "kitchen_counter")
+    uris = [u.text for u in counter.iter("uri")]
+
+    assert any(c.get("name") == "top_collision" for c in counter.iter("collision"))
+    assert not [c for c in counter.iter("collision") if c.find("geometry/mesh") is not None]
+    assert len(uris) == 1 and uris[0].endswith(COUNTER_VISUAL)
+    assert "KitchenCabinet_01_001" in gen.DROP_MODELS
+    assert "KitchenCabinet_01_001" not in _poses(generated, "include")
+
+
+def _pose_of(element):
+    return [float(v) for v in element.findtext("pose").split()]
+
+
+def test_counter_visual_stays_where_the_house_had_the_cabinet(source, generated, transform):
+    counter = _model(generated, "kitchen_counter")
+    placed = gen.pose_matrix(*_pose_of(counter)) @ gen.pose_matrix(*_pose_of(counter.find(
+        "link/visual")))
+    cabinet = gen.pose_matrix(*_poses(source, "model")["KitchenCabinet_01_001"])
+
+    # The template's copy of the pose is 6-decimal text: 1e-6 per value.
+    _assert_same_pose(gen.matrix_pose(placed), gen.matrix_pose(transform @ cabinet), atol=2e-6)
+
+
+def test_counter_top_constant_matches_the_template(generated):
+    assert gen.COUNTER_TOP_M == pytest.approx(_top(generated, "kitchen_counter"), abs=1e-6)
+
+
+@pytest.mark.parametrize("name", ON_COUNTER_MODELS)
+def test_everything_on_the_counter_rests_on_its_top(generated, name):
+    z = _poses(generated, "include")[name][2]
+
+    assert z == pytest.approx(gen.COUNTER_TOP_M, abs=COUNTER_RESTING_TOLERANCE_M)
 
 
 def test_house_lights_are_carried_over_with_the_house(source, generated, transform):

@@ -18,6 +18,10 @@
 #                             and standoff B (back off, turn, drive); reversed on the way home.
 #                             At least one pose: ROS parameters cannot be empty lists
 #   place_surface             world model (with a top_collision) the place spot must rest on
+#   place_hover_joints        optional: level gripper above the place surface, held object clear of it
+#   place_grasp_joints        optional: sets the object down on the place surface. Both default to
+#                             hover_joints/grasp_joints, for a surface as high as the pick table; the
+#                             object then lands as far ahead of the base as it was picked
 # Base poses are in the odom frame, which is the world frame: the robot spawns at the origin
 # facing +x and the sim odometry has no noise.
 garden:
@@ -49,10 +53,18 @@ small_house:
   grasp_joints: [0.0, 0.777, -1.081, 0.0, 0.392, 0.0]  # TCP (0.430, 0, 0.871)
   rig_file: video_rig_small_house.sdf
   standoff_m: 0.15
-  # Second slot on the same kitchen table (top y -1.2..0.6), 20 cm from its +y
-  # end: the bottle goes down at (0.935, 0.40). The chairs block other slots;
-  # ChairA_01_001 stands at (0.50, -0.86), so the route stays at y >= 0.
-  place_base_pose: [0.535, 0.4, 0.0]
-  # back to the origin, turn left, 0.40 m along y, turn back
-  place_route: [0.0, 0.0, 0.0,  0.0, 0.0, 1.5708,  0.0, 0.4, 1.5708,  0.0, 0.4, 0.0]
-  place_surface: table
+  # Kitchen counter (inline `kitchen_counter`: top 0.904 m, front face y -2.416, x -5.16..-1.94):
+  # the bottle goes down at (-4.0, -2.454), 3.8 cm in from the face, between the sink (west leg,
+  # face x -4.54) and the cooktop (x -3.57..-2.57). Unlike the tables the counter is a cabinet
+  # down to the floor: the base stops with its lidar (0.394 m ahead of base_footprint) 4.8 cm
+  # short of the face, at y = -2.416 + 0.394 + 0.048, and the arm reaches 8 cm further than at
+  # the pick to make up for it.
+  place_base_pose: [-4.0, -1.974, -1.5708]
+  # back to the origin, face -x, 4 m west along y = 0 (clear corridor), face -y
+  place_route: [0.0, 0.0, 0.0,  0.0, 0.0, 3.1416,  -4.0, 0.0, 3.1416,  -4.0, 0.0, -1.5708]
+  place_surface: kitchen_counter
+  # Level, link6 x 0.370 = 0.290 + 0.080 (tools/solve_level_waypoint.py 0.370 Z). The grasp is
+  # 0.103 m above the pick's (counter 0.904 - table 0.801); the hover only 6 cm above it, not
+  # the pick's 9.1: joint 5 reaches its 1.22 rad limit near link6 z 1.05.
+  place_grasp_joints: [0.0, 1.221, -1.766, 0.0, 0.632, 0.0]   # TCP (0.510, 0, 0.974)
+  place_hover_joints: [0.0, 1.455, -2.339, 0.0, 0.971, 0.0]   # TCP (0.510, 0, 1.034)

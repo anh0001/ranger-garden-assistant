@@ -6,17 +6,19 @@ Prereq: `ros2 launch ranger_sim sim_bringup.launch.py` is up (Gazebo +
 controllers + grasp_manager + MoveIt move_group), with the same `scene`.
 
 Safe, validate planning only (no motion):
-  ros2 launch ranger_sim pick_place_demo.launch.py
-  ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house
+  ros2 launch ranger_sim pick_place_demo.launch.py                  # small_house
+  ros2 launch ranger_sim pick_place_demo.launch.py scene:=garden
 
 Actually run it in Gazebo (drives base + moves arm + gripper + grasp):
   ros2 launch ranger_sim pick_place_demo.launch.py execute:=true
-  ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house execute:=true
+  ros2 launch ranger_sim pick_place_demo.launch.py scene:=garden execute:=true
 
 The demo picks the object at the scene's table, carries it along the place
-route and sets it down at the place pose, then drives back. The object,
-base approach, gripper closing, hover/grasp waypoints, standoff, place pose
-and route come from the scene (config/pick_place_scenes.yaml); a non-empty
+route and sets it down at the place pose, then drives back (small_house:
+dining table -> kitchen counter). The object, base approach, gripper
+closing, hover/grasp waypoints (and the place's, if the scene has its own),
+standoff, place pose and route come from the scene
+(config/pick_place_scenes.yaml); a non-empty
 object_name, base_approach_x or gripper_closed argument overrides the
 scene's value.
 """
@@ -38,8 +40,9 @@ _spec.loader.exec_module(scenes)
 def generate_launch_description():
     scene = LaunchConfiguration("scene")
     args = [
-        DeclareLaunchArgument("scene", default_value="garden",
-                              description="Scene in config/pick_place_scenes.yaml"),
+        DeclareLaunchArgument("scene", default_value="small_house",
+                              description="Scene in config/pick_place_scenes.yaml (default "
+                                          "small_house; garden needs no fetched assets)"),
         DeclareLaunchArgument("execute", default_value="false",
                               description="false = plan only (no motion); true = run in sim"),
         DeclareLaunchArgument("base_approach_x", default_value="",
@@ -68,6 +71,8 @@ def generate_launch_description():
             "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
             "hover_joints": scenes.from_scene(scene, "hover_joints"),
             "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
+            "place_hover_joints": scenes.from_scene(scene, "place_hover_joints"),
+            "place_grasp_joints": scenes.from_scene(scene, "place_grasp_joints"),
             "standoff_m": scenes.from_scene(scene, "standoff_m", float),
             "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
             "place_route": scenes.from_scene(scene, "place_route"),

@@ -33,13 +33,15 @@ def _load(name, path):
 
 
 demo = _load("pick_place_demo", PKG / "scripts" / "pick_place_demo.py")
+scenes = _load("pick_place_scenes", PKG / "launch" / "pick_place_scenes.py")
 
 
 def _scene_parameters(name):
-    cfg = SCENES[name]
+    """Return the demo parameters the launch files pass for scene `name` (optional keys set)."""
     keys = ("object_name", "base_approach_x", "gripper_closed", "hover_joints",
-            "grasp_joints", "standoff_m", "place_base_pose", "place_route")
-    return {key: cfg[key] for key in keys}
+            "grasp_joints", "place_hover_joints", "place_grasp_joints", "standoff_m",
+            "place_base_pose", "place_route")
+    return {key: scenes.scene_value(SCENES[name], key) for key in keys}
 
 
 @pytest.fixture
@@ -482,8 +484,9 @@ def test_captions_fit_the_video_status_bar(recorded):
             assert caption.isascii() and len(caption) <= VIDEO_CAPTION_MAX_CHARS, caption
 
 
-def test_arm_is_in_the_carry_pose_on_every_base_leg_away_from_a_table(recorded):
-    node, calls = recorded()
+@pytest.mark.parametrize("scene", sorted(SCENES))
+def test_arm_is_in_the_carry_pose_on_every_base_leg_away_from_a_table(recorded, scene):
+    node, calls = recorded(scene)
     node.run()
 
     arm = None
@@ -495,11 +498,13 @@ def test_arm_is_in_the_carry_pose_on_every_base_leg_away_from_a_table(recorded):
             legs += 1
             if label in CARRY_LEGS:
                 assert arm == demo.CARRY, f"'{label}' with the arm at {arm}"
-    assert legs == 10
+    # 2 pick legs, 3 place legs, return to start, the route out and back.
+    assert legs == 6 + 2 * len(demo.route_triples(SCENES[scene]["place_route"]))
 
 
-def test_slide_ins_are_slow_at_grasp_or_hover_height(recorded):
-    node, calls = recorded()
+@pytest.mark.parametrize("scene", sorted(SCENES))
+def test_slide_ins_are_slow_at_grasp_or_hover_height(recorded, scene):
+    node, calls = recorded(scene)
     node.run()
 
     arm, slides = None, {}
@@ -508,13 +513,35 @@ def test_slide_ins_are_slow_at_grasp_or_hover_height(recorded):
             arm = list(value)
         elif kind == "drive" and label in SLIDE_LEGS:
             slides[label] = (arm, value[1])
-    cfg = SCENES["garden"]
+    cfg = _scene_parameters(scene)
     slow = demo.BASE_APPROACH_SPEED_MPS
     assert slides == {
         "approach the object": (cfg["grasp_joints"], slow),
-        "approach the place": (cfg["hover_joints"], slow),
-        "back off": (cfg["hover_joints"], slow),
+        "approach the place": (cfg["place_hover_joints"], slow),
+        "back off": (cfg["place_hover_joints"], slow),
     }
+
+
+def test_house_places_with_the_counter_waypoints(recorded):
+    node, calls = recorded("small_house")
+    node.run()
+
+    arm = {label: list(value) for kind, label, value in calls if kind == "arm"}
+    house = SCENES["small_house"]
+    assert arm["look at the object"] == house["grasp_joints"]
+    assert arm["lift"] == house["hover_joints"]
+    assert arm["hover above the place"] == house["place_hover_joints"]
+    assert arm["place"] == house["place_grasp_joints"]
+    assert arm["clear (hover)"] == house["place_hover_joints"]
+
+
+def test_place_waypoints_default_to_the_garden_pick_waypoints(make_node):
+    # The node's own defaults (no launch file) are the garden's, which
+    # places with its pick waypoints.
+    plan = make_node().transfer_plan()
+
+    assert plan.place_hover == tuple(demo.HOVER)
+    assert plan.place_grasp == tuple(demo.GRASP)
 
 
 def test_the_object_is_attached_before_the_gripper_closes(recorded):

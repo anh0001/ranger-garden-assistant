@@ -19,6 +19,8 @@ This is how the demo's level waypoints were derived. Reference solutions:
   link6 (0.200, 0.950) -> [0.0, 0.719, -1.496, 0.0, 0.864, 0.0]  TCP (0.340, 0, 0.950)  CARRY
   link6 (0.190, 0.842) -> [0.0, 0.415, -0.944, 0.0, 0.616, 0.0]  arm-only standoff (garden)
   link6 (0.290, 0.842) -> [0.0, 0.732, -0.943, 0.0, 0.298, 0.0]  GRASP (garden)
+  link6 (0.370, 0.974) -> [0.0, 1.221, -1.766, 0.0, 0.632, 0.0]  place GRASP, counter (house)
+  link6 (0.370, 1.034) -> [0.0, 1.455, -2.339, 0.0, 0.971, 0.0]  place HOVER (house)
 
 Re-run it if the arm mount or the D405 calibration changes.
 """
