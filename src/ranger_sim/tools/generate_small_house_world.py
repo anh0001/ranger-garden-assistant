@@ -7,7 +7,8 @@ Generate worlds/small_house_world.sdf from the AWS Small House and our template.
 
 The house (tools/aws_small_house/small_house.world, MIT-0, a verbatim copy of
 TeamSOBITS' Fortress port) is moved by one rigid transform that puts its kitchen
-table where the template's inline `table` stands. The robot is not moved: it
+table where the template's inline `table` stands; the template's inline
+`kitchen_counter` replaces the kitchen cabinet. The robot is not moved: it
 spawns at the world origin with yaw 0, because pick_place_demo drives along
 /odom x and sim_bringup publishes an identity map -> odom. Every house model
 becomes a flat static <include>; its lights are moved with it. The output is
@@ -36,12 +37,18 @@ ANCHOR_WORLD_POSE = (1.25, -0.30, 0.0, 0.0, 0.0, -math.pi)  # = the template's `
 DROP_MODELS = {
     "KitchenTable_01_001": "replaced by the inline `table` (collision at the visual top)",
     "ChairA_01_002": "stands in the robot's approach slot",
+    "KitchenCabinet_01_001": (
+        "replaced by the inline `kitchen_counter` (collision at the visual top)"
+    ),
 }
 # House models standing on the replaced table: the AWS world rests them on its
 # collision-mesh top (0.8185 m), which would leave them floating 1.7 cm above
 # the visible top. They are re-seated on the inline table's top.
 TABLE_TOP_M = 0.801
 ON_TABLE_MODELS = ("Tableware_01_001",)
+# Top of the inline `kitchen_counter`, the place surface of the transfer: its
+# visible top is 0.9044 m, rounded down as the table's (0.8014 -> 0.801).
+COUNTER_TOP_M = 0.904
 
 
 def pose_matrix(x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> np.ndarray:

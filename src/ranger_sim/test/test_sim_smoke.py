@@ -5,8 +5,9 @@ Headless smoke test for the Gazebo Fortress simulation.
 Boots the sim, spawns the robot, and checks that core topics/actions are alive.
 Needs a GPU (gpu_lidar / camera sensors), so it only runs with RANGER_SIM_GPU=1:
   RANGER_SIM_GPU=1 launch_test src/ranger_sim/test/test_sim_smoke.py
-  RANGER_SIM_GPU=1 RANGER_SIM_SCENE=small_house launch_test src/ranger_sim/test/test_sim_smoke.py
+  RANGER_SIM_GPU=1 RANGER_SIM_SCENE=garden launch_test src/ranger_sim/test/test_sim_smoke.py
 RANGER_SIM_SCENE picks the scene of config/pick_place_scenes.yaml (default
+small_house once its assets are fetched with tools/fetch_sim_assets.py, else
 garden). Run it in an isolated ROS domain (e.g. ROS_DOMAIN_ID=88
 ROS_LOCALHOST_ONLY=1) so it can never talk to a real robot on the network.
 """
@@ -38,11 +39,14 @@ import yaml
 # the rest of the startup (paused start, startup detach, controller
 # activation after the unpause).
 READY_DELAY_SEC = 10.0
-SCENE = os.environ.get("RANGER_SIM_SCENE", "garden")
-with open(
-    os.path.join(get_package_share_directory("ranger_sim"), "config", "pick_place_scenes.yaml"),
-    encoding="utf-8",
-) as _scenes:
+_SHARE = get_package_share_directory("ranger_sim")
+# The house needs the fetched third-party assets (tools/fetch_sim_assets.py);
+# without them the garden is the only scene that boots.
+_HOUSE_ASSETS = os.path.join(_SHARE, "models", "third_party", "aws_small_house", ".fetched")
+SCENE = os.environ.get(
+    "RANGER_SIM_SCENE", "small_house" if os.path.isfile(_HOUSE_ASSETS) else "garden"
+)
+with open(os.path.join(_SHARE, "config", "pick_place_scenes.yaml"), encoding="utf-8") as _scenes:
     GRASP_OBJECT = yaml.safe_load(_scenes)[SCENE]["object_name"]
 # The house loads ~90 meshes: give its startup more time.
 WAIT_SEC = 30.0 if SCENE == "garden" else 60.0

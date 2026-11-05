@@ -4,7 +4,23 @@ Scope: simulation only (`ranger_sim`). Hardware is unaffected.
 
 ## Status (verified headless, Gazebo Sim 6.16 / Humble)
 
-`pick_place_demo.launch.py execute:=true` on the garden world moves the cup
+The default scene is the AWS Small House (`scene:=small_house`, see
+[Small-house scene](#small-house-scene); its assets are fetched once):
+`pick_place_demo.launch.py execute:=true` picks a scanned vitamin bottle off
+the dining table, carries it 4 m west through the dining room and 2 m south
+into the kitchen, and sets it down on the kitchen counter, 10 cm higher than
+the table (final offset 4.5 mm from the planned spot, upright, resting at
+the counter top), then drives back to within 1.1 mm of its start pose.
+Every MoveIt step returns SUCCESS and the Gazebo log has no `[Err]` line.
+
+```bash
+ros2 launch ranger_sim sim_bringup.launch.py                      # full sim, the house (starts paused, see below)
+ros2 launch ranger_sim pick_place_demo.launch.py                  # plan-only (safe)
+ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Gazebo
+```
+
+`scene:=garden` (needs no fetched assets) runs the same demo on the
+primitive garden world: `pick_place_demo.launch.py execute:=true` moves the cup
 from table A to a second table, `table_b`: the base stops 15 cm short of
 the cup with the gripper level at cup height, so the wrist camera has the
 cup centred (see [Approach along the wrist camera](#approach-along-the-wrist-camera)),
@@ -18,16 +34,9 @@ joints actually reach their targets; the base holds its position to
 ±0.2 mm while the arm works and stops within 5 mm of every pose.
 
 ```bash
-ros2 launch ranger_sim sim_bringup.launch.py                      # full sim (starts paused, see below)
-ros2 launch ranger_sim pick_place_demo.launch.py                  # plan-only (safe)
-ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it in Gazebo
+ros2 launch ranger_sim sim_bringup.launch.py scene:=garden
+ros2 launch ranger_sim pick_place_demo.launch.py scene:=garden execute:=true
 ```
-
-The same demo runs in a home dining room with `scene:=small_house` (see
-[Small-house scene](#small-house-scene)): it picks a scanned vitamin bottle
-off the kitchen table and sets it down 0.40 m further along the same table,
-next to the sprinkles jar (within 3.5 mm of the planned spot). `garden`
-stays the default scene.
 
 ## How the grasp works
 
@@ -178,17 +187,34 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
   the pick standoff and the place standoff, driven in reverse on the way
   home (never empty: a ROS parameter cannot be an empty list); and
   `place_surface`, the world model the place spot must rest on.
-  `load_scenes` rejects a scene without them.
+  `load_scenes` rejects a scene without them. Optional:
+  `place_hover_joints` / `place_grasp_joints`, the level hover and grasp
+  at the place; they default to the pick's `hover_joints` / `grasp_joints`
+  (`launch/pick_place_scenes.py` `OPTIONAL_KEYS`), which set the object down
+  on a surface as high as the pick table, as far ahead of the base as it
+  was picked. `load_scenes` rejects one that is not 6 floats.
 - **Routes.**
   - garden: back to the origin, turn to 90°, drive to (0, 0.92), slide in to
     (0, 1.07). `table_b` is a copy of `table` at (0, 1.75), so the cup is
     set down at (0, 1.465), 1.5 cm in from the front edge as at table A;
     `planter_2` moved from (0, 1.5) to (1.2, 1.5) to make room.
-  - small_house: back to the origin, turn to 90°, drive 0.40 m, turn back,
-    drive to (0.385, 0.40), slide in to (0.535, 0.40): the second slot on
-    the same kitchen table, 20 cm from its +y end. The chairs block every
-    other slot (`ChairA_01_001` stands at (0.50, −0.86)), so the route
-    stays at y ≥ 0.
+  - small_house: dining table -> kitchen counter. Back to the origin, turn
+    to 180°, drive 4 m west along y = 0, turn to −90°, drive to
+    (−4.0, −1.824), slide in to (−4.0, −1.974); the bottle goes down at
+    (−4.0, −2.454) on the counter, 3.8 cm in from its front face, between
+    the sink and the cooktop. The counter (0.904 m) is 10.3 cm above the
+    table, so the place has its own waypoints, re-solved level at link6
+    x 0.370 (TCP (0.510, 0, 0.974) / (0.510, 0, 1.034)): 10.3 cm higher than
+    the pick's, and 8 cm further out, because the counter is a cabinet down
+    to the floor. The base cannot reach under it as it does under the
+    tables, and its lidar sticks out 0.394 m ahead of `base_footprint`, so
+    it stops 0.442 m short of the face (4.8 cm lidar clearance) and the arm
+    reaches the extra 8 cm. The place hover is only 6 cm above the place
+    grasp, not the pick's 9.1: joint 5 reaches its 1.22 rad limit near
+    link6 z 1.05. The bottle hangs 6 cm above the counter during the
+    slide-in. After the release the open pads still reach 4–14 mm down
+    around its top, so the slow back-off slides them off it, the pick's
+    slide-in reversed (8 mm per side).
 - **Pose controller.** `drive_to_pose()` turns the base in place until its
   yaw is within 0.005 rad of the target, then translates it holonomically
   (`VelocityControl` takes vx, vy, wz), until it is within 5 mm and
@@ -212,8 +238,11 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
   spot; the translation removes it. `test_pick_place_demo.py` runs the
   controller against a fake base with these dead zones.
 - **Order of steps.** The arm is in CARRY on every base leg away from a
-  table, at GRASP for the pick slide-in and at HOVER for the place slide-in
-  and the back-off (`test_pick_place_demo.py` checks the sequence).
+  table, at GRASP for the pick slide-in and at the place hover for the place
+  slide-in and the back-off (`test_pick_place_demo.py` checks the sequence
+  for every scene). At the place standoff the arm rises from CARRY to the
+  place hover; in CARRY the held bottle is below the counter top, so it
+  rises behind the counter's edge (`test_pick_place_geometry.py`).
 
 ## Base wheels
 
@@ -248,29 +277,31 @@ paused start + `/grasp/set` design above; `grasp_magnet.py` and the
 
 ## Small-house scene
 
-The dining room of the AWS RoboMaker Small House (MIT-0, via TeamSOBITS'
-Fortress port) with Google Scanned Objects on the kitchen table (CC BY 4.0;
-see `src/ranger_sim/models/THIRD_PARTY_ASSETS.md`). The assets are fetched,
-not committed (~140 MB, git-ignored), once:
+The default scene: the dining room and kitchen of the AWS RoboMaker Small
+House (MIT-0, via TeamSOBITS' Fortress port) with Google Scanned Objects on
+the dining table (CC BY 4.0; see `src/ranger_sim/models/THIRD_PARTY_ASSETS.md`).
+The assets are fetched, not committed (~140 MB, git-ignored), once:
 
 ```bash
 python3 src/ranger_sim/tools/fetch_sim_assets.py     # pinned commit / versions + sha256
 colcon build --packages-select ranger_sim --symlink-install
-ros2 launch ranger_sim sim_bringup.launch.py scene:=small_house
-ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house                 # plan-only
-ros2 launch ranger_sim pick_place_demo.launch.py scene:=small_house execute:=true   # run it
+ros2 launch ranger_sim sim_bringup.launch.py
+ros2 launch ranger_sim pick_place_demo.launch.py                  # plan-only
+ros2 launch ranger_sim pick_place_demo.launch.py execute:=true    # run it
 ```
 
 Without the assets, `gazebo.launch.py` stops with the number of missing
-models and the fetch command instead of starting an empty world.
+models and the fetch command instead of starting an empty world; use
+`scene:=garden` there.
 
 - **Scenes.** `config/pick_place_scenes.yaml` holds, per scene, the world,
   the object, the base approach, the gripper closing, the hover/grasp
-  waypoints, the transfer (standoff, place pose, route, place surface) and
-  the video camera rig. The launch files take `scene:=`
-  (default `garden`); explicit `world:=`, `world_name:=`, `object_name:=`,
-  `base_approach_x:=` and `gripper_closed:=` still override it. An unknown
-  scene fails at launch with the list of known ones.
+  waypoints (and the place's, optional), the transfer (standoff, place
+  pose, route, place surface) and the video camera rig. The launch files
+  take `scene:=` (default `small_house`; `garden` needs no fetched assets);
+  explicit `world:=`, `world_name:=`, `object_name:=`, `base_approach_x:=`
+  and `gripper_closed:=` still override it. An unknown scene fails at
+  launch with the list of known ones.
 - **The house is moved, not the robot.** `tools/generate_small_house_world.py`
   transforms the committed source world
   (`tools/aws_small_house/small_house.world`) rigidly so its kitchen table
@@ -284,6 +315,26 @@ models and the fetch command instead of starting an empty world.
   it with an inline `table` (the AWS visual, box collisions at the visible
   top); the tableware that stood on it is re-seated on 0.801 m too. Without
   this, everything on the table floats 1.7 cm in the video.
+- **Primitive counter collisions.** The same for the L-shaped kitchen
+  cabinet, the place surface: its 32-vertex collision hull tops out at
+  0.909–0.913 m (and wraps the faucet), its visible top is 0.9044 m. The
+  inline `kitchen_counter` keeps the AWS visual at the cabinet's generated
+  pose and puts world-axis-aligned boxes under it: the top slab
+  (`top_collision`, 0.854–0.904 m), the body below it down to the floor, and
+  the sink leg. The mesh is 0.29° off square, so each box face sits at the
+  proud end of the visible face (front face y −2.416 in front of the
+  robot's lane, sink leg x −4.540). The generator drops
+  `KitchenCabinet_01_001`; `COUNTER_TOP_M` in the generator is checked
+  against the template and the scene's place surface.
+- **Kitchen lane.** Measured from the meshes: along y = 0 nothing stands
+  within 0.45 m of the robot's line between the table and x = −4.0; on the
+  lane x = −4.0 the sink leg's face is at x −4.54, 0.29 m from the base's
+  side, the cooktop at x −3.57..−2.57 (0.43 m from the place spot, on the
+  counter), the rangehood above it from z 1.49 m (the arm stays below
+  1.15 m), the fridge at x ≥ −1.27. `test_generate_small_house_world.py`
+  keeps every house model's origin out of both lanes; the base's own
+  collisions (wheels, lidar, camera) are checked against the counter's
+  boxes at the place approach (`test_pick_place_geometry.py`).
 - **Narrow objects only.** The PiPER opens 70 mm and the attach-before-close
   grasp needs >= 5 mm per side, so objects must be <= 60 mm wide; every GSO
   mug is 102-126 mm. The vitamin bottle is 54 mm, wrapped by
@@ -306,9 +357,9 @@ is in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4).
 With the sim up (`sim_bringup.launch.py`, headless is fine, same `scene`):
 
 ```bash
-ros2 launch ranger_sim record_pick_place_video.launch.py
+ros2 launch ranger_sim record_pick_place_video.launch.py                 # the house
 ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
-ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
+ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 ```
 
 - Spawns the scene's camera rig (`models/video_rig.sdf` for the garden,
@@ -333,11 +384,18 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   and the gripper path clear of the inset (top left). The garden camera
   looks down 43° from (1.20, 2.77, 2.80), beyond the garden border, so both
   tables and the route are in view and no table top hides the robot. The
-  cameras need GPU rendering, like the robot's own sensors.
+  house camera looks south-west and 31° down from (1.9, 1.75, 2.75) in the
+  dining room's north-east corner (horizontal FOV 1.5 rad): the dining
+  table and the start pose 2 m away, the route west and the kitchen counter
+  7 m away, seen past the robot's right side so the gripper stays in view
+  at the counter. It is west of the folding door at x 2.3–3.4 (which
+  would fill the foreground) and under the header over the room's open
+  north side (y 2.04, from z 2.5). The cameras need GPU rendering, like the
+  robot's own sensors.
 - The status bar right-aligns the grasp state and the sim time and cuts the
   step caption to the space left, so long object names fit.
-- The recorded transfer is 63 s of sim time in the garden and 76 s in the
-  house.
+- The recorded transfer is 63 s of sim time in the garden and 124 s in the
+  house (dining table to kitchen counter and back).
 
 ## Known limitations
 
@@ -361,12 +419,13 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 - The sim base has no drivetrain: turning in place and lateral `vy` skid the
   wheels (wheels visibly dragged, dead zones measured above), and the wheel
   collisions differ from the hardware description (concentric).
-- The house's place slot is 40 cm along the same kitchen table: the chairs
-  around it block the other approaches.
 - The approach is scripted. The wrist camera's view is checked by FK and
   shown in the video; nothing reads the image yet (no visual servoing).
-- The house rig camera loses part of the base off the right edge of the
-  frame while it turns at (0, 0.40); the pick and the place stay in view.
+- At the house counter the place hover is only 6 cm above the place grasp
+  (joint 5 limit): after the release the open fingers still straddle the
+  top of the bottle, and the base backs off slowly to slide them off it.
+- The counter spot is 7 m from the house camera: the place is small in the
+  wide view; the wrist inset shows it up close.
 - The waypoints are joint-space and per scene in
   `config/pick_place_scenes.yaml`; re-solve them with FK when moving an
   object (see `test_pick_place_geometry.py`, which checks every scene).
@@ -379,12 +438,13 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   paths, missing-asset check
 - `src/ranger_sim/config/pick_place_scenes.yaml`,
   `src/ranger_sim/launch/pick_place_scenes.py` — scenes and the launch
-  helper that reads them (`SceneValue`, `from_scene`)
+  helper that reads them (`SceneValue`, `from_scene`, `OPTIONAL_KEYS`)
 - `src/ranger_sim/tools/fetch_sim_assets.py`, `tools/sim_assets.yaml` —
   pinned third-party asset download (`models/third_party/`, git-ignored)
 - `src/ranger_sim/tools/generate_small_house_world.py`,
   `tools/small_house_world.template.sdf`, `tools/aws_small_house/` —
-  generator, template and source of `worlds/small_house_world.sdf`
+  generator, template (inline `table` and `kitchen_counter`) and source of
+  `worlds/small_house_world.sdf`
 - `src/ranger_sim/models/{vitamin_bottle,supplement_bottle,sprinkles_jar}`,
   `src/ranger_sim/models/THIRD_PARTY_ASSETS.md` — GSO wrappers, attribution
 - `src/ranger_sim/launch/spawn_robot.launch.py` — bridges, grasp manager,
@@ -409,8 +469,9 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
 - `src/ranger_sim/tools/solve_level_waypoint.py` — planar IK for level arm
   waypoints (how `CARRY` was solved)
 - `src/ranger_sim/test/test_pick_place_geometry.py` — FK clearances of the
-  grasp and carry waypoints, the wrist camera's view, the place spot for
-  every scene; steering-lock / bridge / relay consistency
+  grasp, carry and place waypoints, the wrist camera's view, the place spot
+  and the base's clearance to the surfaces it approaches for every scene;
+  steering-lock / bridge / relay consistency
 - `src/ranger_sim/test/test_pick_place_demo.py` — pose controller (ideal and
   skidding fake base, 0–2 updates of `/cmd_vel` latency, stale `/odom`,
   Ctrl-C), step sequence, plan-only safety
@@ -418,8 +479,8 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
   `test_generate_small_house_world.py`, `test_fetch_sim_assets.py` —
   scenes and launch helper, world generator, fetch tool (offline)
 - `src/ranger_sim/test/test_sim_smoke.py` — headless bringup incl. the
-  drive-straight check and the wrist image (`RANGER_SIM_GPU=1`,
-  `RANGER_SIM_SCENE=small_house`)
+  drive-straight check and the wrist image (`RANGER_SIM_GPU=1`; the house
+  once its assets are fetched, `RANGER_SIM_SCENE=garden` for the garden)
 - `src/ranger_sim/launch/record_pick_place_video.launch.py`,
   `src/ranger_sim/scripts/record_demo_video.py`,
   `src/ranger_sim/models/video_rig.sdf`,

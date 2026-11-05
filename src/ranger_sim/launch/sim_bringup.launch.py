@@ -3,13 +3,15 @@
 Full simulation bringup: Gazebo Fortress + robot spawn + MoveIt + optional Nav2.
 
 Usage:
-  ros2 launch ranger_sim sim_bringup.launch.py
-  ros2 launch ranger_sim sim_bringup.launch.py headless:=true   # CI mode
+  ros2 launch ranger_sim sim_bringup.launch.py                   # house (small_house)
+  ros2 launch ranger_sim sim_bringup.launch.py headless:=true    # CI mode
   ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true  # with Nav2
-  ros2 launch ranger_sim sim_bringup.launch.py scene:=small_house  # house dining room
+  ros2 launch ranger_sim sim_bringup.launch.py scene:=garden     # no fetched assets needed
 
 `scene` (config/pick_place_scenes.yaml) sets the `world` / `world_name`
-defaults; explicit `world:=` / `world_name:=` still override it.
+defaults; explicit `world:=` / `world_name:=` still override it. The house
+needs the third-party assets (python3 src/ranger_sim/tools/fetch_sim_assets.py);
+without them gazebo.launch.py stops and names that command.
 """
 
 import importlib.util
@@ -50,9 +52,10 @@ def generate_launch_description():
         # Before `world` / `world_name`: their defaults are performed in
         # declaration order and read it.
         DeclareLaunchArgument(
-            "scene", default_value="garden",
+            "scene", default_value="small_house",
             description="Scene in config/pick_place_scenes.yaml; sets the "
-                        "world/world_name defaults.",
+                        "world/world_name defaults (small_house needs the fetched "
+                        "assets, garden none).",
         ),
         DeclareLaunchArgument("use_sim_time", default_value="true"),
         DeclareLaunchArgument("headless", default_value="false",

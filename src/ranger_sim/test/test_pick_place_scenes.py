@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 import pytest
 import yaml
 
@@ -117,6 +118,31 @@ def test_load_scenes_rejects_a_scene_without_a_required_key(tmp_path, key):
         scenes.load_scenes(path)
 
 
+@pytest.mark.parametrize("name", sorted(SCENES))
+def test_optional_place_waypoints_are_six_floats(name):
+    for key in set(scenes.OPTIONAL_KEYS) & set(SCENES[name]):
+        value = SCENES[name][key]
+        assert len(value) == 6 and all(isinstance(v, float) for v in value), key
+
+
+def test_the_shipped_scenes_cover_both_place_waypoint_cases():
+    # The house places with its own waypoints, the garden with the pick's.
+    assert set(scenes.OPTIONAL_KEYS) <= set(SCENES["small_house"])
+    assert not set(scenes.OPTIONAL_KEYS) & set(SCENES["garden"])
+
+
+@pytest.mark.parametrize("bad", [[0.0] * 5, [0.0] * 5 + [1], "0 0 0 0 0 0"],
+                         ids=["five", "int", "string"])
+def test_load_scenes_rejects_a_bad_optional_waypoint(tmp_path, bad):
+    broken = {name: dict(cfg) for name, cfg in SCENES.items()}
+    broken["garden"]["place_grasp_joints"] = bad
+    path = tmp_path / "scenes.yaml"
+    path.write_text(yaml.safe_dump(broken))
+
+    with pytest.raises(ValueError, match="garden.*place_grasp_joints"):
+        scenes.load_scenes(path)
+
+
 # ---- SceneValue / from_scene (launch/pick_place_scenes.py) ------------------
 
 
@@ -151,6 +177,53 @@ def test_unknown_scene_is_an_error():
         value.perform(_context(scene="nope"))
 
 
+def test_scene_value_falls_back_for_an_optional_key():
+    value = scenes.SceneValue("garden", "place_grasp_joints")
+
+    assert yaml.safe_load(value.perform(_context())) == SCENES["garden"]["grasp_joints"]
+
+
+def test_scene_value_reads_an_optional_key_the_scene_has():
+    value = scenes.SceneValue("small_house", "place_grasp_joints")
+
+    assert yaml.safe_load(value.perform(_context())) == SCENES["small_house"]["place_grasp_joints"]
+
+
+def test_scene_value_of_an_unknown_key_is_an_error():
+    with pytest.raises(KeyError, match="no_such_key"):
+        scenes.SceneValue("garden", "no_such_key").perform(_context())
+
+
+# Demo node parameters that come from the scene.
+DEMO_SCENE_PARAMETERS = {
+    "object_name", "base_approach_x", "gripper_closed", "hover_joints", "grasp_joints",
+    "place_hover_joints", "place_grasp_joints", "standoff_m", "place_base_pose", "place_route",
+}
+
+
+def _parameter_names(node):
+    return {"".join(s.text for s in name) for params in node._Node__parameters for name in params}
+
+
+def _demo_node(launch_name, monkeypatch):
+    """Return the pick_place_demo Node of `launch_name` (the recorder starts it from a gate)."""
+    module = _load(launch_name.replace(".", "_"), PKG / "launch" / launch_name)
+    gated = []
+    if hasattr(module, "make_demo_gate"):
+        monkeypatch.setattr(module, "make_demo_gate", lambda actions: gated.extend(actions))
+    entities = [*module.generate_launch_description().entities, *gated]
+    (demo,) = [e for e in entities
+               if isinstance(e, Node) and e.node_executable == "pick_place_demo.py"]
+    return demo
+
+
+@pytest.mark.parametrize("launch_name", [
+    "pick_place_demo.launch.py", "record_pick_place_video.launch.py",
+])
+def test_demo_launches_pass_every_scene_parameter(launch_name, monkeypatch):
+    assert DEMO_SCENE_PARAMETERS <= _parameter_names(_demo_node(launch_name, monkeypatch))
+
+
 def test_from_scene_types_the_parameter():
     context = _context(scene="small_house", base_approach_x="")
 
@@ -183,8 +256,8 @@ def test_sim_bringup_takes_its_world_from_the_scene(name):
     assert Path(configuration["world"]).is_file()
 
 
-def test_sim_bringup_defaults_to_the_garden():
-    assert _bringup_configuration()["world_name"] == SCENES["garden"]["world_name"]
+def test_sim_bringup_defaults_to_the_small_house():
+    assert _bringup_configuration()["world_name"] == SCENES["small_house"]["world_name"]
 
 
 def test_explicit_world_arguments_override_the_scene():

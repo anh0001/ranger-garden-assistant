@@ -27,8 +27,11 @@ then close to its radius, i.e. the pads rest on its surface. The gripper is
 driven through control_msgs/GripperCommand on
 /piper_gripper_controller/gripper_cmd, the same interface MoveIt and the
 real PiPER bridge use. The attach keeps the object's pose relative to the
-gripper, so going down to the grasp pose at the place sets it on a table
-of the same height, the same distance ahead of the base as it was picked.
+gripper, so going down to `place_grasp_joints` at the place, the level grasp
+waypoint shifted by the place surface's height above the pick table (and
+by any extra reach), sets it down on the place surface. A scene without
+place waypoints places with the pick's hover and grasp: on a surface as
+high as the pick table, as far ahead of the base as it was picked.
 
 Why joint-space waypoints
 -------------------------
@@ -65,7 +68,9 @@ with the base at world x = 0.52) and 5.6 cm in z:
                                the tables, hence the back-off before it
   carry TCP (0.340, 0, 0.950)  level, retracted over the base: the held
                                object stays upright, behind the table
-                               edge and >= 5 cm above the table tops
+                               edge and >= 5 cm above the pick table top
+                               (it rises over a higher place surface at
+                               the place standoff, behind its edge)
   hover TCP (0.430, 0, 0.935)  pads >= 1.7 cm above the rim: no contact
   grasp TCP (0.430, 0, 0.842)  pads inside the cup body (>= 2.4 cm above
                                the table, >= 1.0 cm below the rim), palm
@@ -100,8 +105,10 @@ clear the object by only 8-10 mm per side.
 Per-scene values (world, object, approach, waypoints, place pose and route)
 live in config/pick_place_scenes.yaml; the constants here are the garden
 defaults. small_house: table top 0.801, vitamin bottle r 0.027 h 0.096 at
-(0.935, 0, 0.801), base at x 0.535, hover/grasp TCP z 0.962/0.871, placed
-0.40 m along the same table.
+(0.935, 0, 0.801), base at x 0.535, hover/grasp TCP z 0.962/0.871; carried
+4 m west and 2 m south to the kitchen counter (top 0.904, a cabinet down to
+the floor: the base stops 0.442 m short of its face) and set down at
+(-4.0, -2.454) with place hover/grasp TCP (0.510, 0, 1.034/0.974).
 
 Safety
 ------
@@ -297,6 +304,8 @@ class TransferPlan:
     hover: tuple[float, ...]
     grasp: tuple[float, ...]
     carry: tuple[float, ...]
+    place_hover: tuple[float, ...]  # held object clear of the place surface
+    place_grasp: tuple[float, ...]  # sets the held object down on it
     gripper_closed: float
     pick: Pose2D  # base at the pick approach: the fingers straddle the object
     pick_standoff: Pose2D
@@ -321,6 +330,9 @@ class PickPlaceDemo(Node):
         p("hover_joints", HOVER)
         p("grasp_joints", GRASP)
         p("carry_joints", CARRY)
+        # The place's hover and grasp; the garden places with HOVER and GRASP.
+        p("place_hover_joints", HOVER)
+        p("place_grasp_joints", GRASP)
         # Finger travel when "closed" on the attached object; object specific.
         p("gripper_closed", GRIPPER_CLOSED)
         p("standoff_m", STANDOFF_M)
@@ -588,6 +600,8 @@ class PickPlaceDemo(Node):
             # Not `grasp`: that is the attach/release method.
             grasp=tuple(value("grasp_joints")),
             carry=tuple(value("carry_joints")),
+            place_hover=tuple(value("place_hover_joints")),
+            place_grasp=tuple(value("place_grasp_joints")),
             gripper_closed=float(value("gripper_closed")),
             pick=pick,
             pick_standoff=standoff_pose(pick, standoff),
@@ -622,15 +636,18 @@ class PickPlaceDemo(Node):
     def _place_steps(self, plan: TransferPlan) -> list[Step]:
         return [
             self._drive_step("drive to the place", plan.place_standoff),
-            # The held object 9 cm above the table top, then over it.
-            self._arm_step("hover above the place", plan.hover),
+            # Raise the held object over the place surface (garden 9 cm,
+            # house counter 6 cm), then slide it over the surface.
+            self._arm_step("hover above the place", plan.place_hover),
             self._drive_step("approach the place", plan.place, BASE_APPROACH_SPEED_MPS),
-            # Straight down: GRASP sets the object on a table as high as the pick's.
-            self._arm_step("place", plan.grasp),
+            # Straight down onto the place surface.
+            self._arm_step("place", plan.place_grasp),
             ("open gripper", lambda: self.set_gripper(GRIPPER_OPEN, "open")),
             ("release object", lambda: self.grasp(False)),
-            self._arm_step("clear (hover)", plan.hover),
-            # Open fingers above the rim: the base can back off under them.
+            self._arm_step("clear (hover)", plan.place_hover),
+            # Open fingers above the rim (garden) or still around the top of
+            # the object (house counter): backing off slowly slides them off
+            # it, the pick's slide-in reversed.
             self._drive_step("back off", plan.place_standoff, BASE_APPROACH_SPEED_MPS),
             self._arm_step("carry pose", plan.carry),
         ]

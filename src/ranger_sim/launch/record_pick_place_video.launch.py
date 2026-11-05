@@ -7,7 +7,7 @@ fine, but the cameras need GPU rendering like the robot's own sensors).
 
   ros2 launch ranger_sim record_pick_place_video.launch.py
   ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
-  ros2 launch ranger_sim record_pick_place_video.launch.py scene:=small_house
+  ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 
 Spawns the scene's static camera rig (models/video_rig*.sdf: one wide
 camera), bridges it, starts record_demo_video.py, which draws the robot's
@@ -68,9 +68,10 @@ def make_demo_gate(demo_actions):
 def generate_launch_description():
     scene = LaunchConfiguration("scene")
     args = [
-        DeclareLaunchArgument("scene", default_value="garden",
+        DeclareLaunchArgument("scene", default_value="small_house",
                               description="Scene in config/pick_place_scenes.yaml "
-                                          "(world, object, waypoints, camera rig)"),
+                                          "(world, object, waypoints, camera rig; default "
+                                          "small_house, garden needs no fetched assets)"),
         DeclareLaunchArgument("world_name", default_value="",
                               description="<world name> of the running sim "
                                           "(empty = from scene)"),
@@ -137,6 +138,8 @@ def generate_launch_description():
             "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
             "hover_joints": scenes.from_scene(scene, "hover_joints"),
             "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
+            "place_hover_joints": scenes.from_scene(scene, "place_hover_joints"),
+            "place_grasp_joints": scenes.from_scene(scene, "place_grasp_joints"),
             "standoff_m": scenes.from_scene(scene, "standoff_m", float),
             "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
             "place_route": scenes.from_scene(scene, "place_route"),

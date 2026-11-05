@@ -13,18 +13,21 @@
   <model name="video_rig">
     <static>true</static>
     <link name="link">
-      <!-- Wide view from above (+y side), 13 cm inside the dining room's west
-           wall, looking back at the robot: the whole base from the start
-           pose to the table, the pick at y 0 and the place at y 0.40, the
-           bottle and gripper path clear of the recorder's wrist inset
-           (top-left 480 x 270 px). -->
+      <!-- Wide view from the north-east of the dining room, 2.75 m up (the
+           header over its open north side starts at y 2.04, z 2.5), looking
+           south-west: the table and the pick 2 m away, the route west along
+           y = 0 and the kitchen counter with the place at (-4.0, -2.454)
+           7 m away, seen past the robot's right side, so the gripper stays
+           in view at the counter. West of the folding door at x 2.3..3.4,
+           which would fill the foreground. The recorder's wrist inset
+           (top-left 480 x 270 px) covers only the south window. -->
       <sensor name="wide_cam" type="camera">
-        <pose>0.95 1.45 1.90 0 0.74 -1.64</pose>
+        <pose>1.9 1.75 2.75 0 0.55 -2.26</pose>
         <always_on>true</always_on>
         <update_rate>30</update_rate>
         <topic>video/wide</topic>
         <camera>
-          <horizontal_fov>1.15</horizontal_fov>
+          <horizontal_fov>1.5</horizontal_fov>
           <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
           <clip><near>0.05</near><far>30</far></clip>
         </camera>

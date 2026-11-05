@@ -110,6 +110,39 @@
     </model>
 
     <!-- ============================================================ -->
+    <!-- Kitchen counter (place target of the transfer)               -->
+    <!-- ============================================================ -->
+    <model name="kitchen_counter">
+      <static>true</static>
+      <!-- AWS KitchenCabinet_01, L-shaped: the south leg along the kitchen
+           wall, the west leg (sink) along the west wall. The visual stays at
+           the pose the generator gives the house's KitchenCabinet_01_001,
+           which it drops. Its visible top is 0.9044 m but its 32-vertex
+           collision hull tops out at 0.909-0.913 m (and covers the faucet),
+           so primitives replace it, as for the table. Measured from the
+           visual mesh in the world frame: top slab z 0.854..0.904, south
+           leg x -5.164..-1.940, y -3.016..-2.416 (its front face in front of
+           the robot's lane at x -4.45..-3.55, drawer handles included; the
+           top overhangs it by up to 7 mm), west leg face x -4.540, y up to
+           -0.418. World-axis-aligned boxes in a zero model pose: the mesh
+           is 0.29 deg off square, so each face is taken at its proud end. -->
+      <pose>0 0 0 0 0 0</pose>
+      <link name="link">
+        <!-- South leg top slab: the place surface (test_pick_place_geometry.py reads top_collision). -->
+        <collision name="top_collision">
+          <pose>-3.552 -2.716 0.879 0 0 0</pose>
+          <geometry><box><size>3.224 0.600 0.050</size></box></geometry>
+        </collision>
+        <collision name="south_body"><pose>-3.552 -2.716 0.427 0 0 0</pose><geometry><box><size>3.224 0.600 0.854</size></box></geometry></collision>
+        <collision name="west_leg"><pose>-4.852 -1.417 0.452 0 0 0</pose><geometry><box><size>0.624 1.998 0.904</size></box></geometry></collision>
+        <visual name="visual">
+          <pose>-3.547237 -1.717371 0.012074 0.000000 0.000000 1.565722</pose>
+          <geometry><mesh><uri>model://aws_robomaker_residential_KitchenCabinet_01/meshes/aws_KitchenCabinet_01_visual.DAE</uri></mesh></geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ============================================================ -->
     <!-- Graspable objects on the table (GSO wrappers, origin = bottom) -->
     <!-- ============================================================ -->
     <!-- Pick target: on the robot's line (y = 0), 3.5 cm in from the table

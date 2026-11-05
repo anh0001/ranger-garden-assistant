@@ -28,7 +28,9 @@ which downloads the pinned versions listed in `tools/sim_assets.yaml` into
 - Committed: `tools/aws_small_house/small_house.world`, a verbatim copy of
   the source world at that commit, with its `LICENSE`. The scene's world is
   generated from it by `tools/generate_small_house_world.py` (the house is
-  moved rigidly; the kitchen table and one chair are replaced or dropped).
+  moved rigidly; one chair is dropped, and the kitchen table and the kitchen
+  cabinet are replaced by inline models that reuse their visual meshes with
+  box collisions at the visible tops).
 
 ## Google Scanned Objects
 

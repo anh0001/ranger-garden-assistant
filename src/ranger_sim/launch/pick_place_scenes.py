@@ -4,7 +4,8 @@ Pick-and-place scenes for the launch files (a helper module, not a launch file).
 
 config/pick_place_scenes.yaml holds, per scene, the world, the object, the base
 approach, the arm waypoints, the place pose and route of the transfer and the
-video camera rig. The launch files take a
+video camera rig; OPTIONAL_KEYS may be left out and take another key's value
+(scene_value). The launch files take a
 `scene` argument and read their defaults through SceneValue / from_scene. They
 import this module by path (it is installed next to them; `ros2 launch` only
 lists *.launch.py, so it stays out of the way):
@@ -30,12 +31,25 @@ REQUIRED_KEYS = frozenset({
     "gripper_closed", "hover_joints", "grasp_joints", "rig_file",
     "standoff_m", "place_base_pose", "place_route", "place_surface",
 })
+# Optional scene keys (arm waypoints, 6 floats) and the key each defaults to:
+# a scene whose place surface is as high as its pick table places with the
+# pick's hover and grasp.
+OPTIONAL_KEYS = {
+    "place_hover_joints": "hover_joints",
+    "place_grasp_joints": "grasp_joints",
+}
+ARM_JOINT_COUNT = 6
 # Scene keys a launch argument of the same name can override (empty = scene).
 OVERRIDABLE = ("object_name", "base_approach_x", "gripper_closed")
 
 
+def _is_joint_list(value) -> bool:
+    return (isinstance(value, list) and len(value) == ARM_JOINT_COUNT
+            and all(isinstance(v, float) for v in value))
+
+
 def load_scenes(path: Path = SCENES_FILE) -> dict:
-    """Read the scenes file; ValueError if a scene lacks a required key."""
+    """Read the scenes file; ValueError for a missing required key or a bad optional one."""
     scenes = yaml.safe_load(Path(path).read_text())
     if not isinstance(scenes, dict) or not scenes:
         raise ValueError(f"{path}: expected a mapping of scene names")
@@ -45,7 +59,20 @@ def load_scenes(path: Path = SCENES_FILE) -> dict:
         missing = sorted(REQUIRED_KEYS - set(cfg))
         if missing:
             raise ValueError(f"{path}: scene '{name}' is missing {', '.join(missing)}")
+        for key in sorted(set(OPTIONAL_KEYS) & set(cfg)):
+            if not _is_joint_list(cfg[key]):
+                raise ValueError(
+                    f"{path}: scene '{name}' {key} must be {ARM_JOINT_COUNT} floats, "
+                    f"got {cfg[key]!r}"
+                )
     return scenes
+
+
+def scene_value(cfg: dict, key: str):
+    """Value of `key` in the scene mapping `cfg`; an absent optional key takes its default's."""
+    if key not in cfg and key in OPTIONAL_KEYS:
+        return cfg[OPTIONAL_KEYS[key]]
+    return cfg[key]
 
 
 class SceneValue(Substitution):
@@ -72,7 +99,7 @@ class SceneValue(Substitution):
         scenes = load_scenes(self._path)
         if name not in scenes:
             raise RuntimeError(f"unknown scene '{name}'; known: {sorted(scenes)}")
-        value = scenes[name][self._key]
+        value = scene_value(scenes[name], self._key)
         if isinstance(value, list):
             return yaml.safe_dump(value, default_flow_style=True).strip()
         return str(value)
