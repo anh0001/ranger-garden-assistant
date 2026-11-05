@@ -351,8 +351,10 @@ models and the fetch command instead of starting an empty world; use
 
 ## Recording a video
 
-A recorded garden transfer (65 s of sim time, wrist-camera inset top left)
-is in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4).
+Recorded transfers, wrist-camera inset top left: the house, dining table to
+kitchen counter (124 s of sim time), in
+[sim_pick_place_small_house.mp4](sim_pick_place_small_house.mp4), and the
+garden (65 s) in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4).
 
 With the sim up (`sim_bringup.launch.py`, headless is fine, same `scene`):
 
