@@ -421,10 +421,13 @@ models and the fetch command instead of starting an empty world; use
 
 ## Recording a video
 
-Recorded transfers, wrist-camera inset top left: the house, dining table to
-kitchen counter (124 s of sim time), in
+Recorded transfers with the steering base (2026-11-21), wrist-camera inset
+top left: the house, dining table to kitchen counter (124 s of sim time), in
 [sim_pick_place_small_house.mp4](sim_pick_place_small_house.mp4), and the
-garden (65 s) in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4).
+garden (64 s) in [sim_pick_place_garden.mp4](sim_pick_place_garden.mp4). The
+wheels turn into an X before each turn in place: in the house at 0:24 and
+1:52 near the camera, and at 0:52 and 1:28 in the kitchen, where the robot is
+6-7 m away and the wheels are small; in the garden at 0:25 and 0:53.
 
 With the sim up (`sim_bringup.launch.py`, headless is fine, same `scene`):
 
@@ -466,7 +469,7 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
   robot's own sensors.
 - The status bar right-aligns the grasp state and the sim time and cuts the
   step caption to the space left, so long object names fit.
-- The recorded transfer is 63 s of sim time in the garden and 124 s in the
+- The recorded transfer is 64 s of sim time in the garden and 124 s in the
   house (dining table to kitchen counter and back).
 
 ## Known limitations
