@@ -5,9 +5,10 @@ For every scene of config/pick_place_scenes.yaml, the arm waypoints, the
 base approach, the wrist camera's view at the standoff and the place spot of
 the transfer are checked against the object and the surfaces of the scene's
 world with forward kinematics built from the robot URDF; the sim-only
-steering lock and base joint-state plugins of urdf/ranger_gazebo.urdf.xacro
-are checked against config/gz_bridge.yaml and
-scripts/base_joint_state_publisher.py.
+body, steering, wheel and base joint-state plugins of
+urdf/ranger_gazebo.urdf.xacro are checked against config/gz_bridge.yaml,
+scripts/base_joint_state_publisher.py and scripts/ranger_motion_adapter.py
+(whose wheel geometry is checked against the URDF).
 
 Needs the install space sourced: the xacro files resolve $(find ...).
 """
@@ -89,7 +90,9 @@ STEERING_JOINTS = {
     "rr_steering_joint",
 }
 JOINT_POSITION_CONTROLLER = "ignition::gazebo::systems::JointPositionController"
+JOINT_CONTROLLER = "ignition::gazebo::systems::JointController"
 JOINT_STATE_PUBLISHER = "ignition::gazebo::systems::JointStatePublisher"
+VELOCITY_CONTROL = "ignition::gazebo::systems::VelocityControl"
 
 
 def _load(name, path):
@@ -101,6 +104,7 @@ def _load(name, path):
 
 demo = _load("pick_place_demo", PKG / "scripts" / "pick_place_demo.py")
 bjsp = _load("base_joint_state_publisher", PKG / "scripts" / "base_joint_state_publisher.py")
+adapter = _load("ranger_motion_adapter", PKG / "scripts" / "ranger_motion_adapter.py")
 house_gen = _load("generate_small_house_world", PKG / "tools" / "generate_small_house_world.py")
 
 
@@ -807,7 +811,7 @@ def _plugins(sim_urdf, name):
     return [p for p in ET.fromstring(sim_urdf).iter("plugin") if p.get("name") == name]
 
 
-def test_sim_xacro_locks_every_steering_joint(sim_urdf):
+def test_sim_xacro_controls_every_steering_joint(sim_urdf):
     controllers = _plugins(sim_urdf, JOINT_POSITION_CONTROLLER)
 
     assert sorted(p.findtext("joint_name") for p in controllers) == sorted(STEERING_JOINTS)
@@ -816,9 +820,102 @@ def test_sim_xacro_locks_every_steering_joint(sim_urdf):
         assert float(plugin.findtext("initial_position")) == 0.0
 
 
+def test_sim_xacro_drives_every_wheel_joint(sim_urdf):
+    controllers = _plugins(sim_urdf, JOINT_CONTROLLER)
+
+    assert sorted(p.findtext("joint_name") for p in controllers) == sorted(adapter.WHEEL_JOINTS)
+
+
+def _bridge_entries(ros_topic):
+    return [
+        e for e in yaml.safe_load(BRIDGE.read_text())
+        if e.get("ros_topic_name", e.get("topic_name")) == ros_topic
+    ]
+
+
+@pytest.mark.parametrize(
+    "plugin_name, joints, topic_of",
+    [
+        (JOINT_POSITION_CONTROLLER, adapter.STEERING_JOINTS, adapter.steering_topic),
+        (JOINT_CONTROLLER, adapter.WHEEL_JOINTS, adapter.wheel_topic),
+    ],
+)
+def test_bridge_carries_every_steering_and_wheel_command(sim_urdf, plugin_name, joints, topic_of):
+    plugin_topics = {
+        p.findtext("joint_name"): p.findtext("topic") for p in _plugins(sim_urdf, plugin_name)
+    }
+
+    for joint in joints:
+        (entry,) = _bridge_entries(topic_of(joint))
+        assert entry["gz_topic_name"] == plugin_topics[joint]
+        assert entry["direction"] == "ROS_TO_GZ"
+        assert entry["ros_type_name"] == "std_msgs/msg/Float64"
+        assert entry["gz_type_name"] == "ignition.msgs.Double"
+
+
+def test_body_twist_goes_through_the_adapter_only(sim_urdf):
+    (plugin,) = _plugins(sim_urdf, VELOCITY_CONTROL)
+
+    (entry,) = _bridge_entries(adapter.BODY_TOPIC)
+
+    assert plugin.findtext("topic") == adapter.BODY_TOPIC
+    assert entry.get("gz_topic_name", entry.get("topic_name")) == adapter.BODY_TOPIC
+    assert entry["direction"] == "ROS_TO_GZ"
+    # Bridging the raw /cmd_vel as well would let it drive the body past the adapter.
+    assert _bridge_entries("/cmd_vel") == []
+
+
+def test_adapter_wheel_geometry_matches_the_urdf(robot):
+    for steering, wheel, (lx, ly) in zip(
+        adapter.STEERING_JOINTS, adapter.WHEEL_JOINTS, adapter.WHEEL_POSITIONS_M
+    ):
+        joint = robot.joint_map[steering]
+        assert joint.origin.xyz[:2] == pytest.approx([lx, ly]), steering
+        # STEERING_AXIS_SIGN: joint position = -(heading about +z).
+        assert joint.axis == [0.0, 0.0, adapter.STEERING_AXIS_SIGN], steering
+        assert joint.limit.lower <= -adapter.MAX_STEER_RAD, steering
+        assert joint.limit.upper >= adapter.MAX_STEER_RAD, steering
+        # A positive wheel speed rolls the wheel along its heading (+x of the
+        # steering link): wheel axis +y.
+        assert robot.joint_map[wheel].axis == [0.0, 1.0, 0.0], wheel
+        child = robot.link_map[robot.joint_map[wheel].child]
+        assert child.collision.geometry.radius == pytest.approx(adapter.WHEEL_RADIUS_M), wheel
+
+
+def test_demo_lateral_corrections_do_not_stop_the_base_to_steer():
+    # Cruising, the demo's lateral correction at its floor points the wheels
+    # atan(floor / speed) off straight (PARALLEL mode). Near a far target it
+    # flips sign with small yaw wobbles: the whole swing must stay below the
+    # adapter's alignment threshold, or every flip stops the base (the
+    # house's 4 m leg stalled at a 0.08 m/s floor).
+    swing = 2 * math.atan2(demo.BASE_MIN_LATERAL_SPEED_MPS, demo.BASE_SPEED_MPS)
+
+    assert swing < adapter.ALIGN_ENTER_RAD
+
+
+def test_sim_wheel_friction_leaves_the_steering_its_torque(sim_urdf, robot):
+    # DART caps the steering servo at the URDF effort limit. Turning a wheel
+    # in place twists its line contact: friction at the two ends of the
+    # contact (half the wheel width out) resists with mu * N * width / 2.
+    # Keep that under half the limit with a wheel carrying 1.6x its share.
+    weight_n = 9.81 * sum(link.inertial.mass for link in robot.links if link.inertial)
+    wheel_load_n = 1.6 * weight_n / len(WHEEL_LINKS)
+    for link in WHEEL_LINKS:
+        (extension,) = [
+            g for g in ET.fromstring(sim_urdf).iter("gazebo") if g.get("reference") == link
+        ]
+        mu = float(extension.findtext("mu1"))
+        assert float(extension.findtext("mu2")) == mu, link
+        half_width = robot.link_map[link].collision.geometry.length / 2
+        steering = next(
+            j for j in robot.joints if j.child == robot.joint_map[link.replace("_link", "")].parent
+        )
+        assert mu * wheel_load_n * half_width < 0.5 * steering.limit.effort, link
+
+
 def test_sim_wheel_collisions_are_concentric(robot):
-    # An off-axle collision rotates with the wheel like a cam: the free-
-    # rolling (steering-locked) base then creeps into the low spots.
+    # An off-axle collision rotates with the wheel like a cam: the rolling
+    # base then creeps into the low spots.
     for name in WHEEL_LINKS:
         assert robot.link_map[name].collision.origin.xyz == [0.0, 0.0, 0.0], name
 

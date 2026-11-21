@@ -82,25 +82,29 @@ the world; tools/solve_level_waypoint.py solves new level waypoints.
 Base motion
 -----------
 drive_to_pose() turns the base in place until its yaw is within
-BASE_YAW_TOLERANCE_RAD of the target, then translates it holonomically (the
-sim's VelocityControl takes vx, vy, wz), until it is within BASE_TOLERANCE_M
-and the yaw tolerance (base_turning, base_command). While it translates it
-only turns back for a yaw error beyond BASE_YAW_REALIGN_RAD: a /cmd_vel that
-arrives late lets a turn overshoot the tolerance band, and stopping to turn
-back every update made the base crawl (18 s instead of 6 s for 0.92 m with
-one /odom update of latency; never at three). A last turn fixes the yaw once
-the position is reached. The base is stopped when a leg ends for any reason
-(Ctrl-C included) and whenever /odom is older than ODOM_STALE_SEC: it never
-drives on a stale pose. The sim base skids: its
-steering is locked straight, so turning in place and moving sideways drag
-the wheels over the ground and nothing moves below ~0.13 rad/s or
-~0.035 m/s sideways (measured; forward motion is exact). BASE_MIN_YAW_RATE
-and BASE_MIN_LATERAL_SPEED_MPS are above those dead zones; a turn also drags
-the base ~0.1 mm per degree, which the translation then removes. Base poses
-are odom poses; odom is the world frame only because the robot spawns at the
-world origin facing +x and the sim's OdometryPublisher has no noise. The
-slide-ins at the tables run at BASE_APPROACH_SPEED_MPS: the open fingers
-clear the object by only 8-10 mm per side.
+BASE_YAW_TOLERANCE_RAD of the target, then translates it holonomically (vx,
+vy, wz), until it is within BASE_TOLERANCE_M and the yaw tolerance
+(base_turning, base_command). In the sim /cmd_vel goes through
+ranger_motion_adapter, which moves the base as the real swerve driver does:
+a turn in place is its SPINNING mode (wheels in an X), any vy its PARALLEL
+mode (all wheels at atan(vy/vx); wz is dropped), forward with a small wz
+DUAL_ACKERMANN; a change of wheel angle above 0.2 rad first stops the base
+while the wheels steer. While it translates it only turns back for a yaw
+error beyond BASE_YAW_REALIGN_RAD: a /cmd_vel that arrives late lets a turn
+overshoot the tolerance band, and stopping to turn back every update made
+the base crawl (18 s instead of 6 s for 0.92 m with one /odom update of
+latency; never at three). A last turn fixes the yaw once the position is
+reached. The base is stopped when a leg ends for any reason (Ctrl-C
+included) and whenever /odom is older than ODOM_STALE_SEC: it never drives
+on a stale pose. The wheels roll the way the base moves, so the sim follows
+slow commands exactly (0.05 rad/s and 0.01 m/s sideways, measured); the skid
+dead zones of the old steering-locked base (0.13 rad/s, 0.035 m/s) are gone.
+BASE_MIN_LATERAL_SPEED_MPS is low enough that sideways corrections do not
+stop the base to re-steer (see its comment). Base poses are odom poses; odom
+is the world frame only because the robot spawns at the world origin facing
++x and the sim's OdometryPublisher has no noise. The slide-ins at the tables
+run at BASE_APPROACH_SPEED_MPS: the open fingers clear the object by only
+8-10 mm per side.
 
 Per-scene values (world, object, approach, waypoints, place pose and route)
 live in config/pick_place_scenes.yaml; the constants here are the garden
@@ -170,15 +174,18 @@ BASE_YAW_TOLERANCE_RAD = 0.005  # 2 mm sideways at the fingers (0.4 m lever)
 BASE_YAW_REALIGN_RAD = 3 * BASE_YAW_TOLERANCE_RAD
 BASE_GAIN = 1.0  # 1/s, proportional drive gain
 BASE_MIN_SPEED_MPS = 0.02  # speed floor so the last centimetres do not crawl
-# Sideways and turning floors: above the sim's skid dead zones (0.035 m/s,
-# 0.13 rad/s, see "Base motion"); per 50 Hz /odom update the sim base then
-# moves ~1 mm / ~4 mrad, a base that does not skid 1.6 mm / 7 mrad.
-BASE_MIN_LATERAL_SPEED_MPS = 0.08
+# Sideways floor, as low as forward. The base steers before it drives (see
+# "Base motion"): cruising at BASE_SPEED_MPS, a lateral correction at the
+# floor points the wheels atan(floor / speed) off straight, and a correction
+# that flips sign must stay inside the adapter's steering hysteresis, or each
+# flip stops the base to re-steer. 0.08 m/s, sized for the old skidding base,
+# stalled the house's 4 m leg that way. test_pick_place_geometry.py checks it.
+BASE_MIN_LATERAL_SPEED_MPS = 0.02
 BASE_SPEED_MPS = 0.25  # default speed ceiling (base_speed parameter)
 BASE_APPROACH_SPEED_MPS = 0.08  # sliding the open fingers around the object
 BASE_YAW_GAIN = 1.5  # 1/s
 BASE_MAX_YAW_RATE = 0.5  # rad/s
-BASE_MIN_YAW_RATE = 0.35  # rad/s
+BASE_MIN_YAW_RATE = 0.35  # rad/s, so the last degrees of a turn do not crawl
 BASE_DRIVE_TIMEOUT_SEC = 30.0  # per leg
 ODOM_WAIT_SEC = 5.0
 ODOM_STALE_SEC = 0.5  # older /odom: stop the base, it never drives on a stale pose

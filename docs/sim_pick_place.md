@@ -10,7 +10,8 @@ The default scene is the AWS Small House (`scene:=small_house`, see
 the dining table, carries it 4 m west through the dining room and 2 m south
 into the kitchen, and sets it down on the kitchen counter, 10 cm higher than
 the table (final offset 4.5 mm from the planned spot, upright, resting at
-the counter top), then drives back to within 1.1 mm of its start pose.
+the counter top), then drives back to its start pose (within the 5 mm
+tolerance: 4.5 mm in the 2026-11-21 run).
 Every MoveIt step returns SUCCESS and the Gazebo log has no `[Err]` line.
 
 ```bash
@@ -30,8 +31,14 @@ backs to the origin, turns left and drives to `table_b`, where the cup is
 set down 1.5 cm in from the front edge (final offset 2 mm from the planned
 spot), and the base drives back to where it started
 (see [Transfer](#transfer)). Every MoveIt step returns SUCCESS and the
-joints actually reach their targets; the base holds its position to
-±0.2 mm while the arm works and stops within 5 mm of every pose.
+joints actually reach their targets; the base stops within 5 mm of every
+pose and does not move while the arm picks; as the arm lifts off after the
+release at the place it creeps up to 1.1 mm (garden) or 3.0 mm (house).
+
+The base steers like the real Ranger Mini 3.0 (see [Base wheels](#base-wheels)):
+each turn in place and each sideways move starts with the wheels turning to
+their angle. Verified 2026-11-21: the house transfer completes in 127 s and
+the garden one in 62 s (wall clock), with no steering timeouts.
 
 ```bash
 ros2 launch ranger_sim sim_bringup.launch.py scene:=garden
@@ -143,10 +150,11 @@ ros2 launch ranger_sim pick_place_demo.launch.py scene:=garden execute:=true
    D405's optical axis, outside its 28° half vertical field of view. Not a
    URDF bug but waypoint choices; see
    [Approach along the wrist camera](#approach-along-the-wrist-camera).
-8. **The first in-place turn stalled at 85°.** Turning in place drags the
-   straight-locked wheels sideways, and below ~0.13 rad/s the sim base does
-   not turn at all; the proportional turn slowed into that dead zone. See
-   [Transfer](#transfer) for the measured dead zones and the floors.
+8. **The first in-place turn stalled at 85°.** Turning in place dragged the
+   straight-locked wheels sideways, and below ~0.13 rad/s the sim base did
+   not turn at all; the proportional turn slowed into that dead zone. Gone
+   since the wheels steer (see [Base wheels](#base-wheels)); the floors are
+   in [Transfer](#transfer).
 
 ## Approach along the wrist camera
 
@@ -217,7 +225,8 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
     slide-in reversed (8 mm per side).
 - **Pose controller.** `drive_to_pose()` turns the base in place until its
   yaw is within 0.005 rad of the target, then translates it holonomically
-  (`VelocityControl` takes vx, vy, wz), until it is within 5 mm and
+  (vx, vy, wz; in the sim through the motion adapter, see
+  [Base wheels](#base-wheels)), until it is within 5 mm and
   0.005 rad. While translating it turns back only beyond 0.015 rad, and
   turns a last time once the position is reached: a `/cmd_vel` that arrives
   an update late carries a turn past the 0.005 rad band, and turning back
@@ -228,15 +237,17 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
   0.5 s: it never drives on a stale pose. Odom is the world frame here: the robot spawns at the origin
   facing +x and the sim odometry has no noise. Nav2 is not used: its
   `xy_goal_tolerance` is 0.25 m and the place needs millimetres.
-- **The sim base skids.** With the steering locked straight, turning in
-  place and moving sideways drag the wheels over the ground. Measured with
-  constant `/cmd_vel` commands in `garden_world`: nothing moves below
-  ~0.13 rad/s (turn) or ~0.035 m/s (sideways), and above that the base
-  moves at about (command − dead zone); forward and backward are exact.
-  The controller's floors sit above the dead zones (0.35 rad/s turning,
-  0.08 m/s sideways). A turn also drags the base ~0.1 mm per degree off its
-  spot; the translation removes it. `test_pick_place_demo.py` runs the
-  controller against a fake base with these dead zones.
+- **Floors.** The old steering-locked base skidded: nothing moved below
+  ~0.13 rad/s (turn) or ~0.035 m/s (sideways), and the floors sat above
+  those dead zones (0.35 rad/s, 0.08 m/s). With the wheels steered they are
+  gone (garden, constant commands: 0.05 rad/s gives 0.0498 rad/s, 0.01 m/s
+  sideways gives 0.0100 m/s). The sideways floor is now 0.02 m/s, like the
+  forward one. At 0.08 m/s a lateral correction pointed the wheels 17.7°
+  off straight while cruising at 0.25 m/s; 3.7 m from the goal a 0.02° yaw
+  wobble flipped its sign, every flip was a 35° re-steer above the
+  adapter's 0.2 rad threshold, and the house's 4 m leg stalled in a
+  stop-and-steer loop. `test_pick_place_geometry.py` checks that such a
+  swing stays under the threshold. The turn floor stays 0.35 rad/s.
 - **Order of steps.** The arm is in CARRY on every base leg away from a
   table, at GRASP for the pick slide-in and at the place hover for the place
   slide-in and the back-off (`test_pick_place_demo.py` checks the sequence
@@ -246,15 +257,47 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
 
 ## Base wheels
 
-- **Kinematic base.** `VelocityControl` moves the base from `/cmd_vel`
-  (vx, vy, wz) and `OdometryPublisher` reports it; the wheels are passive.
-- **Steering lock (sim-only).** `ranger_gazebo.urdf.xacro` holds every
-  `*_steering_joint` at 0 rad with one `JointPositionController` each
-  (velocity-command mode, the same DART joint servo the arm uses). The
-  wheel joints stay free and roll from ground contact. Turning in place
-  and lateral `vy` make the aligned wheels skid, with a dead zone the
-  transfer's pose controller works around (see [Transfer](#transfer));
-  `nav2_sim.yaml` plans DiffDrive (vy = 0).
+- **Kinematic body.** `VelocityControl` moves the body from
+  `/cmd_vel_body` and `OdometryPublisher` reports it; wheel contact does
+  not propel it. `/cmd_vel` itself is not bridged.
+- **Motion adapter (sim-only).** `scripts/ranger_motion_adapter.py` turns
+  `/cmd_vel` into the real driver's motion mode (`ranger_messenger.cpp`,
+  `TwistCmdCallback`, Ranger Mini V3): any `linear.y` gives PARALLEL (all
+  wheels at atan(vy/vx), `angular.z` dropped); a turn radius |vx/wz| under
+  0.476 m gives SPINNING (wheels in an X at ±0.92 rad, rr 0.84; the linear
+  part dropped); anything else DUAL_ACKERMANN (front and rear wheels
+  counter-steer). Speeds are capped at the driver's 1.5 m/s and 4.8 rad/s; a
+  capped Ackermann turn keeps its radius. It publishes four steering targets
+  (`/ranger/<steering joint>/cmd_pos`), four wheel speeds
+  (`/ranger/<wheel>/cmd_vel`, rim speed = the body's speed at the wheel) and
+  the body twist, all bridged to the Gazebo controllers below.
+- **Steer, then drive.** The body twist and wheel speeds stay zero once a
+  steering joint is more than 0.2 rad off its target, until all are within
+  0.05 rad; the gap keeps the small changes of an Ackermann turn from
+  stopping the base. After 3 s it drives anyway and warns once, and stays
+  open until the steering catches up. The angles come from
+  `/gz/base_joint_states`; without them it drives without waiting (warned
+  once).
+- **Watchdog.** It publishes every 20 ms of sim time, zeros included:
+  `VelocityControl` keeps the last twist forever. No `/cmd_vel` for 0.5 s,
+  or a NaN/inf twist, stops the body and the wheels.
+- **Steering and wheel controllers (sim-only).** `ranger_gazebo.urdf.xacro`
+  drives each `*_steering_joint` with a `JointPositionController`
+  (velocity-command mode, the same DART joint servo the arm uses; 0 rad
+  until the first command; at most `steering_max_velocity`, 3.14 rad/s, a
+  placeholder: AgileX publish no figure) and each wheel with a
+  `JointController` (velocity). On a zero twist the wheels keep their
+  angles; the adapter's `straighten_on_stop` steers them back to 0 (what the
+  real robot does on a stop is not confirmed).
+- **Wheel friction (sim-only).** DART caps a joint's velocity servo at its
+  URDF effort limit, 5 N·m for the steering. Turning a loaded wheel in
+  place twists its 8 cm wide contact: about 5 N·m per wheel at the default
+  friction (μ 1) for the 51 kg robot. In the first demo runs some steering
+  joints never moved once the arm shifted the load, and the held base was
+  dragged 30–47 mm. The wheels' μ is 0.2 (`wheel_friction`), which changes
+  nothing else here: the body is moved kinematically and the wheels are
+  spun by their controllers. `test_pick_place_geometry.py` checks the
+  margin.
 - **Concentric wheel collisions (sim-only).** `ranger_complete.urdf.xacro`
   takes `wheel_collision_z` (default −0.005, the historical value: the
   hardware URDF is unchanged); the sim wrapper passes 0.0.
@@ -262,8 +305,35 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
   base joints on gz `/ranger/base_joint_states`, bridged to ROS
   `/gz/base_joint_states`; `base_joint_state_publisher.py` relays them to
   `/joint_states` (zeros until the first message), so RViz shows the
-  wheels rolling. The smoke test drives the base 0.3 m and asserts the
-  steering stays at 0 and the base does not drift in y.
+  wheels steering and rolling. The smoke test drives the base straight
+  0.3 m (steering stays at 0, < 1 cm y drift), sideways 0.10 m (every wheel
+  at 90°, < 1 cm x drift) and spins it 0.5 rad in place (wheels in the X
+  before the base has turned 0.03 rad, < 3 cm drift).
+
+### Nav2 with the steering base (observed 2026-11-21)
+
+`sim_bringup.launch.py launch_nav:=true` in the house, `navigate_to_pose`
+goals, against the same goals on the previous steering-locked base:
+
+- **Straight goal 2 m behind the start** `(-2, 0, 180°)`: reached in 14.5 s
+  and 12.3 s (two runs). The RotationShim spins in place (SPINNING), then
+  MPPI drives (DUAL_ACKERMANN). The locked base did not reach it in 180 s:
+  Nav2's 0.125 rad/s turn commands sat in its 0.13 rad/s skid dead zone.
+- **Curved goal** `(-3, -1.2, -90°)` from there: the arc is driven in
+  DUAL_ACKERMANN without steering stops (wheels at up to 0.27 rad), but MPPI
+  cut the corner, stopped 0.44 m beside the goal and then mostly sent zero
+  (not reached in 180 s): the forward-only DiffDrive model cannot side-step.
+  The locked base aborted the same goal.
+- **Goal 0.3 m to the left, next to the table** `(0.4, 0.3, 0°)`: not
+  reached in 180 s. MPPI mostly idled after "Failed to make progress"; 35 of
+  its 365 commands were arcs tighter than 0.476 m, which the adapter, like
+  the driver, turned into spins in place.
+- Steering stops were rare: 78–87 of ~1700–1800 non-zero adapter ticks held
+  the base.
+
+Follow-up, not applied: MPPI's `Ackermann` motion model with
+`min_turning_r` 0.48 behind the existing RotationShim, so MPPI only samples
+arcs the driver executes as arcs.
 
 ## History: the teleport "magnet" (resolved, removed)
 
@@ -418,9 +488,12 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
   task executor in a later phase); base poses are world poses only because
   the robot spawns at the origin facing +x and the sim odometry is
   noise-free.
-- The sim base has no drivetrain: turning in place and lateral `vy` skid the
-  wheels (wheels visibly dragged, dead zones measured above), and the wheel
-  collisions differ from the hardware description (concentric).
+- The sim body is moved kinematically: the wheels steer and roll so that
+  `/cmd_vel` behaves as on the real driver, but they do not propel it. The
+  steering speed (3.14 rad/s), the steer-then-drive thresholds and whether
+  the wheels straighten on a stop are not measured on the robot; the wheel
+  friction is lowered to 0.2 and the wheel collisions are concentric (see
+  [Base wheels](#base-wheels)).
 - The approach is scripted. The wrist camera's view is checked by FK and
   shown in the video; nothing reads the image yet (no visual servoing).
 - At the house counter the place hover is only 6 cm above the place grasp
@@ -450,7 +523,7 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 - `src/ranger_sim/models/{vitamin_bottle,supplement_bottle,sprinkles_jar}`,
   `src/ranger_sim/models/THIRD_PARTY_ASSETS.md` — GSO wrappers, attribution
 - `src/ranger_sim/launch/spawn_robot.launch.py` — bridges, grasp manager,
-  mimic relay, controller spawners
+  motion adapter, mimic relay, controller spawners
 - `src/ranger_sim/config/graspable_objects.yaml` — graspable objects (single
   source of truth)
 - `src/ranger_sim/config/gz_bridge.yaml` — incl. the generated
@@ -458,11 +531,12 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 - `src/ranger_sim/config/ros2_controllers_sim.yaml` — GripperActionController,
   mimic broadcaster
 - `src/ranger_sim/urdf/ranger_gazebo.urdf.xacro` — DetachableJoint macro,
-  joint8 mimic, joint2/3 initial values, steering lock, base
-  JointStatePublisher, concentric wheel collisions
+  joint8 mimic, joint2/3 initial values, steering and wheel controllers,
+  wheel friction, base JointStatePublisher, concentric wheel collisions
 - `src/ranger_description/urdf/ranger_complete.urdf.xacro` —
   `wheel_collision_z` arg
 - `src/ranger_sim/scripts/grasp_manager.py`,
+  `src/ranger_sim/scripts/ranger_motion_adapter.py`,
   `src/ranger_sim/scripts/mimic_joint_state_relay.py`,
   `src/ranger_sim/scripts/base_joint_state_publisher.py`,
   `src/ranger_sim/scripts/pick_place_demo.py`
@@ -473,15 +547,19 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 - `src/ranger_sim/test/test_pick_place_geometry.py` — FK clearances of the
   grasp, carry and place waypoints, the wrist camera's view, the place spot
   and the base's clearance to the surfaces it approaches for every scene;
-  steering-lock / bridge / relay consistency
-- `src/ranger_sim/test/test_pick_place_demo.py` — pose controller (ideal and
-  skidding fake base, 0–2 updates of `/cmd_vel` latency, stale `/odom`,
+  steering, wheel and body plugins against the bridge, the relay and the
+  motion adapter (its wheel geometry against the URDF), the wheel friction
+  margin, the demo's sideways floor against the steering hysteresis
+- `src/ranger_sim/test/test_ranger_motion_adapter.py` — motion modes, swerve
+  kinematics, steer-then-drive gate, watchdog and node (offline)
+- `src/ranger_sim/test/test_pick_place_demo.py` — pose controller (fake
+  base, 0–2 updates of `/cmd_vel` latency, stale `/odom`,
   Ctrl-C), step sequence, plan-only safety
 - `src/ranger_sim/test/test_pick_place_scenes.py`,
   `test_generate_small_house_world.py`, `test_fetch_sim_assets.py` —
   scenes and launch helper, world generator, fetch tool (offline)
 - `src/ranger_sim/test/test_sim_smoke.py` — headless bringup incl. the
-  drive-straight check and the wrist image (`RANGER_SIM_GPU=1`; the house
+  drive-straight, side-slip and spin checks and the wrist image (`RANGER_SIM_GPU=1`; the house
   once its assets are fetched, `RANGER_SIM_SCENE=garden` for the garden)
 - `src/ranger_sim/launch/record_pick_place_video.launch.py`,
   `src/ranger_sim/scripts/record_demo_video.py`,

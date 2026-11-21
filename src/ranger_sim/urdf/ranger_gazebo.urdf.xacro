@@ -5,8 +5,10 @@
   Includes the real robot description (with Gazebo Classic plugin disabled)
   and adds:
     - Gazebo Fortress ros2_control plugin (gz_ros2_control) for the arm
-    - True holonomic base (VelocityControl + OdometryPublisher) matching
-      the real swerve robot, so the shipped Omni MPPI tuning is exercised
+    - Kinematic base (VelocityControl on /cmd_vel_body + OdometryPublisher)
+      with steering and wheel joint controllers, all commanded by
+      scripts/ranger_motion_adapter.py from /cmd_vel the way the real swerve
+      driver does (steer, then drive)
     - Simulated Livox-style lidar
     - Simulated front camera (fisheye approximation)
     - Simulated wrist RGBD camera
@@ -19,11 +21,18 @@
   <xacro:arg name="sim_gazebo_classic" default="false"/>
   <xacro:arg name="gz_controller_config" default="$(find ranger_sim)/config/ros2_controllers_sim.yaml"/>
   <!-- Concentric wheel collisions (ranger_complete keeps a historical
-       -0.005 offset). With the steering locked (below) the wheels roll
-       freely, and an off-axle collision turns each wheel into a cam: the
-       ride height then changes by 1 cm per revolution and the idle base
+       -0.005 offset). An off-axle collision turns each rolling wheel into a
+       cam: the ride height then changes by 1 cm per revolution and the base
        creeps up to a quarter metre into the low spots. -->
   <xacro:arg name="wheel_collision_z" default="0.0"/>
+  <!-- rad/s the steering joints turn at. AgileX publishes no figure for the
+       real robot (their Gazebo Classic model uses 1 rad/s); 3.14 turns a
+       wheel 90 deg in 0.5 s, visible without slowing the demo much. Tune
+       against the robot before claiming parity. -->
+  <xacro:arg name="steering_max_velocity" default="3.14"/>
+  <!-- Wheel-ground friction coefficient (sim-only, see "Steering and wheel
+       controllers" below). -->
+  <xacro:arg name="wheel_friction" default="0.2"/>
 
   <!-- Include the real robot URDF with Gazebo Classic plugin disabled.
        The sim_gazebo_classic arg above (default=false) overrides the
@@ -144,24 +153,24 @@
   <xacro:grasp_joints objs="${grasp_cfg['objects']}"/>
 
   <!-- ================================================================== -->
-  <!-- Base mobility: TRUE HOLONOMIC sim base (matches real swerve robot)  -->
+  <!-- Base mobility: kinematic body, swerve wheels for show and parity    -->
   <!--                                                                    -->
-  <!-- The real Ranger Mini 3.0 is omnidirectional (swerve wheels): it    -->
-  <!-- translates in any direction (vx, vy) and rotates (wz). To exercise  -->
-  <!-- the SAME RotationShim + MPPI "Omni" tuning we ship for hardware     -->
-  <!-- (robofi_bringup/config/nav2_params.yaml) without faking a mecanum   -->
-  <!-- or a full swerve drivetrain, the sim base is driven kinematically: -->
-  <!--   * VelocityControl   - consumes full vx,vy,wz from /cmd_vel       -->
+  <!-- The real Ranger Mini 3.0 is a four-wheel swerve base. Its driver    -->
+  <!-- picks one motion mode per Twist (dual Ackermann, parallel,          -->
+  <!-- spinning) and steers the wheels before they drive. The sim body is  -->
+  <!-- still moved kinematically, not by wheel contact:                    -->
+  <!--   * VelocityControl   - body twist from /cmd_vel_body              -->
   <!--   * OdometryPublisher  - emits /odom + odom->base_footprint TF      -->
-  <!-- (dimensions=2 -> planar). This is why the earlier MecanumDrive      -->
-  <!-- attempt produced no odom/TF: MecanumDrive has no odom publisher;    -->
-  <!-- OdometryPublisher is the missing piece. nav2_sim.yaml stays Omni    -->
-  <!-- with nonzero vy - no controller behavior change needed.            -->
+  <!-- (dimensions=2 -> planar). Nothing publishes /cmd_vel_body but      -->
+  <!-- scripts/ranger_motion_adapter.py: it turns /cmd_vel into the        -->
+  <!-- driver's mode, the steering and wheel commands below, and a body    -->
+  <!-- twist it withholds until the steering has arrived. MecanumDrive was -->
+  <!-- tried earlier and dropped: it has no odom publisher.               -->
   <!-- ================================================================== -->
   <gazebo>
     <plugin filename="ignition-gazebo-velocity-control-system"
             name="ignition::gazebo::systems::VelocityControl">
-      <topic>/cmd_vel</topic>
+      <topic>/cmd_vel_body</topic>
       <initial_linear>0 0 0</initial_linear>
       <initial_angular>0 0 0</initial_angular>
     </plugin>
@@ -178,24 +187,35 @@
   </gazebo>
 
   <!-- ================================================================== -->
-  <!-- Steering lock (sim-only)                                           -->
+  <!-- Steering and wheel controllers (sim-only)                          -->
   <!--                                                                    -->
-  <!-- The base is moved kinematically (VelocityControl above); the       -->
-  <!-- *_steering_joint revolute joints of ranger_complete.urdf.xacro     -->
-  <!-- have no actuator, damping or caster trail, so ground contact       -->
-  <!-- swivels the wheels to random angles (up to the +-2.1 rad limits,   -->
-  <!-- already while the robot settles after spawning) and the base       -->
-  <!-- slides. Hold every steering joint at 0 rad (wheels aligned with    -->
-  <!-- +x) with a JointPositionController in velocity-command mode: the   -->
-  <!-- same DART joint servo the arm already uses. The wheel joints stay  -->
-  <!-- free and roll from ground contact. Lateral vy motion skids the     -->
-  <!-- wheels; nav2_sim.yaml plans DiffDrive (vy = 0), so nothing uses it. -->
+  <!-- The *_steering_joint revolute joints of ranger_complete.urdf.xacro -->
+  <!-- have no actuator, damping or caster trail: left free, ground       -->
+  <!-- contact swivels them to random angles and the base slides. Each is -->
+  <!-- driven by a JointPositionController in velocity-command mode (the  -->
+  <!-- same DART joint servo the arm uses): it turns at up to             -->
+  <!-- steering_max_velocity towards its target and holds it, 0 rad      -->
+  <!-- (wheels along +x) until the first command. Each wheel joint gets a -->
+  <!-- JointController (velocity mode) so it rolls at the speed that      -->
+  <!-- matches the body motion instead of skidding. All eight are         -->
+  <!-- commanded by scripts/ranger_motion_adapter.py through              -->
+  <!-- config/gz_bridge.yaml.                                             -->
+  <!--                                                                    -->
+  <!-- DART caps a joint's velocity servo at its URDF effort limit: 5 N m -->
+  <!-- for the steering. Turning a loaded wheel in place twists its 8 cm  -->
+  <!-- wide contact; at the default friction (mu 1) that takes ~5 N m     -->
+  <!-- per wheel (51 kg on four wheels), so the steering stalled as soon  -->
+  <!-- as the arm shifted the load. The body is moved kinematically and   -->
+  <!-- the wheels are spun by their controllers, so wheel friction does   -->
+  <!-- nothing useful here: wheel_friction (default 0.2) keeps the        -->
+  <!-- twisting torque well under the servo limit                         -->
+  <!-- (test_pick_place_geometry.py checks the margin).                   -->
   <!-- ================================================================== -->
   <xacro:property name="steering_joints"
                   value="${['fl_steering_joint', 'fr_steering_joint', 'rl_steering_joint', 'rr_steering_joint']}"/>
   <xacro:property name="wheel_joints"
                   value="${['fl_wheel', 'fr_wheel', 'rl_wheel', 'rr_wheel']}"/>
-  <xacro:macro name="lock_steering" params="joints">
+  <xacro:macro name="steering_controller" params="joints">
     <xacro:if value="${len(joints) > 0}">
       <gazebo>
         <plugin filename="ignition-gazebo-joint-position-controller-system"
@@ -204,16 +224,41 @@
           <initial_position>0.0</initial_position>
           <use_velocity_commands>true</use_velocity_commands>
           <p_gain>20.0</p_gain>
-          <!-- rad/s: the URDF steering velocity limit -->
-          <cmd_max>6.28</cmd_max>
-          <cmd_min>-6.28</cmd_min>
+          <cmd_max>$(arg steering_max_velocity)</cmd_max>
+          <cmd_min>-$(arg steering_max_velocity)</cmd_min>
           <topic>/model/ranger/joint/${joints[0]}/cmd_pos</topic>
         </plugin>
       </gazebo>
-      <xacro:lock_steering joints="${joints[1:]}"/>
+      <xacro:steering_controller joints="${joints[1:]}"/>
     </xacro:if>
   </xacro:macro>
-  <xacro:lock_steering joints="${steering_joints}"/>
+  <xacro:steering_controller joints="${steering_joints}"/>
+
+  <xacro:macro name="wheel_controller" params="joints">
+    <xacro:if value="${len(joints) > 0}">
+      <gazebo>
+        <plugin filename="ignition-gazebo-joint-controller-system"
+                name="ignition::gazebo::systems::JointController">
+          <joint_name>${joints[0]}</joint_name>
+          <initial_velocity>0.0</initial_velocity>
+          <topic>/model/ranger/joint/${joints[0]}/cmd_vel</topic>
+        </plugin>
+      </gazebo>
+      <xacro:wheel_controller joints="${joints[1:]}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:wheel_controller joints="${wheel_joints}"/>
+
+  <xacro:macro name="wheel_friction" params="links">
+    <xacro:if value="${len(links) > 0}">
+      <gazebo reference="${links[0]}">
+        <mu1>$(arg wheel_friction)</mu1>
+        <mu2>$(arg wheel_friction)</mu2>
+      </gazebo>
+      <xacro:wheel_friction links="${links[1:]}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:wheel_friction links="${['fl_wheel_link', 'fr_wheel_link', 'rl_wheel_link', 'rr_wheel_link']}"/>
 
   <!-- Real wheel/steer angles out of Gazebo on gz topic
        /ranger/base_joint_states, bridged to ROS /gz/base_joint_states by

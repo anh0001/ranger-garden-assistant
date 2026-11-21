@@ -2,10 +2,12 @@
 """
 Spawn the Ranger + PiPER robot into a running Gazebo Fortress instance.
 
-Also starts the ros2_control controllers, the ros_gz bridges and the grasp
-manager. Gazebo is expected to be PAUSED (gazebo.launch.py default):
-grasp_manager detaches every DetachableJoint grasp joint created at spawn,
-then unpauses the world; controllers finish activating after that.
+Also starts the ros2_control controllers, the ros_gz bridges, the grasp
+manager and ranger_motion_adapter (/cmd_vel -> steering, wheel and body
+commands, steer-then-drive like the real swerve driver). Gazebo is expected
+to be PAUSED (gazebo.launch.py default): grasp_manager detaches every
+DetachableJoint grasp joint created at spawn, then unpauses the world;
+controllers finish activating after that.
 """
 
 from launch import LaunchDescription
@@ -122,6 +124,23 @@ def generate_launch_description():
         parameters=[{
             "use_sim_time": use_sim_time,
             "input_topic": "/gz/base_joint_states",
+        }],
+    )
+
+    # /cmd_vel is not bridged: this node turns it into the Ranger driver's
+    # motion mode (dual Ackermann / parallel / spinning), four steering
+    # targets, four wheel speeds and the body twist on /cmd_vel_body, which
+    # it holds back until the steering angles on /gz/base_joint_states have
+    # reached their targets. Its timer runs on sim time, so it publishes
+    # nothing until grasp_manager unpauses the world.
+    ranger_motion_adapter = Node(
+        package="ranger_sim",
+        executable="ranger_motion_adapter.py",
+        name="ranger_motion_adapter",
+        output="screen",
+        parameters=[{
+            "use_sim_time": use_sim_time,
+            "joint_state_topic": "/gz/base_joint_states",
         }],
     )
 
@@ -250,6 +269,7 @@ def generate_launch_description():
             grasp_manager,
             spawn_robot,
             base_joint_state_publisher,
+            ranger_motion_adapter,
             mimic_joint_state_relay,
             spawn_jsb_after_create,
             spawn_controllers_after_jsb,

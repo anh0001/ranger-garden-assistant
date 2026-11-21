@@ -160,12 +160,10 @@ def test_base_drive_corrects_a_lateral_error_and_caps_the_speed():
     assert vy == pytest.approx(-0.08)
 
 
-def test_lateral_floor_is_above_the_sideways_dead_zone():
+def test_a_small_lateral_error_is_corrected_at_the_floor():
     _, vy, _ = demo.base_command((0.0, 0.003, 0.0), START, 0.25, turning=False)
 
     assert vy == pytest.approx(demo.BASE_MIN_LATERAL_SPEED_MPS)
-    assert demo.BASE_MIN_LATERAL_SPEED_MPS > 2 * SIM_LATERAL_DEAD_ZONE_MPS
-    assert demo.BASE_MIN_YAW_RATE > 2 * SIM_YAW_DEAD_ZONE_RAD_S
 
 
 # Yaw errors between the tolerance and the realign threshold.
@@ -199,16 +197,13 @@ def test_at_pose_needs_position_and_yaw():
 
 # ---- drive_to_pose on a kinematic base -------------------------------------
 
-# The sim base skids: its steering is locked straight, so turning in place
-# and moving sideways drag the wheels across the ground. Measured in
-# garden_world on 2026-11-04 (constant commands, 2 s each): no motion below
-# these rates, about (command - dead zone) above them. Forward is exact.
-SIM_YAW_DEAD_ZONE_RAD_S = 0.13
-SIM_LATERAL_DEAD_ZONE_MPS = 0.035
-BASES = {"ideal": (0.0, 0.0), "skidding": (SIM_YAW_DEAD_ZONE_RAD_S, SIM_LATERAL_DEAD_ZONE_MPS)}
+# The fake base follows /cmd_vel exactly, as the sim base does: with the
+# wheels steered and rolling (scripts/ranger_motion_adapter.py) it follows
+# 0.05 rad/s and 0.01 m/s sideways (measured in garden_world on 2026-11-21).
+# The steering-locked base it replaced skidded, with dead zones of 0.13 rad/s
+# and 0.035 m/s that this file used to model.
 # /cmd_vel takes effect this many /odom updates late (the sim: about 1).
 LAGS = (0, 1, 2)
-FAKE_BASES = [(base, lag) for base in sorted(BASES) for lag in LAGS]
 
 
 def _odom(x, y, yaw):
@@ -218,22 +213,18 @@ def _odom(x, y, yaw):
     return pose
 
 
-def _dead_zone(command, zone):
-    return math.copysign(max(0.0, abs(command) - zone), command)
-
-
-@pytest.fixture(params=FAKE_BASES, ids=[f"{base}-lag{lag}" for base, lag in FAKE_BASES])
+@pytest.fixture(params=LAGS, ids=[f"lag{lag}" for lag in LAGS])
 def kinematic_base(request, make_node, monkeypatch):
     """
     Return an executing node on a fake base, its published twists and a clock.
 
-    The base is ideal or skids like the sim's (BASES) and applies /cmd_vel
-    `lag` updates late. clock.path collects every base pose /odom reports,
-    clock.stamps the time of every published twist. Set clock.moving = False
+    The base applies /cmd_vel exactly, `lag` updates late. clock.path
+    collects every base pose /odom reports, clock.stamps the time of every
+    published twist. Set clock.moving = False
     for a stuck base, clock.odom_until for an /odom that stops, and
     clock.interrupt_at for a Ctrl-C at that time.
     """
-    (yaw_zone, lateral_zone), lag = BASES[request.param[0]], request.param[1]
+    lag = request.param
     node = make_node(execute=True)
     sent = []
     clock = SimpleNamespace(now=1000.0, moving=True, path=[], stamps=[],
@@ -257,12 +248,12 @@ def kinematic_base(request, make_node, monkeypatch):
             return
         x, y, yaw = node._odom_pose()
         tw = sent[-1 - lag]
-        vx, vy = tw.linear.x, _dead_zone(tw.linear.y, lateral_zone)
+        vx, vy = tw.linear.x, tw.linear.y
         c, s = math.cos(yaw), math.sin(yaw)
         node._odom = _odom(
             x + (c * vx - s * vy) * SIM_STEP_SEC,
             y + (s * vx + c * vy) * SIM_STEP_SEC,
-            yaw + _dead_zone(tw.angular.z, yaw_zone) * SIM_STEP_SEC,
+            yaw + tw.angular.z * SIM_STEP_SEC,
         )
         clock.path.append(node._odom_pose())
 
@@ -290,7 +281,7 @@ def test_drive_to_pose_turns_then_drives_to_the_target(kinematic_base):
 
 def test_drive_to_pose_finishes_a_turn_and_removes_its_drift(kinematic_base):
     # Where the first garden run stalled: 85 deg into the turn at the
-    # origin, 12 mm off it (the skidding turn drags the base along).
+    # origin, 12 mm off it (the old skidding base dragged itself along).
     node, _, _ = kinematic_base
     node._odom = _odom(0.0115, 0.0052, math.radians(85.45))
     target = (0.0, 0.0, math.pi / 2)
