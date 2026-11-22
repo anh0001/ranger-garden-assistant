@@ -13,7 +13,8 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash          # after a build, from the workspace root
 ```
 
-Python is 3.10+. Hardware deps not managed by rosdep: `python-can`, `piper_sdk`, `scipy`.
+Python is 3.10+. Deps not managed by rosdep: `python-can`, `piper_sdk`, `scipy` (hardware),
+`casadi` (sim whole-body MPC only, `pip3 install --user casadi==3.8.2`).
 
 ## Build
 

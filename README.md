@@ -80,6 +80,7 @@ Install Python dependencies (not managed by rosdep):
 
 ```bash
 pip3 install python-can piper_sdk scipy
+pip3 install --user casadi==3.8.2  # sim whole-body MPC only (docs/sim_whole_body_mpc.md)
 ```
 
 ### 3. Install Intel RealSense (D405 Gripper Camera)

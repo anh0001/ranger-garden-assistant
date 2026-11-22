@@ -507,11 +507,18 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 - The waypoints are joint-space and per scene in
   `config/pick_place_scenes.yaml`; re-solve them with FK when moving an
   object (see `test_pick_place_geometry.py`, which checks every scene).
+- Base and arm never move together here. The whole-body MPC handover (Nav2
+  to a handover pose, then base and arm reach together) is a separate demo:
+  [sim_whole_body_mpc.md](sim_whole_body_mpc.md).
 
 ## Key files
 
 - `src/ranger_sim/launch/sim_bringup.launch.py` — full sim (`scene`,
   `paused`, `world_name` args)
+- `src/ranger_sim/scripts/{base_handover_gate,whole_body_mpc,whole_body_mpc_core,wbmpc_reach_demo}.py`,
+  `src/ranger_sim/config/wbmpc.yaml`, `src/ranger_sim/launch/wbmpc_reach_*.py`,
+  `src/ranger_sim/launch/record_wbmpc_reach_video.launch.py` — whole-body MPC
+  handover (`handover_gate:=true`), see [sim_whole_body_mpc.md](sim_whole_body_mpc.md)
 - `src/ranger_sim/launch/gazebo.launch.py` — paused start, model resource
   paths, missing-asset check
 - `src/ranger_sim/config/pick_place_scenes.yaml`,
