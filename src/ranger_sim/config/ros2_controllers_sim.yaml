@@ -17,6 +17,14 @@ controller_manager:
     piper_arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    # Streamed joint positions on ~/commands (std_msgs/Float64MultiArray)
+    # for whole_body_mpc.py. It claims the same six position command
+    # interfaces as piper_arm_controller, so ros2_control activates only one
+    # of the two: spawned inactive, switched in by wbmpc_reach_demo.py. Not
+    # in MoveIt's moveit_controllers.yaml: MoveIt only drives the JTC.
+    piper_arm_stream_controller:
+      type: forward_command_controller/ForwardCommandController
+
     # GripperCommand on /piper_gripper_controller/gripper_cmd: the same
     # action MoveIt (moveit_controllers.yaml) and the real
     # piper_follow_joint_trajectory_bridge expose. piper_joint8 (second
@@ -62,6 +70,17 @@ piper_arm_controller:
     state_interfaces:
       - position
       - velocity
+
+piper_arm_stream_controller:
+  ros__parameters:
+    joints:
+      - piper_joint1
+      - piper_joint2
+      - piper_joint3
+      - piper_joint4
+      - piper_joint5
+      - piper_joint6
+    interface_name: position
 
 piper_gripper_controller:
   ros__parameters:

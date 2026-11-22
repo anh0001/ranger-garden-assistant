@@ -324,8 +324,8 @@ class TransferPlan:
 class PickPlaceDemo(Node):
     """Scripted base pose control + MoveIt arm waypoints + /grasp/set."""
 
-    def __init__(self, **node_kwargs) -> None:
-        super().__init__("pick_place_demo", **node_kwargs)
+    def __init__(self, node_name: str = "pick_place_demo", **node_kwargs) -> None:
+        super().__init__(node_name, **node_kwargs)
 
         p = self.declare_parameter
         p("execute", False)  # False => plan only (safe)

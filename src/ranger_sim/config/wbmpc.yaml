@@ -1,0 +1,50 @@
+# Whole-body MPC handover in the sim (docs/sim_whole_body_mpc.md). Read by
+# launch/spawn_robot.launch.py (base_handover_gate, with handover_gate:=true)
+# and launch/wbmpc_reach_common.py (whole_body_mpc, wbmpc_reach_demo).
+# Parameter files address nodes by NAME: the launches name the nodes as here.
+# test/test_wbmpc_launch.py checks the box and the target against the world.
+# Floats must be written as floats.
+#
+# The reach target is NOT here: it is a launch argument (target_x/y/z/yaw of
+# the reach launches), so the demo and the video's target marker cannot
+# disagree. Default (0.95, 0.15, 1.00) in odom, gripper level, approach +x:
+# 0.20 m beyond what the arm reaches from the spawn pose.
+base_handover_gate:
+  ros__parameters:
+    settle_sec: 0.3          # /odom still this long before the new owner gets the base
+    still_linear: 0.005      # m/s
+    still_angular: 0.01      # rad/s
+    # >= hypot(base_speed, base_speed) = 0.141 m/s of whole_body_mpc: a legal
+    # MPC command is never scaled, only a misbehaving one.
+    manip_max_speed: 0.15
+
+whole_body_mpc:
+  ros__parameters:
+    # [x_min, y_min, x_max, y_max] of the base in odom. x <= 0.52 keeps the
+    # base short of the house table as the pick does (base_approach_x
+    # 0.52 / 0.535); y >= -0.20 keeps it clear of ChairA_01_001 at
+    # (0.50, -0.86). A base that starts outside (a Nav2 stop) may only move in.
+    base_box: [-0.40, -0.20, 0.52, 0.30]
+    rate: 20.0               # Hz
+    horizon: 20              # stages of dt
+    dt: 0.1                  # s
+    base_speed: 0.10         # m/s per body axis
+    joint_speed: 0.6         # rad/s (URDF allows 3-5)
+    position_tolerance: 0.005  # m: REACHED below this and angle_tolerance
+    angle_tolerance: 0.035   # rad (2 deg)
+    reengage_factor: 3.0     # REACHED -> TRACKING only beyond 3x the tolerances
+    base_deadband: 0.01      # m/s: slower base commands are sent as zero
+    odom_timeout: 0.3        # s
+    joint_timeout: 0.3       # s
+    max_command_lag: 0.15    # rad, commanded vs measured joints
+
+wbmpc_reach_demo:
+  ros__parameters:
+    # Nav2 legs (frame map = odom in the sim), [x, y, yaw]: goal types that
+    # docs/sim_pick_place.md "Nav2 with the steering base" reports as reached.
+    nav_away_pose: [-2.0, 0.0, 3.1416]
+    nav_handover_pose: [0.0, 0.0, 0.0]
+    nav_timeout: 120.0       # s per Nav2 goal
+    handover_timeout: 10.0   # s for the gate to settle / a controller switch
+    reach_timeout: 40.0      # s for whole_body_mpc to report REACHED
+    hold_sec: 2.0            # s at the target before handing back

@@ -4,7 +4,10 @@ Spawn the Ranger + PiPER robot into a running Gazebo Fortress instance.
 
 Also starts the ros2_control controllers, the ros_gz bridges, the grasp
 manager and ranger_motion_adapter (/cmd_vel -> steering, wheel and body
-commands, steer-then-drive like the real swerve driver). Gazebo is expected
+commands, steer-then-drive like the real swerve driver). With
+handover_gate:=true, base_handover_gate sits in front of the adapter
+(/cmd_vel or /cmd_vel_manip -> /cmd_vel_gated, see
+scripts/base_handover_gate.py) for the whole-body MPC. Gazebo is expected
 to be PAUSED (gazebo.launch.py default): grasp_manager detaches every
 DetachableJoint grasp joint created at spawn, then unpauses the world;
 controllers finish activating after that.
@@ -15,6 +18,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     RegisterEventHandler,
 )
+from launch.conditions import IfCondition
 from launch.event_handlers import OnProcessExit
 from launch.substitutions import (
     Command,
@@ -43,6 +47,7 @@ def generate_launch_description():
     y = LaunchConfiguration("y")
     z = LaunchConfiguration("z")
     yaw = LaunchConfiguration("yaw")
+    handover_gate = LaunchConfiguration("handover_gate")
 
     declared_arguments = [
         DeclareLaunchArgument("use_sim_time", default_value="true"),
@@ -61,6 +66,13 @@ def generate_launch_description():
         DeclareLaunchArgument("y", default_value="0.0"),
         DeclareLaunchArgument("z", default_value="0.33"),
         DeclareLaunchArgument("yaw", default_value="0.0"),
+        DeclareLaunchArgument(
+            "handover_gate",
+            default_value="false",
+            description="true: base_handover_gate owns the adapter's input "
+                        "(/cmd_vel_gated) and hands the base between /cmd_vel and the "
+                        "whole-body MPC's /cmd_vel_manip; false: the adapter reads /cmd_vel.",
+        ),
     ]
 
     graspable_objects_file = PathJoinSubstitution([
@@ -141,7 +153,28 @@ def generate_launch_description():
         parameters=[{
             "use_sim_time": use_sim_time,
             "joint_state_topic": "/gz/base_joint_states",
+            # The gate's output_topic default (scripts/base_handover_gate.py).
+            # Same truth values as the gate's IfCondition (true/1, any case).
+            "input_topic": PythonExpression([
+                "'/cmd_vel_gated' if '", handover_gate,
+                "'.lower() in ('true', '1') else '/cmd_vel'",
+            ]),
         }],
+    )
+
+    # The single owner of the adapter's input when handover_gate:=true:
+    # /cmd_vel (Nav2, scripted demos) or /cmd_vel_manip (whole_body_mpc),
+    # switched through ~/set_manipulate once the base is still.
+    base_handover_gate = Node(
+        package="ranger_sim",
+        executable="base_handover_gate.py",
+        name="base_handover_gate",
+        output="screen",
+        parameters=[
+            PathJoinSubstitution([FindPackageShare("ranger_sim"), "config", "wbmpc.yaml"]),
+            {"use_sim_time": use_sim_time},
+        ],
+        condition=IfCondition(handover_gate),
     )
 
     # gz_ros2_control exports the joint8 mimic as "piper_joint8_mimic"
@@ -238,6 +271,19 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Loaded and configured, NOT activated: it shares the arm's command
+    # interfaces with piper_arm_controller; wbmpc_reach_demo.py switches
+    # between the two (controller_manager/switch_controller, STRICT).
+    arm_stream_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=[
+            "piper_arm_stream_controller", "--inactive", "-c", "/controller_manager",
+            *spawner_timeouts,
+        ],
+        output="screen",
+    )
+
     gripper_controller_spawner = Node(
         package="controller_manager",
         executable="spawner",
@@ -256,6 +302,7 @@ def generate_launch_description():
             target_action=joint_state_broadcaster_spawner,
             on_exit=[
                 arm_controller_spawner,
+                arm_stream_controller_spawner,
                 gripper_controller_spawner,
             ],
         )
@@ -270,6 +317,7 @@ def generate_launch_description():
             spawn_robot,
             base_joint_state_publisher,
             ranger_motion_adapter,
+            base_handover_gate,
             mimic_joint_state_relay,
             spawn_jsb_after_create,
             spawn_controllers_after_jsb,

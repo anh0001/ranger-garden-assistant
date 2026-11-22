@@ -17,12 +17,20 @@ install(DIRECTORY launch/
 
 # Install Python node scripts as executables
 install(PROGRAMS
+  scripts/base_handover_gate.py
   scripts/base_joint_state_publisher.py
   scripts/pick_place_demo.py
   scripts/grasp_manager.py
   scripts/mimic_joint_state_relay.py
   scripts/ranger_motion_adapter.py
   scripts/record_demo_video.py
+  scripts/wbmpc_reach_demo.py
+  scripts/whole_body_mpc.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+# Loaded by path by whole_body_mpc.py (casadi + numpy, no rclpy); not a node.
+install(FILES
+  scripts/whole_body_mpc_core.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -87,11 +95,25 @@ if(BUILD_TESTING)
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_fetch_sim_assets test/test_fetch_sim_assets.py
     ENV ${RANGER_SIM_TEST_ENV})
+  # Whole-body MPC handover (docs/sim_whole_body_mpc.md).
+  ament_add_pytest_test(test_base_handover_gate test/test_base_handover_gate.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_wbmpc_launch test/test_wbmpc_launch.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  # Skipped without casadi (pip3 install --user casadi).
+  ament_add_pytest_test(test_whole_body_mpc_core test/test_whole_body_mpc_core.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_whole_body_mpc test/test_whole_body_mpc.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_wbmpc_reach_demo test/test_wbmpc_reach_demo.py
+    ENV ${RANGER_SIM_TEST_ENV})
 
   # Headless Gazebo bringup. Needs a GPU (gpu_lidar / camera sensors), so it
   # is skipped unless RANGER_SIM_GPU=1 is set in the environment.
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(test/test_sim_smoke.py TIMEOUT 240 ENV ${RANGER_SIM_TEST_ENV})
+  # Whole-body MPC reach in Gazebo (also needs casadi); RANGER_SIM_GPU=1 as above.
+  add_launch_test(test/test_wbmpc_sim.py TIMEOUT 400 ENV ${RANGER_SIM_TEST_ENV})
 
   install(DIRECTORY test/
     DESTINATION share/${PROJECT_NAME}/test

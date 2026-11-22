@@ -7,6 +7,7 @@ Usage:
   ros2 launch ranger_sim sim_bringup.launch.py headless:=true    # CI mode
   ros2 launch ranger_sim sim_bringup.launch.py launch_nav:=true  # with Nav2
   ros2 launch ranger_sim sim_bringup.launch.py scene:=garden     # no fetched assets needed
+  ros2 launch ranger_sim sim_bringup.launch.py handover_gate:=true  # for the whole-body MPC
 
 `scene` (config/pick_place_scenes.yaml) sets the `world` / `world_name`
 defaults; explicit `world:=` / `world_name:=` still override it. The house
@@ -47,6 +48,7 @@ def generate_launch_description():
     launch_moveit = LaunchConfiguration("launch_moveit")
     launch_nav = LaunchConfiguration("launch_nav")
     use_rviz = LaunchConfiguration("use_rviz")
+    handover_gate = LaunchConfiguration("handover_gate")
 
     declared_arguments = [
         # Before `world` / `world_name`: their defaults are performed in
@@ -84,6 +86,11 @@ def generate_launch_description():
         DeclareLaunchArgument("launch_moveit", default_value="true"),
         DeclareLaunchArgument("launch_nav", default_value="false"),
         DeclareLaunchArgument("use_rviz", default_value="false"),
+        DeclareLaunchArgument(
+            "handover_gate", default_value="false",
+            description="true: base_handover_gate between /cmd_vel and the motion adapter, "
+                        "for the whole-body MPC (docs/sim_whole_body_mpc.md).",
+        ),
     ]
 
     # ---- 1. Start Gazebo Fortress ----
@@ -114,6 +121,7 @@ def generate_launch_description():
                     "use_sim_time": use_sim_time,
                     "world_name": world_name,
                     "grasp_detach_timeout": grasp_detach_timeout,
+                    "handover_gate": handover_gate,
                 }.items(),
             ),
         ],

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!--
+  Target marker of the whole-body MPC reach (record_wbmpc_reach_video.launch.py
+  spawns it at the target: world z = odom z - 0.010). Visual only: no
+  collision, so the gripper passes through it, and no sensor.
+-->
+<sdf version="1.8">
+  <model name="wbmpc_target">
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <geometry><sphere><radius>0.02</radius></sphere></geometry>
+        <material>
+          <ambient>0.9 0.1 0.1 1</ambient>
+          <diffuse>0.9 0.1 0.1 1</diffuse>
+          <emissive>0.6 0.0 0.0 1</emissive>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
