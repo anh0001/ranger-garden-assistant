@@ -18,6 +18,10 @@ Videos (house scene, recorded 2026-11-21 with
 The red sphere is the target (visual only, no collision). The wrist inset shows
 the gripper closing on it.
 
+The same MPC also does the pick of the pick-and-place demo
+(`pick_place_demo.launch.py approach:=mpc`), compared there with the
+scripted pick from wrong base poses: [sim_wbmpc_pick.md](sim_wbmpc_pick.md).
+
 ## What runs where
 
 ```

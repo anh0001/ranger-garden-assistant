@@ -114,6 +114,24 @@ defaults. small_house: table top 0.801, vitamin bottle r 0.027 h 0.096 at
 the floor: the base stops 0.442 m short of its face) and set down at
 (-4.0, -2.454) with place hover/grasp TCP (0.510, 0, 1.034/0.974).
 
+Approach comparison (docs/sim_wbmpc_pick.md)
+--------------------------------------------
+`approach_error` = [dx, dy, dyaw] ends the first leg that far off the pick
+standoff (dx, dy along and across the pick heading): the stand-in for a
+coarse navigation stop, at most Nav2's goal tolerances. The scripted pick
+then drives a "correct the standoff" leg before going on; with no error the
+steps are exactly the ones above. Right after the attach the node logs
+
+  approach result: mode=sequential time=<s> tcp offset=(dx, dy, dz) mm yaw=<deg> aligned=yes|no
+
+time on the node clock (sim time) from the end of the first leg, offset of
+the TCP (TF odom -> piper_tcp) from the grasp target along / across the pick
+heading and up, yaw of the base off the pick heading. Aligned is inside the
+finger, palm and pad clearances (ALIGNED_*). scripts/wbmpc_pick_place_demo.py
+does the same pick with the whole-body MPC and logs mode=mpc.
+`approach_only` ends the run after the lift instead: set the object back
+down, open, release, back off, carry pose, return to start, 'home'.
+
 Safety
 ------
 `execute` defaults to **False** (plan-only). In plan-only mode the node
@@ -138,7 +156,9 @@ from sensor_msgs.msg import JointState
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
+from rclpy.time import Time
 from ranger_sim.srv import SetGrasp
+from tf2_ros import Buffer, TransformException, TransformListener
 
 ARM_JOINTS = [f"piper_joint{i}" for i in range(1, 7)]
 
@@ -208,6 +228,28 @@ GRIPPER_ACCEPT_TIMEOUT_SEC = 5.0
 SETTLE_TIMEOUT_SEC = 3.0
 SETTLE_STILL_RAD = 0.0005  # max joint change between samples = at rest
 SETTLE_SAMPLE_SEC = 0.1
+
+# ---- approach comparison (docs/sim_wbmpc_pick.md) ----
+# TCP [x, z] in base_footprint at GRASP / HOVER (garden; FK, as the scenes' keys).
+GRASP_TCP = [0.430, 0.842]
+HOVER_TCP = [0.430, 0.935]
+APPROACH_ERROR = [0.0, 0.0, 0.0]  # [dx, dy (m) along / across the pick heading, dyaw (rad)]
+# The error stands in for a coarse Nav2 stop: at most its goal tolerances
+# (config/nav2_sim.yaml xy_goal_tolerance, yaw_goal_tolerance).
+MAX_APPROACH_ERROR_M = 0.25
+MAX_APPROACH_ERROR_RAD = 0.10
+# Aligned: TCP minus grasp target at the attach, mm, inside the clearances of
+# test/test_pick_place_geometry.py (docs/sim_pick_place.md).
+# Along the approach: short, the pads still span the object; past, the palm
+# stays >= 5 mm off it.
+ALIGNED_DX_MM = (-10.0, 5.0)
+ALIGNED_DY_MM = 6.0  # across: open fingers clear the object by 8-10 mm per side
+ALIGNED_DZ_MM = 10.0  # up/down: pads >= 1 cm below the rim and >= 2.4 cm above the table
+TF_TIMEOUT_SEC = 1.0  # for the TCP lookup at the attach
+TF_MAX_AGE_SEC = 0.5  # older: the TF tree stopped (joint states?), the offset may be stale
+TF_POLL_SEC = 0.02
+ODOM_FRAME = "odom"
+TCP_FRAME = "piper_tcp"
 
 
 # ---- base pose control (pure) ----------------------------------------------
@@ -303,6 +345,92 @@ def format_pose(pose: Pose2D) -> str:
     return f"({x:.3f}, {y:.3f}, {math.degrees(yaw):.0f} deg)"
 
 
+# ---- approach comparison (pure) --------------------------------------------
+
+
+def displaced_pose(pose: Pose2D, error: Pose2D) -> Pose2D:
+    """`pose` moved by `error` = (dx, dy, dyaw): dx, dy along and across its own heading."""
+    if not any(error):
+        return pose
+    x, y, yaw = pose
+    dx, dy, dyaw = error
+    c, s = math.cos(yaw), math.sin(yaw)
+    return x + c * dx - s * dy, y + s * dx + c * dy, wrap_angle(yaw + dyaw)
+
+
+def check_approach_error(values, standoff_m: float) -> Pose2D:
+    """
+    Return `values` as (dx, dy, dyaw); ValueError unless it is a coarse stop.
+
+    A coarse stop is within Nav2's goal tolerances and short of the pick
+    approach: dx at the standoff distance would drive the base to the table.
+    """
+    if len(values) != 3:
+        raise ValueError(f"approach_error must be [dx, dy, dyaw], got {list(values)}")
+    dx, dy, dyaw = (float(v) for v in values)
+    if not all(map(math.isfinite, (dx, dy, dyaw))):
+        raise ValueError(f"approach_error must be finite, got {list(values)}")
+    if math.hypot(dx, dy) > MAX_APPROACH_ERROR_M or abs(dyaw) > MAX_APPROACH_ERROR_RAD:
+        raise ValueError(
+            f"approach_error {list(values)} is beyond the Nav2 goal tolerances it stands in "
+            f"for ({MAX_APPROACH_ERROR_M} m, {MAX_APPROACH_ERROR_RAD} rad)"
+        )
+    if dx >= standoff_m:
+        raise ValueError(
+            f"approach_error dx {dx} m puts the base at or past the pick approach "
+            f"({standoff_m} m ahead of the standoff)"
+        )
+    return dx, dy, dyaw
+
+
+def tcp_xz(name: str, values) -> tuple[float, float]:
+    """Return a TCP [x, z] parameter as floats; ValueError unless it has two values."""
+    if len(values) != 2 or not all(math.isfinite(float(v)) for v in values):
+        raise ValueError(f"{name} must be [x, z] of the TCP in base_footprint, got {list(values)}")
+    return float(values[0]), float(values[1])
+
+
+def tcp_target(base: Pose2D, tcp: tuple[float, float]) -> tuple[float, float, float]:
+    """
+    Odom position of the TCP at base-frame (x, 0, z) with the base at `base`.
+
+    The sim's odometry is planar (base_footprint at z = 0 in odom), so z
+    carries over unchanged.
+    """
+    x, y, yaw = base
+    tcp_x, tcp_z = tcp
+    return x + tcp_x * math.cos(yaw), y + tcp_x * math.sin(yaw), tcp_z
+
+
+def tcp_offset_mm(tcp, target, heading: float = 0.0) -> tuple[float, float, float]:
+    """`tcp` minus `target` in mm: along and across the pick `heading`, and up."""
+    ex, ey, ez = (float(a) - float(b) for a, b in zip(tcp, target))
+    c, s = math.cos(heading), math.sin(heading)
+    return 1e3 * (c * ex + s * ey), 1e3 * (-s * ex + c * ey), 1e3 * ez
+
+
+def is_aligned(offset_mm: tuple[float, float, float]) -> bool:
+    """Whether a TCP offset (mm, see tcp_offset_mm) is inside the grasp clearances."""
+    dx, dy, dz = offset_mm
+    return (ALIGNED_DX_MM[0] <= dx <= ALIGNED_DX_MM[1]
+            and abs(dy) <= ALIGNED_DY_MM and abs(dz) <= ALIGNED_DZ_MM)
+
+
+def format_approach_result(mode: str, seconds: Optional[float],
+                           offset_mm: Optional[tuple[float, float, float]],
+                           yaw: Optional[float]) -> str:
+    """Return the one log line per pick the comparison is read from; n/a for the unknown."""
+    duration = "n/a" if seconds is None else f"{seconds:.1f} s"
+    if offset_mm is None:
+        offset, aligned = "n/a", "n/a"
+    else:
+        offset = "({:+.1f}, {:+.1f}, {:+.1f}) mm".format(*offset_mm)
+        aligned = "yes" if is_aligned(offset_mm) else "no"
+    heading = "n/a" if yaw is None else f"{math.degrees(yaw):+.1f} deg"
+    return (f"approach result: mode={mode} time={duration} tcp offset={offset} "
+            f"yaw={heading} aligned={aligned}")
+
+
 @dataclass(frozen=True)
 class TransferPlan:
     """Arm waypoints and base poses of one pick -> transfer -> place run."""
@@ -319,10 +447,16 @@ class TransferPlan:
     place: Pose2D
     place_standoff: Pose2D
     route: tuple[Pose2D, ...]  # pick standoff -> place standoff, exclusive
+    pick_start: Pose2D  # end of the first leg: the pick standoff moved by approach_error
+    grasp_target: tuple[float, float, float]  # odom TCP at the grasp, base at `pick`
+    hover_tcp_z: float  # TCP height at hover_joints: where a lift ends
+    approach_only: bool  # end after the lift: set the object back, return
 
 
 class PickPlaceDemo(Node):
     """Scripted base pose control + MoveIt arm waypoints + /grasp/set."""
+
+    APPROACH_MODE = "sequential"  # the `mode` of the approach result line
 
     def __init__(self, node_name: str = "pick_place_demo", **node_kwargs) -> None:
         super().__init__(node_name, **node_kwargs)
@@ -345,11 +479,19 @@ class PickPlaceDemo(Node):
         p("standoff_m", STANDOFF_M)
         p("place_base_pose", PLACE_BASE_POSE)  # [x, y, yaw] in odom
         p("place_route", PLACE_ROUTE)  # flat [x, y, yaw, ...] in odom
+        p("approach_error", APPROACH_ERROR)  # [dx, dy, dyaw] off the pick standoff
+        p("approach_only", False)  # end after the lift: object set back, base returned
+        p("grasp_tcp", GRASP_TCP)  # [x, z] in base_footprint at grasp_joints
+        p("hover_tcp", HOVER_TCP)  # [x, z] in base_footprint at hover_joints
 
         self.execute = self.get_parameter("execute").value
         self.group = self.get_parameter("planning_group").value
         self.object_name = self.get_parameter("object_name").value
 
+        self._approach_started: Optional[float] = None  # node clock at the end of the first leg
+        # Fed by this node's own spinning: every step that waits spins it.
+        self._tf_buffer = Buffer()
+        self._tf_listener = TransformListener(self._tf_buffer, self)
         self._odom = None
         self._odom_time: Optional[float] = None  # wall clock of the last /odom
         self._joints: dict[str, float] = {}
@@ -361,10 +503,23 @@ class PickPlaceDemo(Node):
         self._gripper = ActionClient(
             self, GripperCommand, "/piper_gripper_controller/gripper_cmd"
         )
+        self._action_clients = [self._move_group, self._gripper]  # see destroy_node
         self._grasp = self.create_client(SetGrasp, "/grasp/set")
 
         mode = "EXECUTE" if self.execute else "PLAN-ONLY (no motion)"
         self.get_logger().info(f"PickPlaceDemo starting — mode: {mode}")
+
+    def destroy_node(self) -> None:
+        """
+        Destroy the action clients, then the node.
+
+        Humble's destroy_node leaves action clients to the garbage collector,
+        which may free them after rclpy.shutdown(): a segfault, seen in the
+        unit tests that build and destroy many demo nodes.
+        """
+        while self._action_clients:  # each once: a second destroy() would raise
+            self._action_clients.pop().destroy()
+        super().destroy_node()
 
     # ---- helpers -------------------------------------------------------
     def _odom_cb(self, msg: Odometry) -> None:
@@ -479,6 +634,48 @@ class PickPlaceDemo(Node):
 
     def _odom_fresh(self) -> bool:
         return self._odom_time is not None and time.time() - self._odom_time <= ODOM_STALE_SEC
+
+    # ---- approach measurement -------------------------------------------
+    def _clock_sec(self) -> float:
+        """Node clock (sim time in the sim) in seconds."""
+        return self.get_clock().now().nanoseconds * 1e-9
+
+    def _tcp_in_odom(self) -> Optional[tuple[float, float, float]]:
+        """Latest TCP position in odom from TF; None (warned) without one in TF_TIMEOUT_SEC."""
+        deadline = time.time() + TF_TIMEOUT_SEC
+        while rclpy.ok() and time.time() < deadline:
+            try:
+                transform = self._tf_buffer.lookup_transform(ODOM_FRAME, TCP_FRAME, Time())
+            except TransformException:
+                rclpy.spin_once(self, timeout_sec=TF_POLL_SEC)
+                continue
+            stamp = transform.header.stamp
+            age = self._clock_sec() - (stamp.sec + stamp.nanosec * 1e-9)
+            if age > TF_MAX_AGE_SEC:
+                self.get_logger().warn(
+                    f"{ODOM_FRAME} -> {TCP_FRAME} is {age:.1f} s old: the approach offset "
+                    "may be stale"
+                )
+            t = transform.transform.translation
+            return t.x, t.y, t.z
+        self.get_logger().warn(
+            f"no {ODOM_FRAME} -> {TCP_FRAME} transform within {TF_TIMEOUT_SEC} s: "
+            "approach offset unknown"
+        )
+        return None
+
+    def _log_approach(self, plan: TransferPlan) -> None:
+        """Log the approach result line (executing only); never fails the pick."""
+        if not self.execute:
+            return
+        seconds = (None if self._approach_started is None
+                   else self._clock_sec() - self._approach_started)
+        tcp = self._tcp_in_odom()
+        heading = plan.pick[2]
+        offset = None if tcp is None else tcp_offset_mm(tcp, plan.grasp_target, heading)
+        pose = self._odom_pose()
+        yaw = None if pose is None else wrap_angle(pose[2] - heading)
+        self.get_logger().info(format_approach_result(self.APPROACH_MODE, seconds, offset, yaw))
 
     def stop_base(self) -> None:
         """Publish a zero /cmd_vel (the sim's VelocityControl keeps the last one)."""
@@ -601,6 +798,8 @@ class PickPlaceDemo(Node):
             raise ValueError(f"place_base_pose must be [x, y, yaw], got {list(place)}")
         standoff = float(value("standoff_m"))
         pick = (float(value("base_approach_x")), 0.0, 0.0)
+        pick_standoff = standoff_pose(pick, standoff)
+        error = check_approach_error(list(value("approach_error")), standoff)
         return TransferPlan(
             home=tuple(value("home_joints")),
             hover=tuple(value("hover_joints")),
@@ -611,10 +810,14 @@ class PickPlaceDemo(Node):
             place_grasp=tuple(value("place_grasp_joints")),
             gripper_closed=float(value("gripper_closed")),
             pick=pick,
-            pick_standoff=standoff_pose(pick, standoff),
+            pick_standoff=pick_standoff,
             place=place,
             place_standoff=standoff_pose(place, standoff),
             route=tuple(route_triples(list(value("place_route")))),
+            pick_start=displaced_pose(pick_standoff, error),
+            grasp_target=tcp_target(pick, tcp_xz("grasp_tcp", value("grasp_tcp"))),
+            hover_tcp_z=tcp_xz("hover_tcp", value("hover_tcp"))[1],
+            approach_only=bool(value("approach_only")),
         )
 
     def _arm_step(self, caption: str, joints: tuple[float, ...]) -> Step:
@@ -623,9 +826,35 @@ class PickPlaceDemo(Node):
     def _drive_step(self, caption: str, pose: Pose2D, speed: Optional[float] = None) -> Step:
         return caption, lambda: self.drive_to_pose(pose, caption, speed)
 
-    def _pick_steps(self, plan: TransferPlan) -> list[Step]:
+    def _first_leg(self, plan: TransferPlan) -> Step:
+        """Drive to the pick standoff moved by approach_error; the approach is timed from here."""
+        caption = "drive to the table"
+
+        def action() -> bool:
+            reached = self.drive_to_pose(plan.pick_start, caption)
+            self._approach_started = self._clock_sec()
+            return reached
+
+        return caption, action
+
+    def _attach_step(self, plan: TransferPlan) -> Step:
+        """Attach the object, then log the approach result (which never fails the step)."""
+
+        def action() -> bool:
+            if not self.grasp(True):
+                return False
+            self._log_approach(plan)
+            return True
+
+        return "attach object", action
+
+    def _grasp_steps(self, plan: TransferPlan) -> list[Step]:
+        """Return the pick up to the lift: first leg, [correct the standoff], look, approach."""
+        correct = ([self._drive_step("correct the standoff", plan.pick_standoff)]
+                   if plan.pick_start != plan.pick_standoff else [])
         return [
-            self._drive_step("drive to the table", plan.pick_standoff),
+            self._first_leg(plan),
+            *correct,
             # Level gripper at grasp height, base short of the object: the
             # wrist camera has it centred (FK: ~4 deg off its optical axis).
             self._arm_step("look at the object", plan.grasp),
@@ -633,10 +862,23 @@ class PickPlaceDemo(Node):
             self._drive_step("approach the object", plan.pick, BASE_APPROACH_SPEED_MPS),
             # Attach before closing so the fixed joint is never created
             # while the fingers interpenetrate the object.
-            ("attach object", lambda: self.grasp(True)),
+            self._attach_step(plan),
             ("close gripper", lambda: self.set_gripper(plan.gripper_closed, "close")),
             self._arm_step("lift", plan.hover),
-            # Upright and behind the table edge before the base moves.
+        ]
+
+    def _pick_steps(self, plan: TransferPlan) -> list[Step]:
+        # Upright and behind the table edge before the base moves.
+        return [*self._grasp_steps(plan), self._arm_step("carry pose", plan.carry)]
+
+    def _put_back_steps(self, plan: TransferPlan) -> list[Step]:
+        """approach_only: set the object back where it was picked and back off the table."""
+        return [
+            self._arm_step("set down", plan.grasp),
+            ("open gripper", lambda: self.set_gripper(GRIPPER_OPEN, "open")),
+            ("release object", lambda: self.grasp(False)),
+            # The open fingers slide off the object, the slide-in reversed.
+            self._drive_step("back off", plan.pick_standoff, BASE_APPROACH_SPEED_MPS),
             self._arm_step("carry pose", plan.carry),
         ]
 
@@ -661,7 +903,7 @@ class PickPlaceDemo(Node):
 
     def sequence(self, plan: TransferPlan, start: Optional[Pose2D]) -> list[Step]:
         """Every step of the run in order; `start` is where the base returns (None: stay)."""
-        return [
+        prepare = [
             # Known start state: object released, gripper open.
             ("release object", lambda: self.grasp(False)),
             ("open gripper", lambda: self.set_gripper(GRIPPER_OPEN, "open")),
@@ -669,15 +911,23 @@ class PickPlaceDemo(Node):
             # Level and retracted BEFORE the base moves: at 'home' the
             # gripper would end up under the table top and jam against it.
             self._arm_step("carry pose", plan.carry),
-            *self._pick_steps(plan),
-            *(self._drive_step("drive to the place", pose) for pose in plan.route),
-            *self._place_steps(plan),
-            *(self._drive_step("return", pose) for pose in reversed(plan.route)),
+        ]
+        finish = [
             # Plan-only without a sim has no start pose to return to.
             ("return to start",
              lambda: start is None or self.drive_to_pose(start, "return to start")),
             # 'home' is below the table top: only away from the tables.
             self._arm_step("retract 'home'", plan.home),
+        ]
+        if plan.approach_only:
+            return [*prepare, *self._grasp_steps(plan), *self._put_back_steps(plan), *finish]
+        return [
+            *prepare,
+            *self._pick_steps(plan),
+            *(self._drive_step("drive to the place", pose) for pose in plan.route),
+            *self._place_steps(plan),
+            *(self._drive_step("return", pose) for pose in reversed(plan.route)),
+            *finish,
         ]
 
     def run(self) -> None:

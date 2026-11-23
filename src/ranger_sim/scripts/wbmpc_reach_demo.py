@@ -87,6 +87,12 @@ NAV_GOAL_ATTEMPTS = 2  # Humble: the first goal response can be lost (see pick_p
 NAV_ACCEPT_TIMEOUT_SEC = 5.0
 NAV_CANCEL_TIMEOUT_SEC = 5.0
 STATE_POLL_SEC = 0.05
+SLIDE_PERIOD_SEC = 0.1  # node clock between two targets of a slide (2 MPC periods)
+# whole_body_mpc publishes its state on change only: after the last target of
+# a slide it may stay REACHED without a word. Give it this long on the node
+# clock (sim time, the MPC's own: 5 of its 20 Hz ticks at any real-time
+# factor) to take the target in before the latest state is trusted.
+TARGET_SETTLE_SEC = 0.25
 
 GATE_SERVICE = "/base_handover_gate/set_manipulate"
 GATE_MODE_TOPIC = "/base_handover_gate/mode"
@@ -116,6 +122,22 @@ def level_quaternion(yaw: float) -> tuple[float, float, float, float]:
     return (-s * _SIN_45, c * _SIN_45, s * _SIN_45, c * _SIN_45)
 
 
+def slide_point(start, end, speed: float, elapsed: float) -> tuple[float, float, float]:
+    """
+    Return the point `speed * elapsed` along the straight line `start` -> `end`.
+
+    Clamped to the line: `start` for elapsed <= 0, `end` itself (not a
+    rounded copy) from the moment it is reached, so a slide ends on it.
+    """
+    end = tuple(float(v) for v in end)
+    length = math.dist(start, end)
+    travelled = speed * max(0.0, elapsed)
+    if travelled >= length:
+        return end
+    fraction = travelled / length
+    return tuple(float(s) + (e - float(s)) * fraction for s, e in zip(start, end))
+
+
 def _triple(name: str, values) -> tuple[float, float, float]:
     if len(values) != 3:
         raise ValueError(f"{name} must have 3 values, got {list(values)}")
@@ -138,8 +160,8 @@ class ReachPlan:
 class WbmpcReachDemo(pick.PickPlaceDemo):
     """Carry pose, [Nav2 legs], hand-over, whole-body MPC reach, hand back."""
 
-    def __init__(self, **node_kwargs) -> None:
-        super().__init__("wbmpc_reach_demo", **node_kwargs)
+    def __init__(self, node_name: str = "wbmpc_reach_demo", **node_kwargs) -> None:
+        super().__init__(node_name, **node_kwargs)
         p = self.declare_parameter
         p("use_nav", False)
         p("target_position", TARGET_POSITION)
@@ -159,6 +181,7 @@ class WbmpcReachDemo(pick.PickPlaceDemo):
         self._gate_client = self.create_client(SetBool, GATE_SERVICE)
         self._switch_client = self.create_client(SwitchController, SWITCH_SERVICE)
         self._nav = ActionClient(self, NavigateToPose, NAV_ACTION)
+        self._action_clients.append(self._nav)  # destroyed by PickPlaceDemo.destroy_node
         self._target_pub = self.create_publisher(PoseStamped, MPC_TARGET_TOPIC, 10)
         self.create_subscription(String, GATE_MODE_TOPIC, self._on_gate_mode, LATCHED_QOS)
         self.create_subscription(String, MPC_STATE_TOPIC, self._on_mpc_state, LATCHED_QOS)
@@ -205,16 +228,20 @@ class WbmpcReachDemo(pick.PickPlaceDemo):
             hold_sec=float(self._value("hold_sec")),
         )
 
-    def target_message(self, plan: ReachPlan) -> PoseStamped:
-        """Return the reach target: level gripper at the target position, in odom."""
+    def pose_message(self, position, yaw: float) -> PoseStamped:
+        """Return an MPC target: level gripper at `position`, approaching along `yaw`, in odom."""
         msg = PoseStamped()
         msg.header.frame_id = TARGET_FRAME
         msg.header.stamp = self.get_clock().now().to_msg()
-        position = msg.pose.position
-        position.x, position.y, position.z = plan.target_position
+        p = msg.pose.position
+        p.x, p.y, p.z = (float(v) for v in position)
         o = msg.pose.orientation
-        o.x, o.y, o.z, o.w = level_quaternion(plan.target_yaw)
+        o.x, o.y, o.z, o.w = level_quaternion(yaw)
         return msg
+
+    def target_message(self, plan: ReachPlan) -> PoseStamped:
+        """Return the reach target: level gripper at the target position, in odom."""
+        return self.pose_message(plan.target_position, plan.target_yaw)
 
     # ---- hand-over -------------------------------------------------------------------
     def set_base_owner(self, manipulate: bool) -> bool:
@@ -275,15 +302,76 @@ class WbmpcReachDemo(pick.PickPlaceDemo):
         return False
 
     def reach(self, label: str) -> bool:
-        """Send the target and wait until whole_body_mpc reports REACHED."""
+        """Send the plan's target and wait until whole_body_mpc reports REACHED."""
         plan = self.reach_plan()
+        return self.reach_pose(plan.target_position, plan.target_yaw, label)
+
+    def reach_pose(self, position, yaw: float, label: str) -> bool:
+        """
+        Send the target `position` (odom, level gripper along `yaw`) and wait for REACHED.
+
+        Only a state reported after the target counts, and the MPC reports on
+        change only: use it for the first target after the hand-over (the MPC
+        leaves IDLE), and slide() for a target that follows another one.
+        """
         if not self.execute:
             self.get_logger().info(f"[plan-only] {label}: would send the target (skipped)")
             return True
         self._mpc_state = None  # only a state reported after this target counts
-        self._target_pub.publish(self.target_message(plan))
-        x, y, z = plan.target_position
+        self._target_pub.publish(self.pose_message(position, yaw))
+        x, y, z = position
         self.get_logger().info(f"{label} -> TCP ({x:.3f}, {y:.3f}, {z:.3f}) in odom")
+        return self._await_reached(label)
+
+    def slide(self, start, end, yaw: float, speed: float, label: str) -> bool:
+        """
+        Move the target along the straight line `start` -> `end` at `speed`, then wait for REACHED.
+
+        A target every SLIDE_PERIOD_SEC of the node clock (sim time), the
+        last one exactly `end`: the MPC minimises the pose error, it does not
+        keep the TCP on a line, but it follows a slowly moving target closely.
+        Ends at once on a FAULT; fails if the slide outlasts its duration plus
+        reach_timeout of wall time (a paused sim).
+        """
+        if speed <= 0.0:
+            raise ValueError(f"{label}: slide speed must be positive, got {speed}")
+        if not self.execute:
+            self.get_logger().info(f"[plan-only] {label}: would slide the target (skipped)")
+            return True
+        end = tuple(float(v) for v in end)
+        length = math.dist(start, end)
+        self.get_logger().info(
+            f"{label} -> TCP ({end[0]:.3f}, {end[1]:.3f}, {end[2]:.3f}) in odom, "
+            f"{length:.3f} m at {speed:.3f} m/s"
+        )
+        deadline = time.time() + length / speed + self._value("reach_timeout")
+        begin = self._clock_sec()
+        while True:
+            point = slide_point(start, end, speed, self._clock_sec() - begin)
+            self._target_pub.publish(self.pose_message(point, yaw))
+            if point == end:
+                break
+            if not self._wait_clock(SLIDE_PERIOD_SEC, deadline):
+                self.get_logger().error(
+                    f"{label}: stopped {math.dist(start, point):.3f} m along: "
+                    f"{self._mpc_state if self._faulted() else 'out of time'}"
+                )
+                return False
+        # Not `self._mpc_state = None`: the state comes on change only (TARGET_SETTLE_SEC).
+        # A FAULT or the deadline cut the settling short; _await_reached judges the state.
+        self._wait_clock(TARGET_SETTLE_SEC, deadline)
+        return self._await_reached(label)
+
+    def _wait_clock(self, seconds: float, deadline: float) -> bool:
+        """Spin `seconds` of the node clock; False at a FAULT, the wall `deadline` or shutdown."""
+        until = self._clock_sec() + seconds
+        while self._clock_sec() < until:
+            if self._faulted() or time.time() >= deadline or not rclpy.ok():
+                return False
+            rclpy.spin_once(self, timeout_sec=STATE_POLL_SEC)
+        return not self._faulted()
+
+    def _await_reached(self, label: str) -> bool:
         if not self.wait_for_state("REACHED", self._value("reach_timeout")):
             return False
         self.get_logger().info(f"{label}: REACHED, base at {pick.format_pose(self._odom_pose())}")
@@ -437,13 +525,14 @@ def _interrupt(signum, frame) -> None:
     raise KeyboardInterrupt
 
 
-def main() -> None:
+def main(demo_class: Optional[Callable[[], "WbmpcReachDemo"]] = None) -> None:
+    """Run `demo_class` (default WbmpcReachDemo) once; exit 1 unless its sequence completed."""
     # Ctrl-C as a plain KeyboardInterrupt: rclpy's own SIGINT handler would
     # shut the context down first, and restore() could not hand back. launch
     # escalates SIGINT to SIGTERM: that one ends in restore() too.
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     previous = signal.signal(signal.SIGTERM, _interrupt)
-    node = WbmpcReachDemo()
+    node = (demo_class or WbmpcReachDemo)()
     completed = True  # Ctrl-C is not a failure
     try:
         completed = node.run()

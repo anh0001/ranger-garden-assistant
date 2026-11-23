@@ -16,6 +16,7 @@ lists *.launch.py, so it stays out of the way):
     _spec.loader.exec_module(scenes)
 """
 
+import math
 from pathlib import Path
 
 from launch import Substitution
@@ -30,7 +31,11 @@ REQUIRED_KEYS = frozenset({
     "world_file", "world_name", "object_name", "base_approach_x",
     "gripper_closed", "hover_joints", "grasp_joints", "rig_file",
     "standoff_m", "place_base_pose", "place_route", "place_surface",
+    "grasp_tcp", "hover_tcp", "mpc_base_box",
 })
+# Required float-list keys of the whole-body MPC pick and their lengths:
+# TCP [x, z] in base_footprint, base box [x_min, y_min, x_max, y_max] in odom.
+FLOAT_LIST_KEYS = {"grasp_tcp": 2, "hover_tcp": 2, "mpc_base_box": 4}
 # Optional scene keys (arm waypoints, 6 floats) and the key each defaults to:
 # a scene whose place surface is as high as its pick table places with the
 # pick's hover and grasp.
@@ -43,13 +48,31 @@ ARM_JOINT_COUNT = 6
 OVERRIDABLE = ("object_name", "base_approach_x", "gripper_closed")
 
 
-def _is_joint_list(value) -> bool:
-    return (isinstance(value, list) and len(value) == ARM_JOINT_COUNT
-            and all(isinstance(v, float) for v in value))
+def _is_float_list(value, length: int) -> bool:
+    return (isinstance(value, list) and len(value) == length
+            and all(isinstance(v, float) and math.isfinite(v) for v in value))
+
+
+def _check_float_lists(path: Path, name: str, cfg: dict) -> None:
+    """Raise a ValueError naming the first malformed waypoint or float-list key of `cfg`."""
+    lengths = {**{key: ARM_JOINT_COUNT for key in OPTIONAL_KEYS}, **FLOAT_LIST_KEYS}
+    for key in sorted(set(lengths) & set(cfg)):
+        if not _is_float_list(cfg[key], lengths[key]):
+            raise ValueError(
+                f"{path}: scene '{name}' {key} must be {lengths[key]} floats, got {cfg[key]!r}"
+            )
+    x_min, y_min, x_max, y_max = cfg["mpc_base_box"]
+    if not (x_min < x_max and y_min < y_max):
+        raise ValueError(f"{path}: scene '{name}' mpc_base_box needs x_min < x_max and "
+                         f"y_min < y_max, got {cfg['mpc_base_box']}")
+    if x_max > cfg["base_approach_x"]:
+        raise ValueError(f"{path}: scene '{name}' mpc_base_box x_max {x_max} is past "
+                         f"base_approach_x {cfg['base_approach_x']}: the base would reach "
+                         "further than the scripted pick")
 
 
 def load_scenes(path: Path = SCENES_FILE) -> dict:
-    """Read the scenes file; ValueError for a missing required key or a bad optional one."""
+    """Read the scenes file; ValueError for a missing required key or a malformed list."""
     scenes = yaml.safe_load(Path(path).read_text())
     if not isinstance(scenes, dict) or not scenes:
         raise ValueError(f"{path}: expected a mapping of scene names")
@@ -59,12 +82,7 @@ def load_scenes(path: Path = SCENES_FILE) -> dict:
         missing = sorted(REQUIRED_KEYS - set(cfg))
         if missing:
             raise ValueError(f"{path}: scene '{name}' is missing {', '.join(missing)}")
-        for key in sorted(set(OPTIONAL_KEYS) & set(cfg)):
-            if not _is_joint_list(cfg[key]):
-                raise ValueError(
-                    f"{path}: scene '{name}' {key} must be {ARM_JOINT_COUNT} floats, "
-                    f"got {cfg[key]!r}"
-                )
+        _check_float_lists(path, name, cfg)
     return scenes
 
 

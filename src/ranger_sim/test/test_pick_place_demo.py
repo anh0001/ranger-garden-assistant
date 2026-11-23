@@ -40,7 +40,7 @@ def _scene_parameters(name):
     """Return the demo parameters the launch files pass for scene `name` (optional keys set)."""
     keys = ("object_name", "base_approach_x", "gripper_closed", "hover_joints",
             "grasp_joints", "place_hover_joints", "place_grasp_joints", "standoff_m",
-            "place_base_pose", "place_route")
+            "place_base_pose", "place_route", "grasp_tcp", "hover_tcp")
     return {key: scenes.scene_value(SCENES[name], key) for key in keys}
 
 
@@ -605,3 +605,258 @@ def test_plan_only_run_commands_nothing(make_node, monkeypatch):
 
     assert sent == []
     assert planned[-1] == "retract 'home'"
+
+
+# ---- approach error, approach_only and the approach result line ------------
+
+APPROACH_ONLY_CAPTIONS = [
+    "release object", "open gripper", "'home'", "carry pose",
+    "drive to the table", "look at the object", "approach the object",
+    "attach object", "close gripper", "lift",
+    # set the object back where it was, then end as the transfer does
+    "set down", "open gripper", "release object", "back off", "carry pose",
+    "return to start", "retract 'home'",
+]
+
+
+def _captions(node):
+    return [caption for caption, _ in node.sequence(node.transfer_plan(), START)]
+
+
+def test_displaced_pose_rotates_the_error_into_the_heading():
+    pose = demo.displaced_pose((1.0, 2.0, math.pi / 2), (0.1, 0.0, 0.0))
+
+    assert pose == pytest.approx((1.0, 2.1, math.pi / 2))
+
+
+def test_displaced_pose_adds_the_yaw_error_and_wraps_it():
+    x, y, yaw = demo.displaced_pose((0.385, 0.0, 0.0), (-0.08, 0.06, 0.07))
+
+    assert (x, y, yaw) == pytest.approx((0.305, 0.06, 0.07))
+    assert demo.displaced_pose((0.0, 0.0, 3.1), (0.0, 0.0, 0.1))[2] == pytest.approx(
+        3.2 - 2 * math.pi)
+
+
+def test_a_zero_error_leaves_the_pose_exactly():
+    pose = (0.385, 0.0, 0.0)
+
+    assert demo.displaced_pose(pose, (0.0, 0.0, 0.0)) == pose
+
+
+def test_tcp_target_puts_the_base_frame_tcp_in_odom():
+    assert demo.tcp_target((0.535, 0.0, 0.0), (0.430, 0.871)) == pytest.approx(
+        (0.965, 0.0, 0.871))
+    assert demo.tcp_target((0.0, 1.0, math.pi / 2), (0.4, 0.9)) == pytest.approx(
+        (0.0, 1.4, 0.9))
+
+
+def test_tcp_offset_is_in_millimetres_along_the_pick_heading():
+    offset = demo.tcp_offset_mm((0.9631, 0.0002, 0.8707), (0.965, 0.0, 0.871))
+
+    assert offset == pytest.approx((-1.9, 0.2, -0.3))
+    # Heading +y: along = +y, across = -x.
+    assert demo.tcp_offset_mm((0.001, 1.002, 0.0), (0.0, 1.0, 0.0), math.pi / 2) == (
+        pytest.approx((2.0, -1.0, 0.0)))
+
+
+@pytest.mark.parametrize("offset, aligned", [
+    ((0.0, 0.0, 0.0), True),
+    ((-10.0, 0.0, 0.0), True), ((-10.1, 0.0, 0.0), False),  # TCP short: pads still across
+    ((5.0, 0.0, 0.0), True), ((5.1, 0.0, 0.0), False),  # TCP past: palm nears the object
+    ((0.0, 6.0, 0.0), True), ((0.0, -6.1, 0.0), False),  # finger clearance per side
+    ((0.0, 0.0, -10.0), True), ((0.0, 0.0, 10.1), False),  # pads vs rim and table
+])
+def test_alignment_holds_inside_the_finger_palm_and_pad_clearances(offset, aligned):
+    assert demo.is_aligned(offset) is aligned
+
+
+def test_approach_result_line_format():
+    line = demo.format_approach_result("mpc", 7.43, (-1.9, 0.2, -0.3), math.radians(4.8))
+
+    assert line == ("approach result: mode=mpc time=7.4 s tcp offset=(-1.9, +0.2, -0.3) mm "
+                    "yaw=+4.8 deg aligned=yes")
+
+
+def test_approach_result_line_without_a_tcp():
+    line = demo.format_approach_result("sequential", 12.0, None, 0.0)
+
+    assert line == ("approach result: mode=sequential time=12.0 s tcp offset=n/a "
+                    "yaw=+0.0 deg aligned=n/a")
+
+
+def test_a_zero_error_keeps_todays_steps(recorded):
+    node, _ = recorded(approach_error=[0.0, 0.0, 0.0])
+
+    assert _captions(node) == GARDEN_CAPTIONS
+
+
+def test_an_error_inserts_the_corrective_leg(recorded):
+    node, calls = recorded(approach_error=[-0.10, 0.10, 0.05])
+    node.run()
+
+    plan = node.transfer_plan()
+    drives = [(label, value[0]) for kind, label, value in calls if kind == "drive"]
+    assert drives[:3] == [
+        ("drive to the table", plan.pick_start),
+        ("correct the standoff", plan.pick_standoff),
+        ("approach the object", plan.pick),
+    ]
+    assert plan.pick_start == pytest.approx(
+        demo.displaced_pose(plan.pick_standoff, (-0.10, 0.10, 0.05)))
+    captions = _captions(node)
+    assert captions[captions.index("drive to the table") + 1] == "correct the standoff"
+
+
+@pytest.mark.parametrize("error", [
+    [0.1, 0.0],  # not [dx, dy, dyaw]
+    [-0.20, 0.20, 0.0],  # 0.28 m: beyond Nav2's xy goal tolerance it stands in for
+    [0.0, 0.0, 0.2],  # beyond Nav2's yaw goal tolerance
+    [0.15, 0.0, 0.0],  # at or past the pick approach: the base would drive into the table
+])
+def test_bad_approach_error_fails_before_any_wait(recorded, monkeypatch, error):
+    node, calls = recorded(approach_error=error)
+    monkeypatch.setattr(node, "_wait_servers", lambda: pytest.fail("waited"))
+
+    with pytest.raises(ValueError, match="approach_error"):
+        node.run()
+    assert calls == []
+
+
+@pytest.mark.parametrize("key", ["grasp_tcp", "hover_tcp"])
+def test_tcp_parameters_must_be_x_and_z(recorded, key):
+    node, _ = recorded(**{key: [0.43, 0.0, 0.87]})
+
+    with pytest.raises(ValueError, match=key):
+        node.transfer_plan()
+
+
+@pytest.mark.parametrize("scene", sorted(SCENES))
+def test_plan_carries_the_grasp_target_and_the_hover_height(recorded, scene):
+    node, _ = recorded(scene)
+    cfg = SCENES[scene]
+
+    plan = node.transfer_plan()
+
+    assert plan.grasp_target == pytest.approx(
+        (cfg["base_approach_x"] + cfg["grasp_tcp"][0], 0.0, cfg["grasp_tcp"][1]))
+    assert plan.hover_tcp_z == cfg["hover_tcp"][1]
+    assert plan.pick_start == plan.pick_standoff  # no error by default
+
+
+def test_approach_only_sets_the_object_back_and_ends_away_from_the_table(recorded):
+    node, calls = recorded(approach_only=True)
+    node.run()
+
+    assert _captions(node) == APPROACH_ONLY_CAPTIONS
+    plan = node.transfer_plan()
+    arm = {label: value for kind, label, value in calls if kind == "arm"}
+    assert arm["set down"] == plan.grasp
+    (back_off,) = [value for kind, label, value in calls if label == "back off"]
+    assert back_off == (plan.pick_standoff, demo.BASE_APPROACH_SPEED_MPS)
+    events = [(kind, label) for kind, label, _ in calls if kind in ("grasp", "gripper")]
+    assert events[-3:] == [("gripper", "close"), ("gripper", "open"), ("grasp", False)]
+
+
+def _executing_with_log(recorded, monkeypatch, tcp, clock=(100.0, 107.43), **parameters):
+    """Return an executing recorded node whose TCP lookup gives `tcp`; logs join its calls."""
+    node, calls = recorded(execute=True, **parameters)
+    times = iter(clock)
+    monkeypatch.setattr(node, "_clock_sec", lambda: next(times))
+    monkeypatch.setattr(node, "_tcp_in_odom", lambda: tcp)
+    monkeypatch.setattr(node, "_odom_pose", lambda: (0.5349, 0.0, math.radians(0.2)))
+    logger = node.get_logger()
+    monkeypatch.setattr(node, "get_logger", lambda: SimpleNamespace(
+        info=lambda msg: calls.append(("log", msg, None)),
+        warn=lambda msg: calls.append(("warn", msg, None)), error=logger.error))
+    return node, calls
+
+
+def test_the_approach_result_is_logged_between_attach_and_close(recorded, monkeypatch):
+    node, calls = _executing_with_log(recorded, monkeypatch, (0.9431, 0.0002, 0.8418))
+    node.run()
+
+    events = [(kind, label) for kind, label, _ in calls if kind in ("grasp", "gripper", "log")]
+    results = [label for kind, label in events if label_is_result(kind, label)]
+    assert results == [
+        "approach result: mode=sequential time=7.4 s tcp offset=(-6.9, +0.2, -0.2) mm "
+        "yaw=+0.2 deg aligned=yes"
+    ]
+    at = events.index(("log", results[0]))
+    assert events[at - 1] == ("grasp", True) and events[at + 1] == ("gripper", "close")
+
+
+def label_is_result(kind, label):
+    return kind == "log" and label.startswith("approach result:")
+
+
+def test_a_failed_tcp_lookup_warns_and_does_not_fail_the_pick(recorded, monkeypatch):
+    node, calls = _executing_with_log(recorded, monkeypatch, None)
+
+    node.run()
+
+    assert any(label_is_result(kind, label) and "tcp offset=n/a" in label
+               for kind, label, _ in calls)
+    assert ("gripper", "close", None) in calls  # the pick went on
+
+
+def test_tcp_lookup_without_tf_returns_none_and_warns(make_node, monkeypatch):
+    node = make_node(execute=True)
+    monkeypatch.setattr(demo, "TF_TIMEOUT_SEC", 0.05)
+    warnings = []
+    logger = node.get_logger()
+    monkeypatch.setattr(node, "get_logger", lambda: SimpleNamespace(
+        info=logger.info, warn=warnings.append, error=logger.error))
+
+    assert node._tcp_in_odom() is None
+    assert len(warnings) == 1 and "piper_tcp" in warnings[0]
+
+
+@pytest.mark.parametrize("approach_only", [False, True])
+def test_plan_only_with_an_error_commands_nothing(make_node, monkeypatch, approach_only):
+    node = make_node(execute=False, approach_error=[-0.08, 0.06, 0.07],
+                     approach_only=approach_only)
+    sent = []
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("plan-only mode must not command or measure anything")
+
+    monkeypatch.setattr(node, "_wait_servers", lambda: None)
+    monkeypatch.setattr(node, "_wait_for_odom_pose", lambda: None)
+    monkeypatch.setattr(node, "_cmd_vel", SimpleNamespace(publish=sent.append))
+    monkeypatch.setattr(node._grasp, "call_async", forbidden)
+    monkeypatch.setattr(node._gripper, "send_goal_async", forbidden)
+    monkeypatch.setattr(node, "_tcp_in_odom", forbidden)
+    monkeypatch.setattr(node, "move_to_joint_state", lambda label, q: True)
+
+    node.run()
+
+    assert sent == []
+
+
+@pytest.mark.parametrize("error", [[math.nan, 0.0, 0.0], [0.0, math.inf, 0.0]])
+def test_non_finite_approach_error_is_rejected(error):
+    with pytest.raises(ValueError, match="approach_error"):
+        demo.check_approach_error(error, 0.15)
+
+
+def test_non_finite_tcp_is_rejected():
+    with pytest.raises(ValueError, match="grasp_tcp"):
+        demo.tcp_xz("grasp_tcp", [0.43, math.nan])
+
+
+def test_a_stale_tcp_transform_warns(make_node, monkeypatch):
+    from geometry_msgs.msg import TransformStamped
+
+    node = make_node(execute=True)
+    old = TransformStamped()
+    old.header.stamp.sec = 100  # node clock (wall time here) is decades later
+    old.transform.translation.x = 0.9
+    monkeypatch.setattr(node, "_tf_buffer", SimpleNamespace(
+        lookup_transform=lambda *_args: old))
+    warnings = []
+    logger = node.get_logger()
+    monkeypatch.setattr(node, "get_logger", lambda: SimpleNamespace(
+        info=logger.info, warn=warnings.append, error=logger.error))
+
+    assert node._tcp_in_odom() == (0.9, 0.0, 0.0)
+    assert len(warnings) == 1 and "old" in warnings[0]

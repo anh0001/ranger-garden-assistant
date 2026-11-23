@@ -16,6 +16,8 @@ reach target from the target_x/y/z/yaw arguments: the one source of the
 target for the demo and the video's marker.
 """
 
+from typing import Optional
+
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
@@ -64,14 +66,15 @@ def target_position() -> ParameterValue:
     )
 
 
-def mpc_node(use_sim_time) -> Node:
-    """Return the whole_body_mpc node."""
+def mpc_node(use_sim_time, overrides: Optional[dict] = None, condition=None) -> Node:
+    """Return the whole_body_mpc node; `overrides` take precedence over config/wbmpc.yaml."""
     return Node(
         package="ranger_sim",
         executable="whole_body_mpc.py",
         name=MPC_NODE_NAME,
         output="screen",
-        parameters=[config_file(), {"use_sim_time": use_sim_time}],
+        parameters=[config_file(), {"use_sim_time": use_sim_time, **(overrides or {})}],
+        condition=condition,
     )
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Record the pick-and-place demo to an MP4 against an already-running sim.
 
 Prereq: `ros2 launch ranger_sim sim_bringup.launch.py` is up (headless is
@@ -8,6 +8,11 @@ fine, but the cameras need GPU rendering like the robot's own sensors).
   ros2 launch ranger_sim record_pick_place_video.launch.py
   ros2 launch ranger_sim record_pick_place_video.launch.py output_path:=/tmp/demo.mp4
   ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
+  ros2 launch ranger_sim record_pick_place_video.launch.py approach:=mpc \
+      approach_error:="[-0.08, 0.06, 0.07]"     # sim_bringup handover_gate:=true
+
+approach, approach_error and approach_only are those of
+pick_place_demo.launch.py (launch/pick_place_nodes.py, docs/sim_wbmpc_pick.md).
 
 Spawns the scene's static camera rig (models/video_rig*.sdf: one wide
 camera), bridges it, starts record_demo_video.py, which draws the robot's
@@ -40,9 +45,10 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 _spec = importlib.util.spec_from_file_location(
-    "pick_place_scenes", Path(__file__).with_name("pick_place_scenes.py"))
-scenes = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(scenes)
+    "pick_place_nodes", Path(__file__).with_name("pick_place_nodes.py"))
+nodes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(nodes)
+scenes = nodes.scenes
 
 # Must equal READY_MARKER in scripts/record_demo_video.py (asserted by
 # test/test_video_rig_launch.py).
@@ -123,43 +129,22 @@ def generate_launch_description():
             "first_frame_timeout_sec": ParameterValue(
                 LaunchConfiguration("first_frame_timeout"), value_type=float
             ),
+            "title": ParameterValue(nodes.video_title(), value_type=str),
             "use_sim_time": True,
         }],
     )
-    demo = Node(
-        package="ranger_sim",
-        executable="pick_place_demo.py",
-        name="pick_place_demo",
-        output="screen",
-        parameters=[{
-            "execute": True,
-            "object_name": scenes.from_scene(scene, "object_name", str),
-            "base_approach_x": scenes.from_scene(scene, "base_approach_x", float),
-            "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
-            "hover_joints": scenes.from_scene(scene, "hover_joints"),
-            "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
-            "place_hover_joints": scenes.from_scene(scene, "place_hover_joints"),
-            "place_grasp_joints": scenes.from_scene(scene, "place_grasp_joints"),
-            "standoff_m": scenes.from_scene(scene, "standoff_m", float),
-            "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
-            "place_route": scenes.from_scene(scene, "place_route"),
-            "use_sim_time": True,
-        }],
-    )
+    # The demo of the chosen approach (and, for mpc, whole_body_mpc): all
+    # of them move the robot, so all of them wait for the first frame.
+    movers = nodes.pick_place_nodes(scene, True, True)
 
-    gate = make_demo_gate([LogInfo(msg="first camera frame recorded; starting the demo"), demo])
+    gate = make_demo_gate(
+        [LogInfo(msg="first camera frame recorded; starting the demo"), *movers])
     start_demo_on_first_frame = RegisterEventHandler(
         OnProcessIO(target_action=recorder, on_stdout=gate, on_stderr=gate)
     )
-    stop_when_demo_exits = RegisterEventHandler(
-        OnProcessExit(
-            target_action=demo,
-            on_exit=[
-                LogInfo(msg="demo finished; closing the video"),
-                EmitEvent(event=Shutdown(reason="pick_place_demo finished")),
-            ],
-        )
-    )
+    # The demo (not whole_body_mpc, which never exits) ends the video.
+    stop_when_demo_exits = nodes.end_with_the_demo(
+        movers, "demo finished; closing the video")
     stop_when_recorder_exits = RegisterEventHandler(
         OnProcessExit(
             target_action=recorder,
@@ -168,12 +153,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription(
-        args + [
+        args + nodes.approach_arguments() + [
             spawn_rig,
             rig_bridge,
             recorder,
             start_demo_on_first_frame,
-            stop_when_demo_exits,
+            *stop_when_demo_exits,
             stop_when_recorder_exits,
         ]
     )

@@ -83,9 +83,11 @@ def test_scene_numbers_are_floats(name):
     cfg = SCENES[name]
     values = [cfg["base_approach_x"], cfg["gripper_closed"], *cfg["hover_joints"],
               *cfg["grasp_joints"], cfg["standoff_m"], *cfg["place_base_pose"],
-              *cfg["place_route"]]
+              *cfg["place_route"], *cfg["grasp_tcp"], *cfg["hover_tcp"], *cfg["mpc_base_box"]]
     assert all(isinstance(v, float) for v in values)
     assert len(cfg["hover_joints"]) == len(cfg["grasp_joints"]) == 6
+    assert len(cfg["grasp_tcp"]) == len(cfg["hover_tcp"]) == 2
+    assert len(cfg["mpc_base_box"]) == 4
 
 
 @pytest.mark.parametrize("name", sorted(SCENES))
@@ -107,7 +109,8 @@ def test_place_surface_is_a_world_model(name):
     assert any(c.get("name") == "top_collision" for c in surface[0].iter("collision"))
 
 
-@pytest.mark.parametrize("key", ["rig_file", "place_route"])
+@pytest.mark.parametrize(
+    "key", ["rig_file", "place_route", "grasp_tcp", "hover_tcp", "mpc_base_box"])
 def test_load_scenes_rejects_a_scene_without_a_required_key(tmp_path, key):
     broken = {name: dict(cfg) for name, cfg in SCENES.items()}
     del broken["garden"][key]
@@ -115,6 +118,27 @@ def test_load_scenes_rejects_a_scene_without_a_required_key(tmp_path, key):
     path.write_text(yaml.safe_dump(broken))
 
     with pytest.raises(ValueError, match=key):
+        scenes.load_scenes(path)
+
+
+@pytest.mark.parametrize("key, bad", [
+    ("grasp_tcp", [0.43]),
+    ("grasp_tcp", [0.43, 1]),
+    ("hover_tcp", "0.43 0.935"),
+    ("mpc_base_box", [-0.4, -0.2, 0.52]),
+    ("mpc_base_box", [-0.4, -0.2, 0.52, 0]),
+    ("mpc_base_box", [0.52, -0.2, -0.4, 0.3]),
+    ("mpc_base_box", [-0.4, -0.2, 0.60, 0.3]),  # x_max past the garden approach (0.52)
+    ("grasp_tcp", [0.43, float("nan")]),
+], ids=["tcp-short", "tcp-int", "tcp-string", "box-short", "box-int", "box-inverted",
+        "box-past-the-approach", "tcp-nan"])
+def test_load_scenes_rejects_a_bad_tcp_or_base_box(tmp_path, key, bad):
+    broken = {name: dict(cfg) for name, cfg in SCENES.items()}
+    broken["garden"][key] = bad
+    path = tmp_path / "scenes.yaml"
+    path.write_text(yaml.safe_dump(broken))
+
+    with pytest.raises(ValueError, match=f"garden.*{key}"):
         scenes.load_scenes(path)
 
 
@@ -198,6 +222,7 @@ def test_scene_value_of_an_unknown_key_is_an_error():
 DEMO_SCENE_PARAMETERS = {
     "object_name", "base_approach_x", "gripper_closed", "hover_joints", "grasp_joints",
     "place_hover_joints", "place_grasp_joints", "standoff_m", "place_base_pose", "place_route",
+    "grasp_tcp", "hover_tcp",
 }
 
 

@@ -766,6 +766,59 @@ def test_base_clears_the_surface_it_drives_up_to(robot, scene_cfg, ground, which
             )
 
 
+# ---- whole-body MPC pick (scene keys grasp_tcp, hover_tcp, mpc_base_box) ----
+
+# The scene's [x, z] TCP keys must be the FK of their waypoints to this much.
+TCP_KEY_TOLERANCE_M = 0.0005
+MPC_BOX_SAMPLES = 5  # per box axis, corners and edges included
+# The MPC only translates the base: it keeps the yaw the base arrived with.
+# A coarse stop leaves it within Nav2's yaw_goal_tolerance (config/nav2_sim.yaml).
+MPC_BOX_YAWS_RAD = (-0.10, 0.0, 0.10)
+
+
+@pytest.mark.parametrize("key, waypoint", [("grasp_tcp", "grasp_joints"),
+                                           ("hover_tcp", "hover_joints")])
+def test_tcp_keys_are_the_fk_of_their_waypoints(robot, scene_cfg, key, waypoint):
+    # The MPC pick aims at these; the scripted pick reaches them with the joints.
+    x, y, z = _fk(robot, "piper_tcp", getattr(scene_cfg, waypoint))[:3, 3]
+    tcp_x, tcp_z = getattr(scene_cfg, key)
+
+    assert abs(tcp_x - x) <= TCP_KEY_TOLERANCE_M
+    assert abs(tcp_z - z) <= TCP_KEY_TOLERANCE_M
+    assert abs(y) <= TCP_KEY_TOLERANCE_M
+
+
+def test_mpc_base_box_holds_the_standoff_and_the_origin(scene_cfg):
+    x_min, y_min, x_max, y_max = scene_cfg.mpc_base_box
+    standoff_x = scene_cfg.base_approach_x - scene_cfg.standoff_m
+
+    assert x_max <= scene_cfg.base_approach_x  # never closer to the table than the pick
+    assert x_min <= standoff_x <= x_max and y_min <= 0.0 <= y_max
+    assert x_min <= 0.0  # the spawn pose: a reach from there stays legal
+
+
+@pytest.mark.parametrize("yaw", MPC_BOX_YAWS_RAD)
+def test_base_anywhere_in_the_mpc_box_clears_the_pick_table(robot, scene_cfg, ground, yaw):
+    # Whatever the MPC does with the base inside its box, every base
+    # collision keeps BASE_CLEARANCE_M to every collision box of the table.
+    root = _world_root(scene_cfg.world_file)
+    x_min, y_min, x_max, y_max = scene_cfg.mpc_base_box
+    parts = _base_parts(robot)
+    tables = _model_boxes(root, "table")
+    for x, y in itertools.product(np.linspace(x_min, x_max, MPC_BOX_SAMPLES),
+                                  np.linspace(y_min, y_max, MPC_BOX_SAMPLES)):
+        base = _tf((x, y, ground), (0.0, 0.0, yaw))
+        for part, points in parts.items():
+            world = base @ np.c_[points, np.ones(len(points))].T
+            for box, to_box, half in tables:
+                local = (to_box @ world)[:3]
+                gaps = np.maximum(local.min(axis=1) - half, -half - local.max(axis=1))
+                assert gaps.max() >= BASE_CLEARANCE_M, (
+                    f"base at ({x:.3f}, {y:.3f}, {yaw:+.2f}): {part} {gaps.max():.3f} m "
+                    f"from table/{box}"
+                )
+
+
 def test_house_place_spot_is_clear_of_the_cooktop(robot):
     cfg = SimpleNamespace(name="small_house", **SCENES["small_house"])
     root = _world_root(cfg.world_file)

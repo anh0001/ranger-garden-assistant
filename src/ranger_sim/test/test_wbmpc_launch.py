@@ -466,3 +466,148 @@ def test_marker_is_spawned_at_the_target_in_world_z():
     position = [float(cmd[cmd.index(flag) + 1]) for flag in ("-x", "-y", "-z")]
     assert position == pytest.approx([TARGET[0], TARGET[1], TARGET[2] + FOOTPRINT_HEIGHT_M])
     assert cmd[cmd.index("-file") + 1].endswith("models/wbmpc_target.sdf")
+
+
+# ---- whole-body MPC pick in the pick-and-place launches (docs/sim_wbmpc_pick.md) ----
+
+PICK_LAUNCHES = ("pick_place_demo.launch.py", "record_pick_place_video.launch.py")
+DEMO_EXECUTABLES = {"pick_place_demo.py", "wbmpc_pick_place_demo.py"}
+MOVERS = DEMO_EXECUTABLES | {"whole_body_mpc.py"}
+MPC_PICK_POSITION_TOLERANCE_M = 0.003  # the plan's spike: 2 mm left one start short
+
+
+def _pick_entities(launch_name, monkeypatch=None):
+    """Every entity of `launch_name`, the record launch's first-frame actions included."""
+    module = _load(launch_name.replace(".", "_"), PKG / "launch" / launch_name)
+    gated = []
+    if monkeypatch is not None and hasattr(module, "make_demo_gate"):
+        monkeypatch.setattr(module, "make_demo_gate", lambda actions: gated.extend(actions)
+                            or (lambda event: None))
+    return [*module.generate_launch_description().entities, *gated]
+
+
+def _running(entities, context):
+    """Return the executables of the Nodes among `entities` whose condition holds."""
+    return sorted(
+        e.node_executable for e in entities
+        if isinstance(e, Node) and (e.condition is None or e.condition.evaluate(context))
+    )
+
+
+@pytest.mark.parametrize("launch_name", PICK_LAUNCHES)
+def test_pick_launches_declare_the_approach_arguments(launch_name):
+    entities = _entities(launch_name)
+    defaults = _defaults(entities)
+
+    assert defaults["approach"] == "sequential"
+    assert _argument(entities, "approach").choices == ["sequential", "mpc"]
+    assert defaults["approach_error"] == "[0.0, 0.0, 0.0]"
+    assert defaults["approach_only"] == "false"
+
+
+@pytest.mark.parametrize("launch_name", PICK_LAUNCHES)
+def test_the_default_approach_runs_only_the_scripted_demo(launch_name, monkeypatch):
+    entities = _pick_entities(launch_name, monkeypatch)
+    context = _context(**_defaults(entities))
+
+    assert set(_running(entities, context)) & MOVERS == {"pick_place_demo.py"}
+
+
+@pytest.mark.parametrize("launch_name", PICK_LAUNCHES)
+def test_the_mpc_approach_runs_the_mpc_demo_and_the_mpc(launch_name, monkeypatch):
+    entities = _pick_entities(launch_name, monkeypatch)
+    context = _context(**{**_defaults(entities), "approach": "mpc"})
+
+    assert set(_running(entities, context)) & MOVERS == {
+        "wbmpc_pick_place_demo.py", "whole_body_mpc.py"}
+
+
+@pytest.mark.parametrize("scene", sorted(SCENES))
+def test_the_mpc_gets_the_scenes_pick_posture_box_and_tolerance(scene):
+    entities = _entities("pick_place_demo.launch.py")
+    context = _context(**{**_defaults(entities), "approach": "mpc", "scene": scene})
+
+    params = _evaluated(_node(entities, "whole_body_mpc.py"), context)
+
+    assert params["q_nominal"] == SCENES[scene]["grasp_joints"]
+    assert params["base_box"] == SCENES[scene]["mpc_base_box"]
+    assert params["position_tolerance"] == MPC_PICK_POSITION_TOLERANCE_M
+    assert _node(entities, "whole_body_mpc.py")._Node__node_name == "whole_body_mpc"
+
+
+def test_both_demo_nodes_are_named_for_the_video_captions():
+    entities = _entities("pick_place_demo.launch.py")
+
+    for executable in DEMO_EXECUTABLES:
+        assert _node(entities, executable)._Node__node_name == "pick_place_demo"
+
+
+@pytest.mark.parametrize("executable", sorted(DEMO_EXECUTABLES))
+def test_demo_nodes_get_the_approach_parameters_typed(executable):
+    entities = _entities("pick_place_demo.launch.py")
+    context = _context(**{**_defaults(entities), "approach_error": "[0, 0.1, -0.05]",
+                          "approach_only": "true", "execute": "true"})
+
+    params = _evaluated(_node(entities, executable), context)
+
+    assert params["approach_error"] == [0.0, 0.1, -0.05]
+    assert all(isinstance(v, float) for v in params["approach_error"])
+    assert params["approach_only"] is True
+    assert params["execute"] is True
+    assert params["grasp_tcp"] == SCENES["small_house"]["grasp_tcp"]
+    assert params["hover_tcp"] == SCENES["small_house"]["hover_tcp"]
+
+
+@pytest.mark.parametrize("approach", ["sequential", "mpc"])
+def test_record_launch_starts_nothing_that_moves_before_the_first_frame(approach):
+    entities = _entities("record_pick_place_video.launch.py")
+    context = _context(**{**_defaults(entities), "approach": approach})
+
+    assert not set(_running(entities, context)) & MOVERS
+
+
+def test_record_launch_gates_every_mover_and_ends_with_either_demo(monkeypatch):
+    from launch.event_handlers import OnProcessExit
+
+    module = _load("record_pick_place_video_launch", PKG / "launch" /
+                   "record_pick_place_video.launch.py")
+    gated = []
+    monkeypatch.setattr(module, "make_demo_gate",
+                        lambda actions: gated.extend(actions) or (lambda event: None))
+    entities = module.generate_launch_description().entities
+    exits = [e.event_handler for e in entities if isinstance(e, RegisterEventHandler)
+             and isinstance(e.event_handler, OnProcessExit)]
+
+    assert {e.node_executable for e in gated if isinstance(e, Node)} == MOVERS
+    ended_by = {h._OnActionEventBase__action_matcher.node_executable for h in exits
+                if isinstance(h._OnActionEventBase__action_matcher, Node)}
+    assert DEMO_EXECUTABLES <= ended_by
+
+
+@pytest.mark.parametrize("approach, mpc_in_title", [("mpc", True), ("sequential", False)])
+def test_pick_video_title_names_the_mpc_pick(approach, mpc_in_title):
+    entities = _entities("record_pick_place_video.launch.py")
+    context = _context(**{**_defaults(entities), "approach": approach})
+
+    title = _evaluated(_node(entities, "record_demo_video.py"), context)["title"]
+
+    assert "pick & place" in title
+    assert ("whole-body MPC" in title) is mpc_in_title
+
+
+def test_the_sequential_video_keeps_the_recorders_default_title():
+    nodes = _load("pick_place_nodes", PKG / "launch" / "pick_place_nodes.py")
+
+    assert nodes.VIDEO_TITLE == _recorder().DEFAULT_TITLE
+
+
+def test_the_demo_launch_ends_with_either_demo():
+    # whole_body_mpc spins forever: without this, approach:=mpc never returns.
+    from launch.event_handlers import OnProcessExit
+
+    entities = _entities("pick_place_demo.launch.py")
+    exits = [e.event_handler for e in entities if isinstance(e, RegisterEventHandler)
+             and isinstance(e.event_handler, OnProcessExit)]
+
+    ended_by = {h._OnActionEventBase__action_matcher.node_executable for h in exits}
+    assert ended_by == DEMO_EXECUTABLES

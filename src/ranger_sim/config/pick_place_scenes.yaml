@@ -22,6 +22,12 @@
 #   place_grasp_joints        optional: sets the object down on the place surface. Both default to
 #                             hover_joints/grasp_joints, for a surface as high as the pick table; the
 #                             object then lands as far ahead of the base as it was picked
+#   grasp_tcp / hover_tcp     [x, z] (m) of the TCP in base_footprint at grasp_joints / hover_joints
+#                             (y = 0): the FK of those joints. The whole-body MPC pick
+#                             (approach:=mpc) aims at them instead of playing the joints back
+#   mpc_base_box              [x_min, y_min, x_max, y_max] (m, odom) the whole-body MPC keeps the base
+#                             in during the pick: x_max at most base_approach_x, and anywhere in it, at
+#                             +-0.10 rad of yaw, the base keeps 3 cm to every collision box of the table
 # Base poses are in the odom frame, which is the world frame: the robot spawns at the origin
 # facing +x and the sim odometry has no noise.
 garden:
@@ -39,6 +45,11 @@ garden:
   place_base_pose: [0.0, 1.07, 1.5708]
   place_route: [0.0, 0.0, 0.0,  0.0, 0.0, 1.5708]      # back to the origin, turn left
   place_surface: table_b
+  grasp_tcp: [0.430, 0.842]
+  hover_tcp: [0.430, 0.935]
+  # x_max 0.50, not the approach's 0.52: the table's front legs stand just behind its edge,
+  # and at 0.52 with |y| >= 0.15 and 0.1 rad of yaw the lidar comes within 1.1 cm of one.
+  mpc_base_box: [-0.40, -0.30, 0.50, 0.30]
 small_house:
   world_file: small_house_world.sdf
   world_name: small_house
@@ -68,3 +79,7 @@ small_house:
   # the pick's 9.1: joint 5 reaches its 1.22 rad limit near link6 z 1.05.
   place_grasp_joints: [0.0, 1.221, -1.766, 0.0, 0.632, 0.0]   # TCP (0.510, 0, 0.974)
   place_hover_joints: [0.0, 1.455, -2.339, 0.0, 0.971, 0.0]   # TCP (0.510, 0, 1.034)
+  grasp_tcp: [0.430, 0.871]
+  hover_tcp: [0.430, 0.962]
+  # The box of config/wbmpc.yaml: y >= -0.20 keeps the base clear of ChairA_01_001 at (0.50, -0.86).
+  mpc_base_box: [-0.40, -0.20, 0.52, 0.30]

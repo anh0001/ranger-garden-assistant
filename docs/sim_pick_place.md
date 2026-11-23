@@ -201,6 +201,12 @@ it looks 30° down along the approach: optical axis (0.86, 0.06, −0.51) in
   (`launch/pick_place_scenes.py` `OPTIONAL_KEYS`), which set the object down
   on a surface as high as the pick table, as far ahead of the base as it
   was picked. `load_scenes` rejects one that is not 6 floats.
+- **Whole-body MPC pick keys.** Required per scene: `grasp_tcp` and
+  `hover_tcp`, the `[x, z]` of the TCP at the grasp and hover joints (their
+  FK), and `mpc_base_box`, where the MPC may move the base during the pick.
+  `pick_place_demo.launch.py approach:=mpc` does the pick with the
+  whole-body MPC; `approach_error` starts either pick from a wrong base pose.
+  See [sim_wbmpc_pick.md](sim_wbmpc_pick.md).
 - **Routes.**
   - garden: back to the origin, turn to 90°, drive to (0, 0.92), slide in to
     (0, 1.07). `table_b` is a copy of `table` at (0, 1.75), so the cup is
@@ -524,6 +530,10 @@ ros2 launch ranger_sim record_pick_place_video.launch.py scene:=garden
 - `src/ranger_sim/config/pick_place_scenes.yaml`,
   `src/ranger_sim/launch/pick_place_scenes.py` — scenes and the launch
   helper that reads them (`SceneValue`, `from_scene`, `OPTIONAL_KEYS`)
+- `src/ranger_sim/launch/pick_place_nodes.py`,
+  `src/ranger_sim/scripts/wbmpc_pick_place_demo.py` — the demo nodes of both
+  pick-and-place launches and the whole-body MPC pick (`approach:=mpc`,
+  `approach_error`, `approach_only`), see [sim_wbmpc_pick.md](sim_wbmpc_pick.md)
 - `src/ranger_sim/tools/fetch_sim_assets.py`, `tools/sim_assets.yaml` —
   pinned third-party asset download (`models/third_party/`, git-ignored)
 - `src/ranger_sim/tools/generate_small_house_world.py`,

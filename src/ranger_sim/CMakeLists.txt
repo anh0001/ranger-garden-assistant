@@ -24,6 +24,7 @@ install(PROGRAMS
   scripts/mimic_joint_state_relay.py
   scripts/ranger_motion_adapter.py
   scripts/record_demo_video.py
+  scripts/wbmpc_pick_place_demo.py
   scripts/wbmpc_reach_demo.py
   scripts/whole_body_mpc.py
   DESTINATION lib/${PROJECT_NAME}
@@ -107,6 +108,9 @@ if(BUILD_TESTING)
     ENV ${RANGER_SIM_TEST_ENV})
   ament_add_pytest_test(test_wbmpc_reach_demo test/test_wbmpc_reach_demo.py
     ENV ${RANGER_SIM_TEST_ENV})
+  # Whole-body MPC pick in the pick-and-place demo (docs/sim_wbmpc_pick.md).
+  ament_add_pytest_test(test_wbmpc_pick_place_demo test/test_wbmpc_pick_place_demo.py
+    ENV ${RANGER_SIM_TEST_ENV})
 
   # Headless Gazebo bringup. Needs a GPU (gpu_lidar / camera sensors), so it
   # is skipped unless RANGER_SIM_GPU=1 is set in the environment.
@@ -114,6 +118,8 @@ if(BUILD_TESTING)
   add_launch_test(test/test_sim_smoke.py TIMEOUT 240 ENV ${RANGER_SIM_TEST_ENV})
   # Whole-body MPC reach in Gazebo (also needs casadi); RANGER_SIM_GPU=1 as above.
   add_launch_test(test/test_wbmpc_sim.py TIMEOUT 400 ENV ${RANGER_SIM_TEST_ENV})
+  # Whole-body MPC pick from a wrong standoff (needs the house assets too).
+  add_launch_test(test/test_wbmpc_pick_sim.py TIMEOUT 400 ENV ${RANGER_SIM_TEST_ENV})
 
   install(DIRECTORY test/
     DESTINATION share/${PROJECT_NAME}/test

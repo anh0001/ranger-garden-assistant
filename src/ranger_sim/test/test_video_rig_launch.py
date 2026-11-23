@@ -154,13 +154,17 @@ def test_launch_declares_its_arguments():
         "base_approach_x",
         "gripper_closed",
         "first_frame_timeout",
+        "approach",
+        "approach_error",
+        "approach_only",
     }
 
 
 def test_launch_does_not_start_the_demo_up_front():
     # The demo moves the arm; it may only start from the first-frame gate.
     executables = {e.node_executable for e in _entities() if isinstance(e, Node)}
-    assert "pick_place_demo.py" not in executables
+    assert not {"pick_place_demo.py", "wbmpc_pick_place_demo.py",
+                "whole_body_mpc.py"} & executables
     assert "record_demo_video.py" in executables
 
 

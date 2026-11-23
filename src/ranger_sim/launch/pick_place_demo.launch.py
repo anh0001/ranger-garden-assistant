@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Run the pick-and-place demo against an already-running sim.
 
 Prereq: `ros2 launch ranger_sim sim_bringup.launch.py` is up (Gazebo +
@@ -12,6 +12,13 @@ Safe, validate planning only (no motion):
 Actually run it in Gazebo (drives base + moves arm + gripper + grasp):
   ros2 launch ranger_sim pick_place_demo.launch.py execute:=true
   ros2 launch ranger_sim pick_place_demo.launch.py scene:=garden execute:=true
+
+The pick done by the whole-body MPC instead (docs/sim_wbmpc_pick.md; the
+sim needs the gate: sim_bringup.launch.py handover_gate:=true), and the
+comparison runs from a deliberately wrong standoff:
+  ros2 launch ranger_sim pick_place_demo.launch.py execute:=true approach:=mpc
+  ros2 launch ranger_sim pick_place_demo.launch.py execute:=true approach:=mpc \
+      approach_only:=true approach_error:="[-0.08, 0.06, 0.07]"
 
 The demo picks the object at the scene's table, carries it along the place
 route and sets it down at the place pose, then drives back (small_house:
@@ -29,12 +36,11 @@ from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
 
 _spec = importlib.util.spec_from_file_location(
-    "pick_place_scenes", Path(__file__).with_name("pick_place_scenes.py"))
-scenes = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(scenes)
+    "pick_place_nodes", Path(__file__).with_name("pick_place_nodes.py"))
+nodes = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(nodes)
 
 
 def generate_launch_description():
@@ -58,26 +64,11 @@ def generate_launch_description():
     ]
 
     # The grasp itself is served by grasp_manager (/grasp/set), started by
-    # sim_bringup / spawn_robot, so this launch only runs the demo node.
-    demo = Node(
-        package="ranger_sim",
-        executable="pick_place_demo.py",
-        name="pick_place_demo",
-        output="screen",
-        parameters=[{
-            "execute": LaunchConfiguration("execute"),
-            "object_name": scenes.from_scene(scene, "object_name", str),
-            "base_approach_x": scenes.from_scene(scene, "base_approach_x", float),
-            "gripper_closed": scenes.from_scene(scene, "gripper_closed", float),
-            "hover_joints": scenes.from_scene(scene, "hover_joints"),
-            "grasp_joints": scenes.from_scene(scene, "grasp_joints"),
-            "place_hover_joints": scenes.from_scene(scene, "place_hover_joints"),
-            "place_grasp_joints": scenes.from_scene(scene, "place_grasp_joints"),
-            "standoff_m": scenes.from_scene(scene, "standoff_m", float),
-            "place_base_pose": scenes.from_scene(scene, "place_base_pose"),
-            "place_route": scenes.from_scene(scene, "place_route"),
-            "use_sim_time": LaunchConfiguration("use_sim_time"),
-        }],
-    )
+    # sim_bringup / spawn_robot, so this launch only runs the demo node (and,
+    # for approach:=mpc, whole_body_mpc).
+    demo_nodes = nodes.pick_place_nodes(
+        scene, LaunchConfiguration("execute"), LaunchConfiguration("use_sim_time"))
 
-    return LaunchDescription(args + [demo])
+    return LaunchDescription(
+        args + nodes.approach_arguments() + demo_nodes + nodes.end_with_the_demo(demo_nodes)
+    )

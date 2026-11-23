@@ -555,3 +555,171 @@ def test_run_reports_whether_the_sequence_completed(recorded):
 
     assert done.run() is True
     assert failed.run() is False
+
+
+# ---- reach_pose and slide (the MPC pick's moving target) -------------------------
+
+START_POINT = (0.800, 0.0, 0.871)
+END_POINT = (0.815, 0.0, 0.871)
+
+
+@pytest.mark.parametrize("elapsed, expected", [
+    (0.0, START_POINT),
+    (0.075, (0.8075, 0.0, 0.871)),  # halfway at 0.1 m/s
+    (0.15, END_POINT),
+    (5.0, END_POINT),
+    (-1.0, START_POINT),  # a sim-time reset never moves the target backwards past the start
+])
+def test_slide_point_moves_along_the_line_and_stops_at_the_end(elapsed, expected):
+    assert demo.slide_point(START_POINT, END_POINT, 0.1, elapsed) == pytest.approx(expected)
+
+
+def test_slide_point_ends_exactly_at_the_end():
+    assert demo.slide_point(START_POINT, END_POINT, 0.1, 1.0) == END_POINT
+
+
+def test_a_zero_length_slide_is_at_its_end_at_once():
+    assert demo.slide_point(END_POINT, END_POINT, 0.03, 0.0) == END_POINT
+
+
+def test_the_node_name_can_be_given(make_node):
+    rclpy_node = demo.WbmpcReachDemo(node_name="pick_place_demo")
+    try:
+        assert rclpy_node.get_name() == "pick_place_demo"
+    finally:
+        rclpy_node.destroy_node()
+
+
+def _streaming(executing, monkeypatch, on_publish=None):
+    """Record the published targets; on_publish(points) may change the MPC state."""
+    points = []
+
+    def publish(msg):
+        p = msg.pose.position
+        points.append((p.x, p.y, p.z))
+        if on_publish is not None:
+            on_publish(points)
+
+    monkeypatch.setattr(executing, "_target_pub", SimpleNamespace(publish=publish))
+    monkeypatch.setattr(demo, "SLIDE_PERIOD_SEC", 0.02)
+    return points
+
+
+def test_reach_pose_publishes_the_pose_and_waits_for_reached(executing, monkeypatch):
+    sent = []
+
+    def publish(msg):
+        sent.append(msg)
+        executing._on_mpc_state(String(data="REACHED"))
+
+    monkeypatch.setattr(executing, "_target_pub", SimpleNamespace(publish=publish))
+
+    assert executing.reach_pose(END_POINT, 0.2, "MPC: pre-grasp")
+    p, o = sent[0].pose.position, sent[0].pose.orientation
+    assert (p.x, p.y, p.z) == END_POINT
+    assert (o.x, o.y, o.z, o.w) == pytest.approx(demo.level_quaternion(0.2))
+
+
+def test_slide_streams_advancing_targets_ending_exactly_at_the_end(executing, monkeypatch):
+    def reached_at_the_end(points):
+        state = "REACHED" if points[-1] == END_POINT else "TRACKING"
+        executing._on_mpc_state(String(data=state))
+
+    points = _streaming(executing, monkeypatch, reached_at_the_end)
+
+    assert executing.slide(START_POINT, END_POINT, 0.0, 0.1, "MPC: slide in")
+    xs = [x for x, _, _ in points]
+    assert len(points) >= 3, points
+    # The clock runs on between the start and the first target: microns.
+    assert xs == sorted(xs) and points[0] == pytest.approx(START_POINT, abs=1e-4)
+    assert points[-1] == END_POINT and points.count(END_POINT) == 1
+
+
+def test_slide_accepts_an_mpc_that_stays_reached_throughout(executing, monkeypatch):
+    # The MPC publishes its state on change only: if it is REACHED for every
+    # target of the slide it never says so again, and the slide must not wait.
+    executing._on_mpc_state(String(data="REACHED"))
+    _streaming(executing, monkeypatch)
+
+    assert executing.slide(START_POINT, END_POINT, 0.0, 0.1, "MPC: lift")
+
+
+def test_a_fault_during_the_slide_ends_it_at_once(executing, monkeypatch):
+    def fault_on_the_second(points):
+        if len(points) == 2:
+            executing._on_mpc_state(String(data="FAULT: command lag 0.2 rad"))
+
+    points = _streaming(executing, monkeypatch, fault_on_the_second)
+    begin = time.monotonic()
+
+    assert not executing.slide(START_POINT, (1.0, 0.0, 0.871), 0.0, 0.1, "MPC: slide in")
+    assert len(points) == 2
+    assert time.monotonic() - begin < 1.0
+
+
+def test_a_zero_length_slide_sends_one_target_then_waits(executing, monkeypatch):
+    points = _streaming(
+        executing, monkeypatch, lambda points: executing._on_mpc_state(String(data="REACHED")))
+
+    assert executing.slide(END_POINT, END_POINT, 0.0, 0.03, "MPC: slide in")
+    assert points == [END_POINT]
+
+
+def test_slide_gives_up_when_the_clock_stands_still(executing, monkeypatch):
+    # A paused sim: the node clock never reaches the next point.
+    _streaming(executing, monkeypatch)
+    monkeypatch.setattr(executing, "_clock_sec", lambda: 42.0)
+
+    assert not executing.slide(START_POINT, END_POINT, 0.0, 0.1, "MPC: slide in")
+
+
+def test_slide_speed_must_be_positive(executing):
+    with pytest.raises(ValueError, match="speed"):
+        executing.slide(START_POINT, END_POINT, 0.0, 0.0, "MPC: slide in")
+
+
+def test_plan_only_slide_and_reach_pose_publish_nothing(make_node, monkeypatch):
+    node = make_node(execute=False)
+    monkeypatch.setattr(node, "_target_pub",
+                        SimpleNamespace(publish=lambda msg: pytest.fail("published")))
+
+    assert node.slide(START_POINT, END_POINT, 0.0, 0.03, "MPC: slide in")
+    assert node.reach_pose(END_POINT, 0.0, "MPC: pre-grasp")
+
+
+def test_slide_settles_on_the_node_clock_not_the_wall_clock(make_node, monkeypatch):
+    # A slow sim (real-time factor 0.2): the MPC answers the end target only
+    # after two of its 50 ms ticks of sim time. Its REACHED from before the end
+    # target is stale (a REACHED is latched up to 3x the tolerance) and must
+    # not end the slide.
+    node = make_node(execute=True, reach_timeout=3.0)
+    monkeypatch.setattr(node, "_odom_pose", lambda: (0.3, 0.1, 0.0))
+    begin, end_sent = time.monotonic(), []
+
+    def sim_clock():
+        now = (time.monotonic() - begin) * 0.2
+        if end_sent:
+            since = now - end_sent[0]
+            node._mpc_state = ("REACHED" if since >= 0.2 else
+                               "TRACKING" if since >= 0.1 else node._mpc_state)
+        return now
+
+    def publish(msg):
+        p = msg.pose.position
+        if (p.x, p.y, p.z) == END_POINT and not end_sent:
+            end_sent.append(sim_clock())
+
+    monkeypatch.setattr(node, "_clock_sec", sim_clock)
+    monkeypatch.setattr(node, "_target_pub", SimpleNamespace(publish=publish))
+    monkeypatch.setattr(demo, "SLIDE_PERIOD_SEC", 0.02)
+    node._on_mpc_state(String(data="REACHED"))
+
+    assert node.slide(START_POINT, END_POINT, 0.0, 0.1, "MPC: slide in")
+    assert sim_clock() - end_sent[0] >= 0.2, "took the stale REACHED"
+
+
+def test_destroying_the_node_twice_is_harmless(make_node):
+    node = make_node()
+
+    node.destroy_node()
+    node.destroy_node()  # the fixture destroys it once more

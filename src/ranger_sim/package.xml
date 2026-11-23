@@ -28,6 +28,8 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
+  <!-- pick_place_demo.py: TCP in odom for the approach result line -->
+  <exec_depend>tf2_ros</exec_depend>
 
   <!-- Whole-body MPC handover (base_handover_gate.py, whole_body_mpc.py, wbmpc_reach_demo.py) -->
   <exec_depend>std_srvs</exec_depend>
