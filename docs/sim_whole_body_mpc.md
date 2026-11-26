@@ -48,6 +48,21 @@ wbmpc_reach_demo.launch.py execute:=true [use_nav:=true]
   received before the current owner took over does not count. With
   `handover_gate` unset (the default), the adapter reads `/cmd_vel` as before
   and no gate runs.
+
+  **Governed mode** (used by the handover baseline,
+  [sim_handover_baseline.md](sim_handover_baseline.md)): `~/set_governed`
+  (`std_srvs/SetBool`, true) makes `~/speed_scale` (`std_msgs/Float64`,
+  [0, 1]) a hard limit. Without a scale fresher than `speed_scale_timeout`
+  (0.5 s), or with a scale ≤ 0, the gate sends zeros in every mode.
+  Otherwise NAVIGATE clamps the linear speed to `nav_max_speed` (0.26 m/s,
+  Nav2's `vx_max`) × scale and scales the whole twist, rotation included, by
+  the same ratio; MANIPULATE caps at `manip_max_speed` × scale. It is a
+  clamp, not a multiplier: a twist already planned under the scaled bound
+  passes unchanged. Ungoverned (the default) the scale is ignored. The gate
+  lives as long as `sim_bringup`; if the governor died without releasing it,
+  the base stays stopped until
+  `ros2 service call /base_handover_gate/set_governed std_srvs/srv/SetBool "{data: false}"`
+  (this reaches the gate only, no hardware).
 - **`piper_arm_stream_controller`**
   (`forward_command_controller/ForwardCommandController`,
   `config/ros2_controllers_sim.yaml`) claims the same six position interfaces
@@ -68,6 +83,20 @@ wbmpc_reach_demo.launch.py execute:=true [use_nav:=true]
   Non-finite odom or joint samples are dropped, so they go stale, which is a
   fault. A target with a zero quaternion is ignored with a warning, and a new
   target always has to earn REACHED again.
+
+  Two runtime inputs serve a governor; a node that never receives them
+  behaves exactly as before. `~/speed_scale` (`std_msgs/Float64`) multiplies
+  the base and joint speed bounds of the OCP (a solver parameter: the problem
+  is not rebuilt), clamped to [0, 1], NaN = 0. Before the first message the
+  scale is 1.0; from the first message on, a scale older than
+  `speed_scale_timeout` (0.5 s) counts as 0. Under 0.05 the node does not
+  solve: state **PAUSED**, zero twist, `q_cmd` held, warm start dropped for
+  the resume; REACHED and FAULT keep their meaning and come first.
+  `~/base_box` (`std_msgs/Float64MultiArray`, `[x_min, y_min, x_max, y_max]`
+  in `odom`) replaces `base_box` while the node is not TRACKING, REACHED or
+  PAUSED; a malformed box is ignored with a warning. Under a scale of about
+  0.15 the base bound (0.10 × scale) reaches the 0.01 m/s deadband and the
+  base parks while the arm still moves.
 - **`wbmpc_reach_demo`** (`scripts/wbmpc_reach_demo.py`, a `PickPlaceDemo`
   subclass) runs the sequence. It hands over in order (gate, then arm, then
   target) and back in reverse. Whatever ends the run (a failed step, an error,
@@ -154,12 +183,14 @@ source of the target for the demo and the marker.
 |---|---|---|---|
 | `base_handover_gate` | `settle_sec`, `still_linear`, `still_angular` | 0.3 s, 0.005 m/s, 0.01 rad/s | still this long before the new owner gets the base |
 | | `manip_max_speed` | 0.15 m/s | ≥ hypot(0.10, 0.10): a legal MPC command is never scaled |
+| | `nav_max_speed`, `speed_scale_timeout` | 0.26 m/s, 0.5 s | governed mode only |
 | `whole_body_mpc` | `base_box` | `[-0.40, -0.20, 0.52, 0.30]` | x ≤ 0.52 keeps the base short of the table (the pick's `base_approach_x`); y ≥ −0.20 keeps it clear of `ChairA_01_001` |
 | | `rate`, `horizon`, `dt` | 20 Hz, 20, 0.1 s | |
 | | `base_speed`, `joint_speed` | 0.10 m/s, 0.6 rad/s | |
 | | `position_tolerance`, `angle_tolerance`, `reengage_factor` | 5 mm, 0.035 rad, 3 | REACHED latch |
 | | `base_deadband` | 0.01 m/s | |
 | | `odom_timeout`, `joint_timeout`, `max_command_lag` | 0.3 s, 0.3 s, 0.15 rad | faults |
+| | `speed_scale_timeout` | 0.5 s | after the first `~/speed_scale`, an older one is 0 (PAUSED) |
 | `wbmpc_reach_demo` | `nav_away_pose`, `nav_handover_pose` | `(-2, 0, π)`, `(0, 0, 0)` in `map` | goal types reported as reached in [Nav2 with the steering base](sim_pick_place.md#nav2-with-the-steering-base-observed-2026-11-21) |
 | | `nav_timeout`, `handover_timeout`, `reach_timeout`, `hold_sec` | 120, 10, 40, 2 s | |
 

@@ -17,6 +17,10 @@ base_handover_gate:
     # >= hypot(base_speed, base_speed) = 0.141 m/s of whole_body_mpc: a legal
     # MPC command is never scaled, only a misbehaving one.
     manip_max_speed: 0.15
+    # Governed mode only (~/set_governed, docs/sim_handover_baseline.md): NAVIGATE
+    # clamps the linear speed to nav_max_speed x scale; config/nav2_sim.yaml vx_max.
+    nav_max_speed: 0.26
+    speed_scale_timeout: 0.5 # s: governed, an older ~/speed_scale stops the base
 
 whole_body_mpc:
   ros__parameters:
@@ -37,6 +41,9 @@ whole_body_mpc:
     odom_timeout: 0.3        # s
     joint_timeout: 0.3       # s
     max_command_lag: 0.15    # rad, commanded vs measured joints
+    # s: after the first ~/speed_scale message an older scale counts as 0 (PAUSED);
+    # without any message the scale is 1.0 (docs/sim_handover_baseline.md).
+    speed_scale_timeout: 0.5
 
 wbmpc_reach_demo:
   ros__parameters:

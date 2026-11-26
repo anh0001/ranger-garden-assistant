@@ -350,3 +350,82 @@ def test_non_finite_inputs_fail_the_solve_without_raising(fresh_mpc, bad):
 def test_a_zero_quaternion_is_rejected():
     with pytest.raises(ValueError, match="quaternion"):
         core.quaternion_to_rotation(0.0, 0.0, 0.0, 0.0)
+
+
+# ---- speed scale (docs/sim_handover_baseline.md) ------------------------------------
+
+
+def _scaled_loop(mpc, model, scales, steps, solve_kwargs=None):
+    """
+    Run a closed loop from the origin with `scales(step)` as the speed scale.
+
+    Returns (inputs, solve results ok, last tracking error).
+    """
+    mpc.reset()
+    target = _target()
+    base, yaw = np.array([0.0, 0.0]), 0.0
+    q, u_prev = np.array(CARRY), np.zeros(core.NU)
+    inputs, oks, error = [], [], None
+    for step in range(steps):
+        solution = mpc.solve(base, yaw, q, target, u_prev, CARRY,
+                             core.effective_box(BOX, base), scales(step))
+        u = solution.u0
+        inputs.append(u.copy())
+        oks.append(solution.ok)
+        base = base + CONTROL_PERIOD_SEC * (_rz(yaw)[:2, :2] @ u[:2])
+        q = core.integrate_command(q, u[2:], CONTROL_PERIOD_SEC, model.lower, model.upper)
+        u_prev = u
+        error = core.tracking_error(*core.tcp_pose(model, base, yaw, q), target)
+        if error[0] < POSITION_TOLERANCE_M and error[1] < ANGLE_TOLERANCE_RAD:
+            break
+    return np.array(inputs), oks, error
+
+
+def test_scale_one_gives_exactly_the_unscaled_inputs(model, mpc):
+    unscaled = core.WholeBodyMpc(model, core.MpcConfig())
+    mpc.reset()
+    target = _target()
+    base, yaw = np.array([0.0, 0.0]), 0.0
+    q, u_prev = np.array(CARRY), np.zeros(core.NU)
+
+    for _ in range(60):
+        box = core.effective_box(BOX, base)
+        scaled = mpc.solve(base, yaw, q, target, u_prev, CARRY, box, 1.0)
+        plain = unscaled.solve(base, yaw, q, target, u_prev, CARRY, box)
+        np.testing.assert_allclose(scaled.u0, plain.u0, atol=1e-9)
+        u = plain.u0
+        base = base + CONTROL_PERIOD_SEC * u[:2]
+        q = core.integrate_command(q, u[2:], CONTROL_PERIOD_SEC, model.lower, model.upper)
+        u_prev = u
+
+
+@pytest.mark.parametrize("scale, steps", [(0.5, 300), (0.25, 500), (0.1, 900)])
+def test_scaled_bounds_hold_and_the_reach_still_converges(mpc, model, scale, steps):
+    config = core.MpcConfig()
+    joint_speed = np.minimum(model.velocity, config.joint_speed)
+
+    inputs, oks, (distance, angle) = _scaled_loop(mpc, model, lambda _: scale, steps)
+
+    assert all(oks)
+    assert np.all(np.abs(inputs[:, :2]) <= config.base_speed * scale + 1e-6)
+    assert np.all(np.abs(inputs[:, 2:]) <= joint_speed * scale + 1e-6)
+    assert distance < POSITION_TOLERANCE_M and angle < ANGLE_TOLERANCE_RAD
+
+
+def test_a_scale_change_mid_run_never_fails_a_solve(mpc, model):
+    def scales(step):
+        return 0.2 if 20 <= step < 60 else 1.0
+
+    inputs, oks, (distance, _) = _scaled_loop(mpc, model, scales, 300)
+
+    assert all(oks)
+    assert np.all(np.abs(inputs[20:60, :2]) <= core.MpcConfig().base_speed * 0.2 + 1e-6)
+    assert distance < POSITION_TOLERANCE_M
+
+
+def test_a_nan_scale_fails_the_solve_without_raising(fresh_mpc):
+    solution = fresh_mpc.solve((0.0, 0.0), 0.0, CARRY, _target(), np.zeros(8), CARRY, BOX,
+                               math.nan)
+
+    assert not solution.ok
+    np.testing.assert_array_equal(solution.u0, np.zeros(core.NU))

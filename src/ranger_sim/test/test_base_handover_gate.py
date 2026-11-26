@@ -10,6 +10,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.parameter import Parameter
+from std_msgs.msg import Float64
 from std_srvs.srv import SetBool
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "base_handover_gate.py"
@@ -319,6 +320,14 @@ class _Harness:
         request.data = manipulate
         return self.node._on_set_manipulate(request, SetBool.Response())
 
+    def govern(self, governed):
+        request = SetBool.Request()
+        request.data = governed
+        return self.node._on_set_governed(request, SetBool.Response())
+
+    def scale(self, value):
+        self.node._on_speed_scale(Float64(data=float(value)))
+
     def tick(self, advance_sec=TICK_SEC):
         self.clock[0] += advance_sec
         self.node._tick()
@@ -444,5 +453,148 @@ def test_node_warns_once_about_a_non_finite_twist(make_node):
     "name", ["publish_rate", "cmd_timeout", "odom_timeout", "settle_sec", "manip_max_speed"]
 )
 def test_node_rejects_non_positive_parameters(make_node, name):
+    with pytest.raises(ValueError, match=name):
+        make_node(**{name: 0.0})
+
+
+# ---- governed speed scale (docs/sim_handover_baseline.md) ---------------------------
+
+
+def _settled_in_manipulate(now=10.0):
+    gate = _gate()
+    gate.request(True)
+    return gate, _settle(gate, now)
+
+
+def test_select_without_a_scale_is_the_ungoverned_select():
+    gate, now = _gate(), 10.0
+    fast_manip = (0.3, 0.2, 0.4)
+    cases = [((NAV, now), None, now + 0.1), ((NAV, now), None, now + 1.0), (None, None, now)]
+    for nav, manip, at in cases:
+        assert gate.select(nav, manip, at, None) == gate.select(nav, manip, at)
+    gate.request(True)
+    assert gate.select((NAV, now), None, now, None) == gate.select((NAV, now), None, now)
+    gate, now = _settled_in_manipulate()
+    for manip in ((MANIP, now), (fast_manip, now), (MANIP, now - 1.0)):
+        assert gate.select(None, manip, now + 0.01, None) == gate.select(None, manip, now + 0.01)
+
+
+def test_a_zero_scale_stops_every_mode():
+    gate, now = _gate(), 10.0
+    assert gate.select((NAV, now), None, now, 0.0) == gate_mod.ZERO_TWIST
+    gate.request(True)
+    assert gate.select((NAV, now), (MANIP, now), now, 0.0) == gate_mod.ZERO_TWIST
+    gate, now = _settled_in_manipulate()
+    assert gate.select(None, (MANIP, now), now, 0.0) == gate_mod.ZERO_TWIST
+    assert gate.select(None, (MANIP, now), now, math.nan) == gate_mod.ZERO_TWIST
+
+
+def test_a_scaled_nav_twist_is_clamped_with_its_rotation():
+    gate, now = _gate(), 10.0
+
+    twist = gate.select(((0.26, 0.0, 0.5), now), None, now, 0.5)
+
+    assert twist == pytest.approx((0.13, 0.0, 0.25))
+
+
+def test_a_nav_twist_under_the_scaled_limit_passes_unchanged():
+    gate, now = _gate(), 10.0
+
+    assert gate.select(((0.1, 0.0, 0.3), now), None, now, 0.5) == (0.1, 0.0, 0.3)
+
+
+def test_a_pure_rotation_passes_any_positive_scale_and_stops_at_zero():
+    gate, now = _gate(), 10.0
+    turn = ((0.0, 0.0, 1.4), now)
+
+    assert gate.select(turn, None, now, 0.5) == (0.0, 0.0, 1.4)
+    assert gate.select(turn, None, now, 0.0) == gate_mod.ZERO_TWIST
+
+
+def test_a_manip_twist_planned_under_the_scaled_bound_passes_unchanged():
+    gate, now = _settled_in_manipulate()
+
+    assert gate.select(None, ((0.05, 0.05, 0.0), now), now, 0.5) == (0.05, 0.05, 0.0)
+
+
+def test_a_fast_manip_twist_is_capped_at_the_scaled_speed():
+    gate, now = _settled_in_manipulate()
+
+    vx, vy, _ = gate.select(None, ((0.3, 0.0, 0.0), now), now, 0.5)
+
+    assert (vx, vy) == pytest.approx((MANIP_MAX_SPEED_MPS * 0.5, 0.0))
+
+
+def test_the_nav_limit_must_be_positive():
+    with pytest.raises(ValueError):
+        gate_mod.HandoverGate(0.3, 0.005, 0.01, 0.5, 0.15, nav_max_speed_mps=0.0)
+
+
+def test_an_ungoverned_node_ignores_the_speed_scale(make_node):
+    sim = make_node()
+    sim.scale(0.0)
+    sim.nav(0.2, 0.0, 0.5)
+
+    assert sim.tick() == (0.2, 0.0, 0.5)
+
+
+def test_a_governed_node_without_a_scale_stops_and_warns_once(make_node):
+    sim = make_node()
+    response = sim.govern(True)
+    sim.nav(0.2, 0.0, 0.5)
+
+    first = sim.tick()
+    sim.nav(0.2, 0.0, 0.5)
+    second = sim.tick()
+
+    assert response.success and "governed" in response.message
+    assert first == second == (0.0, 0.0, 0.0)
+    assert len([w for w in sim.log.warnings if "set_governed" in w]) == 1
+
+
+def test_a_governed_node_with_a_fresh_full_scale_passes_nav(make_node):
+    sim = make_node()
+    sim.govern(True)
+    sim.scale(1.0)
+    sim.nav(0.2, 0.0, 0.5)
+
+    assert sim.tick() == (0.2, 0.0, 0.5)
+
+
+def test_a_governed_node_clamps_nav_by_the_scale(make_node):
+    sim = make_node()
+    sim.govern(True)
+    sim.scale(0.5)
+    sim.nav(0.26, 0.0, 0.5)
+
+    assert sim.tick() == pytest.approx((0.13, 0.0, 0.25))
+
+
+def test_a_stale_scale_stops_a_governed_node(make_node):
+    sim = make_node()
+    sim.govern(True)
+    sim.scale(1.0)
+
+    sim.nav(0.2)
+    sim.tick(advance_sec=0.6)
+
+    assert sim.twists[-1].linear.x == 0.0
+
+
+def test_ungoverning_restores_the_plain_gate(make_node):
+    sim = make_node()
+    sim.govern(True)
+    sim.nav(0.2)
+    sim.tick()
+
+    response = sim.govern(False)
+    sim.nav(0.2)
+
+    assert response.success and "ungoverned" in response.message
+    assert sim.tick() == (0.2, 0.0, 0.0)
+
+
+@pytest.mark.parametrize("name", ["nav_max_speed", "speed_scale_timeout"])
+def test_node_rejects_non_positive_governance_parameters(make_node, name):
     with pytest.raises(ValueError, match=name):
         make_node(**{name: 0.0})

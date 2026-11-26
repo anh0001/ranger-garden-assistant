@@ -19,7 +19,7 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
+from std_msgs.msg import Float64, Float64MultiArray, String
 
 pytest.importorskip("casadi")
 
@@ -117,6 +117,12 @@ class _Harness:
             self.odom()
             self.joints()
         self.node._tick()
+
+    def scale(self, value):
+        self.node._on_speed_scale(Float64(data=float(value)))
+
+    def box(self, values):
+        self.node._on_base_box(Float64MultiArray(data=[float(v) for v in values]))
 
     @property
     def state(self):
@@ -535,3 +541,147 @@ def test_main_without_casadi_exits_with_the_install_hint(monkeypatch):
         node_mod.main()
 
     assert "pip3 install --user casadi" in str(stopped.value.code)
+
+
+# ---- speed scale and runtime base box (docs/sim_handover_baseline.md) --------------------
+
+
+def _base_speeds(sim):
+    return [math.hypot(t.linear.x, t.linear.y) for t in sim.twists]
+
+
+def test_without_a_scale_message_the_commands_equal_a_full_scale(make_node):
+    plain, governed = make_node(), make_node()
+    plain.ready()
+    governed.ready()
+
+    for _ in range(5):
+        governed.scale(1.0)
+        plain.tick()
+        governed.tick()
+
+    assert plain.state == governed.state == "TRACKING"
+    np.testing.assert_allclose([(t.linear.x, t.linear.y) for t in plain.twists],
+                               [(t.linear.x, t.linear.y) for t in governed.twists], atol=1e-9)
+    np.testing.assert_allclose([list(a.data) for a in plain.arm],
+                               [list(a.data) for a in governed.arm], atol=1e-9)
+
+
+def test_without_a_scale_message_the_node_never_pauses(make_node):
+    sim = make_node()
+    sim.ready()
+
+    sim.tick(advance_sec=5.0)
+
+    assert sim.state == "TRACKING"
+
+
+def test_half_scale_halves_the_largest_base_command(make_node):
+    plain, half = make_node(), make_node()
+    plain.ready()
+    half.ready()
+    half.scale(0.5)
+
+    plain.tick()
+    half.tick()
+
+    largest = max(abs(plain.twists[-1].linear.x), abs(plain.twists[-1].linear.y))
+    scaled = max(abs(half.twists[-1].linear.x), abs(half.twists[-1].linear.y))
+    assert largest == pytest.approx(0.10, abs=1e-6)  # the unscaled bound
+    assert scaled == pytest.approx(0.5 * largest, abs=1e-6)
+
+
+@pytest.mark.parametrize("value", [0.0, 0.04, math.nan])
+def test_a_scale_under_the_pause_threshold_pauses_and_holds(make_node, value):
+    sim = make_node()
+    sim.ready()
+    sim.tick()
+    held = list(sim.arm[-1].data)
+    sim.scale(value)
+
+    sim.tick()
+    sim.tick()
+
+    assert sim.state == "PAUSED"
+    assert (sim.twists[-1].linear.x, sim.twists[-1].linear.y) == (0.0, 0.0)
+    assert list(sim.arm[-1].data) == pytest.approx(held)
+
+
+def test_a_stale_scale_pauses_and_a_fresh_one_resumes(make_node):
+    sim = make_node()
+    sim.ready()
+    sim.scale(1.0)
+    sim.tick()
+
+    sim.tick(advance_sec=0.6)  # older than speed_scale_timeout
+    stale = sim.state
+    sim.scale(1.0)
+    sim.tick()
+
+    assert stale == "PAUSED"
+    assert sim.state == "TRACKING"
+    assert len([w for w in sim.log.warnings if "speed scale" in w]) == 1
+    assert any("PAUSED -> TRACKING" in text for text in sim.log.infos)
+
+
+def test_the_first_tick_with_a_zero_scale_is_paused_not_tracking(make_node):
+    sim = make_node()
+    sim.ready()
+    sim.scale(0.0)
+
+    sim.tick()
+
+    assert [s.data for s in sim.states] == ["PAUSED"]
+    assert all(t.linear.x == t.linear.y == 0.0 for t in sim.twists)
+
+
+def test_reached_while_paused_stays_reached(make_node, model):
+    sim = make_node()
+    sim.description()
+    sim.odom()
+    sim.joints()
+    sim.mode("MANIPULATE")
+    sim.target(tuple(_tcp(model, sim)))
+    sim.tick()
+    sim.scale(0.0)
+
+    sim.tick()
+    sim.odom(x=-0.006)  # 6 mm: inside the re-engage band
+    sim.tick()
+
+    assert [s.data for s in sim.states] == ["REACHED"]
+
+
+def test_a_base_box_is_taken_while_idle(make_node):
+    sim = make_node()
+
+    sim.box([0.0, 0.0, 1.0, 1.0])
+
+    assert sim.node._box.tolist() == [0.0, 0.0, 1.0, 1.0]
+
+
+def test_a_base_box_is_refused_while_tracking(make_node):
+    sim = make_node()
+    sim.ready()
+    sim.tick()
+
+    sim.box([0.0, 0.0, 1.0, 1.0])
+
+    assert sim.node._box.tolist() == BOX
+    assert any("base box" in w and "TRACKING" in w for w in sim.log.warnings)
+
+
+@pytest.mark.parametrize("values", [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0],
+                                    [0.0, 0.0, math.nan, 1.0]])
+def test_a_malformed_base_box_is_ignored(make_node, values):
+    sim = make_node()
+
+    sim.box(values)
+
+    assert sim.node._box.tolist() == BOX
+    assert len(sim.log.warnings) == 1
+
+
+def test_a_non_positive_scale_timeout_fails_at_start(make_node):
+    with pytest.raises(ValueError, match="speed_scale_timeout"):
+        make_node(speed_scale_timeout=0.0)

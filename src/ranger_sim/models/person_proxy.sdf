@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  Seated person stand-in of the handover study (docs/sim_handover_baseline.md).
+  launch/handover_common.py spawns it on ChairA_01_001; scripts/person_proxy.py
+  turns it with /world/<world>/set_pose when its facing changes. Model frame on
+  the floor under the torso axis, +x = the facing. Visual only: no collision
+  (contact with the robot is measured from ground truth, not simulated) and no
+  sensor. Torso cylinder r 0.17 m from the seat (0.435 m) to 1.00 m, head
+  sphere r 0.10 m at 1.20 m, thighs a box 0.45 m long along +x at seat height.
+-->
+<sdf version="1.8">
+  <model name="person_proxy">
+    <static>true</static>
+    <link name="link">
+      <visual name="torso">
+        <pose>0 0 0.7175 0 0 0</pose>
+        <geometry><cylinder><radius>0.17</radius><length>0.565</length></cylinder></geometry>
+        <material>
+          <ambient>0.2 0.4 0.8 1</ambient>
+          <diffuse>0.2 0.4 0.8 1</diffuse>
+        </material>
+      </visual>
+      <visual name="head">
+        <pose>0 0 1.20 0 0 0</pose>
+        <geometry><sphere><radius>0.10</radius></sphere></geometry>
+        <material>
+          <ambient>0.9 0.75 0.6 1</ambient>
+          <diffuse>0.9 0.75 0.6 1</diffuse>
+        </material>
+      </visual>
+      <visual name="thighs">
+        <pose>0.225 0 0.485 0 0 0</pose>
+        <geometry><box><size>0.45 0.32 0.10</size></box></geometry>
+        <material>
+          <ambient>0.15 0.15 0.3 1</ambient>
+          <diffuse>0.15 0.15 0.3 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

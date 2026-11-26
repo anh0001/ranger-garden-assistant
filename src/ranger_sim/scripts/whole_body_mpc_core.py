@@ -17,6 +17,9 @@ from the previous solution shifted by one stage) tracks a TCP target pose:
 position, the gripper's approach (z) and finger (x) axes, a posture term
 towards q_nominal, velocity and input-change penalties, with bounds on the
 base speed, the joint speeds and positions (URDF) and a base box in odom.
+The two speed bounds are multiplied by a solver parameter, the speed scale
+(1.0 unless solve() is given another): a runtime governor slows the plan
+without rebuilding the problem.
 Forward kinematics come from the robot URDF, base_footprint -> piper_tcp.
 
 This module imports casadi and numpy, never rclpy: whole_body_mpc.py wraps
@@ -257,7 +260,7 @@ class WholeBodyMpc:
         self._p = {
             "x0": o.parameter(NX), "psi": o.parameter(), "p_ref": o.parameter(3),
             "r_ref": o.parameter(3, 3), "u_prev": o.parameter(NU),
-            "q_nom": o.parameter(NQ), "box": o.parameter(4),
+            "q_nom": o.parameter(NQ), "box": o.parameter(4), "speed_scale": o.parameter(),
         }
         self._add_constraints()
         o.minimize(self._cost())
@@ -281,8 +284,9 @@ class WholeBodyMpc:
         o.subject_to(self._xs[0] == p["x0"])
         for x, u, x_next in zip(self._xs, self._us, self._xs[1:]):
             o.subject_to(x_next == x + cfg.dt * ca.vertcat(ca.mtimes(turn, u[:2]), u[2:]))
-            o.subject_to(o.bounded(-cfg.base_speed, u[:2], cfg.base_speed))
-            o.subject_to(o.bounded(-joint_speed, u[2:], joint_speed))
+            scale = p["speed_scale"]
+            o.subject_to(o.bounded(-cfg.base_speed * scale, u[:2], cfg.base_speed * scale))
+            o.subject_to(o.bounded(-joint_speed * scale, u[2:], joint_speed * scale))
             o.subject_to(o.bounded(model.lower, x_next[2:], model.upper))
             o.subject_to(o.bounded(p["box"][:2], x_next[:2], p["box"][2:]))
 
@@ -312,14 +316,19 @@ class WholeBodyMpc:
         self._guess = None
 
     def solve(self, base_xy, yaw: float, q, target: Target, u_prev, q_nominal,
-              box) -> Solution:
-        """Solve from base (x, y, yaw) and joints q; a failure returns ok=False and u0 = 0."""
+              box, speed_scale: float = 1.0) -> Solution:
+        """
+        Solve from base (x, y, yaw) and joints q; a failure returns ok=False and u0 = 0.
+
+        `speed_scale` multiplies both speed bounds; a non-finite one fails the solve.
+        """
         model, o = self._model, self._opti
         x0 = np.concatenate([np.asarray(base_xy, dtype=float)[:2],
                              np.clip(np.asarray(q, dtype=float), model.lower, model.upper)])
         values = {"x0": x0, "psi": float(yaw), "p_ref": target.position,
                   "r_ref": target.rotation, "u_prev": np.asarray(u_prev, dtype=float),
-                  "q_nom": np.asarray(q_nominal, dtype=float), "box": np.asarray(box, float)}
+                  "q_nom": np.asarray(q_nominal, dtype=float), "box": np.asarray(box, float),
+                  "speed_scale": float(speed_scale)}
         if not all(np.all(np.isfinite(value)) for value in values.values()):
             # CasADi asserts (it does not raise RuntimeError) on non-finite parameters.
             self.reset()

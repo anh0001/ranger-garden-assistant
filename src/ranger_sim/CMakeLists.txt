@@ -21,7 +21,11 @@ install(PROGRAMS
   scripts/base_joint_state_publisher.py
   scripts/pick_place_demo.py
   scripts/grasp_manager.py
+  scripts/handover_baseline.py
+  scripts/handover_recorder.py
+  scripts/handover_safety.py
   scripts/mimic_joint_state_relay.py
+  scripts/person_proxy.py
   scripts/ranger_motion_adapter.py
   scripts/record_demo_video.py
   scripts/wbmpc_pick_place_demo.py
@@ -29,8 +33,11 @@ install(PROGRAMS
   scripts/whole_body_mpc.py
   DESTINATION lib/${PROJECT_NAME}
 )
-# Loaded by path by whole_body_mpc.py (casadi + numpy, no rclpy); not a node.
+# Loaded by path by the nodes next to them (no rclpy); not nodes.
+# whole_body_mpc_core.py: casadi + numpy, for whole_body_mpc.py.
+# handover_core.py: geometry and rules of the handover baseline.
 install(FILES
+  scripts/handover_core.py
   scripts/whole_body_mpc_core.py
   DESTINATION lib/${PROJECT_NAME}
 )
@@ -111,6 +118,24 @@ if(BUILD_TESTING)
   # Whole-body MPC pick in the pick-and-place demo (docs/sim_wbmpc_pick.md).
   ament_add_pytest_test(test_wbmpc_pick_place_demo test/test_wbmpc_pick_place_demo.py
     ENV ${RANGER_SIM_TEST_ENV})
+  # Handover baseline, Stage 0 (docs/sim_handover_baseline.md).
+  ament_add_pytest_test(test_handover_core test/test_handover_core.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_person_proxy test/test_person_proxy.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_handover_safety test/test_handover_safety.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_handover_baseline test/test_handover_baseline.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_handover_recorder test/test_handover_recorder.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_handover_launch test/test_handover_launch.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  ament_add_pytest_test(test_run_handover_batch test/test_run_handover_batch.py
+    ENV ${RANGER_SIM_TEST_ENV})
+  # Reach check of the standoffs against the MPC: skipped without casadi; ~1 min.
+  ament_add_pytest_test(test_handover_reach test/test_handover_reach.py
+    TIMEOUT 600 ENV ${RANGER_SIM_TEST_ENV})
 
   # Headless Gazebo bringup. Needs a GPU (gpu_lidar / camera sensors), so it
   # is skipped unless RANGER_SIM_GPU=1 is set in the environment.
@@ -120,6 +145,8 @@ if(BUILD_TESTING)
   add_launch_test(test/test_wbmpc_sim.py TIMEOUT 400 ENV ${RANGER_SIM_TEST_ENV})
   # Whole-body MPC pick from a wrong standoff (needs the house assets too).
   add_launch_test(test/test_wbmpc_pick_sim.py TIMEOUT 400 ENV ${RANGER_SIM_TEST_ENV})
+  # One handover baseline episode in the house (GPU, casadi, house assets).
+  add_launch_test(test/test_handover_sim.py TIMEOUT 600 ENV ${RANGER_SIM_TEST_ENV})
 
   install(DIRECTORY test/
     DESTINATION share/${PROJECT_NAME}/test

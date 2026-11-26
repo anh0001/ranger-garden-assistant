@@ -489,6 +489,8 @@ class PickPlaceDemo(Node):
         self.object_name = self.get_parameter("object_name").value
 
         self._approach_started: Optional[float] = None  # node clock at the end of the first leg
+        # Wall-clock limit of one base leg; a subclass whose legs are slowed may raise it.
+        self.drive_timeout_sec = BASE_DRIVE_TIMEOUT_SEC
         # Fed by this node's own spinning: every step that waits spins it.
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -610,7 +612,7 @@ class PickPlaceDemo(Node):
 
     def _drive_leg(self, target: Pose2D, speed: float) -> bool:
         """Command /cmd_vel until the base is at `target`; False on timeout."""
-        deadline = time.time() + BASE_DRIVE_TIMEOUT_SEC
+        deadline = time.time() + self.drive_timeout_sec
         turning = stale = False
         while rclpy.ok() and time.time() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)

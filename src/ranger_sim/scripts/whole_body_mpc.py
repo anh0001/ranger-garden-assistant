@@ -18,9 +18,20 @@ Closing the loop on the measured joints would feed the position interface's
 lag back into the plan; the measured joints give the tracking error and the
 lag fault instead.
 
+Runtime inputs of a governor (docs/sim_handover_baseline.md); a node that
+never receives them behaves as without them:
+  * ~/speed_scale (std_msgs/Float64): multiplies the MPC's base and joint
+    speed bounds, clamped to [0, 1], NaN = 0. From the first message on the
+    node is governed: a scale older than speed_scale_timeout counts as 0.
+  * ~/base_box (std_msgs/Float64MultiArray, [x_min, y_min, x_max, y_max] in
+    odom): replaces base_box while the node is not TRACKING, REACHED or
+    PAUSED; a malformed box is ignored with a warning.
+
 States on ~/state (std_msgs/String, transient local, on change):
   IDLE      not in MANIPULATE, no target or no robot model: publishes nothing
   TRACKING  solving and commanding
+  PAUSED    governed with a speed scale under SPEED_SCALE_PAUSE: zero twist,
+            q_cmd held, no solve; the warm start is dropped for the resume
   REACHED   error under position_tolerance and angle_tolerance: zero twist,
             q_cmd held; back to TRACKING only beyond reengage_factor times them
   FAULT: <reason>  odom or joint states older than their timeout, too many
@@ -48,7 +59,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray, String
+from std_msgs.msg import Float64, Float64MultiArray, String
 
 # resolve(): with --symlink-install this file is a link into the source tree.
 CORE_FILE = Path(__file__).resolve().with_name("whole_body_mpc_core.py")
@@ -81,9 +92,11 @@ JOINT_TIMEOUT_SEC = 0.3
 # Measured 0.046 rad worst in the planning spike (position lag ~0.1 s).
 MAX_COMMAND_LAG_RAD = 0.15
 MAX_SOLVER_FAILURES = 3
+SPEED_SCALE_TIMEOUT_SEC = 0.5  # a governed scale older than this counts as 0
+SPEED_SCALE_PAUSE = 0.05  # under this scale the node holds instead of solving
 TARGET_FRAME = "odom"
 MANIPULATE = "MANIPULATE"  # base_handover_gate Mode.MANIPULATE
-IDLE, TRACKING, REACHED = "IDLE", "TRACKING", "REACHED"
+IDLE, TRACKING, REACHED, PAUSED = "IDLE", "TRACKING", "REACHED", "PAUSED"
 FAULT = "FAULT: "
 LATCHED_QOS = QoSProfile(
     depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE
@@ -121,7 +134,9 @@ class WholeBodyMpcNode(Node):
         self._solve_ms: list[float] = []  # this activation's solve times
         self._start_xy = (0.0, 0.0)  # base position at activation
         self._target_fresh = False  # a new target: REACHED must be earned again
-        self._warned = {"frame": False, "rotation": False, "slow": False}
+        self._scale: tuple[float, float] | None = None  # (value, receipt time): governed
+        self._warned = {"frame": False, "rotation": False, "slow": False, "scale": False,
+                        "box": False}
         self._cmd_pub = self.create_publisher(Twist, self._topic("cmd_topic"), 10)
         self._arm_pub = self.create_publisher(
             Float64MultiArray, self._topic("arm_command_topic"), 10)
@@ -134,6 +149,8 @@ class WholeBodyMpcNode(Node):
         sub(String, self._topic("robot_description_topic"), self._on_robot_description,
             LATCHED_QOS)
         sub(PoseStamped, "~/target", self._on_target, 10)
+        sub(Float64, "~/speed_scale", self._on_speed_scale, 10)
+        sub(Float64MultiArray, "~/base_box", self._on_base_box, 10)
         self._timer = self.create_timer(self._period, self._tick)
         self.get_logger().info(
             f"Whole-body MPC at {1.0 / self._period:.0f} Hz, base box {self._box.tolist()}: "
@@ -160,6 +177,7 @@ class WholeBodyMpcNode(Node):
             "joint_timeout": p("joint_timeout", JOINT_TIMEOUT_SEC).value,
             "max_command_lag": p("max_command_lag", MAX_COMMAND_LAG_RAD).value,
             "max_solver_failures": p("max_solver_failures", MAX_SOLVER_FAILURES).value,
+            "speed_scale_timeout": p("speed_scale_timeout", SPEED_SCALE_TIMEOUT_SEC).value,
         }
         for name, value in positive.items():
             if value <= 0:
@@ -251,6 +269,34 @@ class WholeBodyMpcNode(Node):
         self._target = core.Target(np.array(values[:3]), rotation)
         self._target_fresh = True
 
+    def _on_speed_scale(self, msg: Float64) -> None:
+        value = msg.data
+        self._scale = (min(1.0, max(0.0, value)) if math.isfinite(value) else 0.0, self._now())
+
+    def _speed_scale(self, now: float) -> float:
+        """1.0 until the first scale arrives; then the scale while fresh, else 0."""
+        if self._scale is None:
+            return 1.0
+        value, stamp = self._scale
+        timeout = self._limits["speed_scale_timeout"]
+        stale = not 0.0 <= now - stamp <= timeout  # a negative age (sim-time reset) counts
+        self._warn_once("scale", stale, f"speed scale older than {timeout} s: paused")
+        return 0.0 if stale else value
+
+    def _on_base_box(self, msg: Float64MultiArray) -> None:
+        try:
+            box = _check_box(list(msg.data))
+        except ValueError as exc:
+            self._warn_once("box", True, f"base box ignored: {exc}")
+            return
+        if self._state in (TRACKING, REACHED, PAUSED):
+            self._warn_once("box", True, f"base box ignored while {self._state}: "
+                                         "it changes only between targets")
+            return
+        self._warn_once("box", False, "")
+        self._box = box
+        self.get_logger().info(f"base box {box.tolist()}")
+
     # ---- cycle ---------------------------------------------------------------------
     def _set_state(self, state: str, detail: str = "") -> None:
         if state == self._state:
@@ -293,7 +339,8 @@ class WholeBodyMpcNode(Node):
         if (self._state or "").startswith(FAULT):
             self._hold()
             return
-        reason = self._stale_reason(self._now())
+        now = self._now()
+        reason = self._stale_reason(now)
         if reason:
             self._fault(reason)
             return
@@ -312,10 +359,16 @@ class WholeBodyMpcNode(Node):
         error = core.tracking_error(*core.tcp_pose(self._model, (x, y), yaw, q_meas),
                                     self._target)
         self._error_pub.publish(Float64MultiArray(data=list(error)))
-        if self._reached(error, (x, y)):
+        scale = self._speed_scale(now)
+        paused = scale < SPEED_SCALE_PAUSE
+        if self._reached(error, (x, y), paused):
             self._hold()
             return
-        self._track(x, y, yaw)
+        if paused:
+            self._hold()
+            self._mpc.reset()  # resume from the current state, not the old plan
+            return
+        self._track(x, y, yaw, scale)
 
     def _progress(self, base_xy: tuple[float, float]) -> str:
         """Solve times and base travel of this activation, for the REACHED log line."""
@@ -325,8 +378,9 @@ class WholeBodyMpcNode(Node):
         return (f"; {len(self._solve_ms)} solves, median {np.median(self._solve_ms):.0f} ms, "
                 f"max {max(self._solve_ms):.0f} ms; base moved {moved:.3f} m")
 
-    def _reached(self, error: tuple[float, float], base_xy: tuple[float, float]) -> bool:
-        """Update TRACKING / REACHED from the measured error; True while REACHED."""
+    def _reached(self, error: tuple[float, float], base_xy: tuple[float, float],
+                 paused: bool = False) -> bool:
+        """Update TRACKING / PAUSED / REACHED from the measured error; True while REACHED."""
         tolerance = (self._limits["position_tolerance"], self._limits["angle_tolerance"])
         within = all(e < t for e, t in zip(error, tolerance))
         beyond = any(e > self._reengage * t for e, t in zip(error, tolerance))
@@ -338,12 +392,14 @@ class WholeBodyMpcNode(Node):
             return True
         if self._state == REACHED:
             self._mpc.reset()  # the warm start is from before the hold
-        self._set_state(TRACKING, f"{detail})")
+        # Here, not after: on change only, so the state does not flip every tick.
+        self._set_state(PAUSED if paused else TRACKING, f"{detail})")
         return False
 
-    def _track(self, x: float, y: float, yaw: float) -> None:
+    def _track(self, x: float, y: float, yaw: float, scale: float = 1.0) -> None:
         solution = self._mpc.solve((x, y), yaw, self._q_cmd, self._target, self._u_prev,
-                                   self._q_nominal, core.effective_box(self._box, (x, y)))
+                                   self._q_nominal, core.effective_box(self._box, (x, y)),
+                                   scale)
         self._solve_ms.append(solution.solve_ms)
         self._warn_once(
             "slow", solution.solve_ms > self._period * 1e3,

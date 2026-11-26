@@ -1,0 +1,139 @@
+# Stage 0 of the human-friendly handover study in the sim (docs/sim_handover_baseline.md).
+# Read by launch/handover_common.py, which gives it to person_proxy, handover_safety,
+# handover_baseline and handover_recorder. Parameter files address nodes by NAME: the
+# launch names the nodes as here. `/**` applies to every node given this file; each node
+# declares every key of `/**` (scripts/handover_core.py SHARED_DEFAULTS mirrors it, and
+# test/test_handover_core.py checks that the two agree). Floats must be written as floats;
+# ROS parameters cannot nest, so rectangles are flat lists, 4 values per rectangle
+# [x_min, y_min, x_max, y_max] in odom (= world x, y).
+#
+# Starting values, not validated: each comes from one lab or one study, or from
+# engineering judgement, as its comment says. [n] are the references of
+# docs/research/academic-lit-human-friendly-robot-approach-and-handov-2026-11-25/research.md
+# ("Starting specification"). "Reach check" is test/test_handover_reach.py. The launch
+# arguments (person pose, facing, hand side, reaction delay, faults, seed) are not here.
+/**:
+  ros__parameters:
+    # ---- soft: where the robot stops and what it offers ----
+    offer_height: 0.80           # world z of the offered TCP; mean 0.79, range 0.73-0.86 [2]
+    offer_distance: 0.45         # torso axis -> offer point; clusters at 0.42 and 0.49 m [2]
+    # Torso axis -> the robot's front edge; stop 0.5-0.7 m [1][2]; 0.8 and 0.9 added for
+    # approaches past the knees.
+    candidate_distances: [0.5, 0.6, 0.7, 0.8, 0.9]
+    # Bearing from the person's facing (rad, + = the person's left): +-35 deg comfortable,
+    # +-70 deg uncomfortable [6]; +-60 and +-90 because the table blocks the front.
+    candidate_bearings: [-1.5708, -1.0472, -0.6109, 0.0, 0.6109, 1.0472, 1.5708]
+    view_comfort: 0.6109         # rad, 35 deg [6]
+    view_limit: 1.2217           # rad, 70 deg [6]
+    # ---- hard (enforced by handover_safety, outside the decisions) ----
+    # Footprint -> person capsule. Engineering, "margin from braking and localisation
+    # error", no study; the bias sweep of the fault matrix sizes the next value.
+    stop_distance: 0.15
+    # Odom z. The forged idea's "face ban as a gripper height limit": 5 cm above the carry
+    # pose TCP (0.950), under a seated adult's chin. Engineering.
+    tcp_height_cap: 1.00
+    # ---- person body for clearance (plan view) ----
+    person_torso_radius: 0.22    # engineering, no study
+    person_leg_length: 0.45      # torso axis -> knees along the facing; engineering
+    # ---- requested speed scale: scale_near at clearance <= ramp_near, 1.0 at >= ramp_far ----
+    # "Lower as distance shrinks; no function" [14][9]; 0.3 x 0.26 m/s = 0.078 m/s, the
+    # low end of [16].
+    ramp_near: 0.5
+    ramp_far: 1.5
+    scale_near: 0.3
+    # ---- watchdog of the measured person data (engineering) ----
+    person_timeout: 0.3          # s; 6 samples at 20 Hz
+    max_body_jump: 0.15          # m between two samples: a seated torso does not move so far in 50 ms
+    jump_hold_sec: 1.0           # s stopped after a jump
+    # ---- waiting ("bounded waiting", engineering) ----
+    hand_wait_sec: 3.0           # s without an extended hand before the set-down
+    take_timeout_sec: 10.0       # s at the offer pose without a take
+    # ---- re-choosing the standoff ----
+    rechoose_facing: 0.6109      # rad the facing may turn after the choice, 35 deg [6]
+    max_rechoices: 2             # engineering
+    # ---- table set-down (engineering; test_pick_place_geometry.py:76; scene grasp_tcp z) ----
+    place_min: 0.35              # torso axis -> place point, plan view
+    place_reach: 0.55
+    place_edge_inset: 0.10       # from every edge of the table top
+    place_free_radius: 0.06      # from every table keep-out
+    place_tcp_height: 0.871      # odom z: the small_house grasp_tcp z
+    # Odom z of the TCP above the place point before it lowers (the scene's hover_tcp z):
+    # the held bottle clears the table edge (Gazebo, 2026-11-25: lowering while reaching
+    # across the edge stalled 115 mm short).
+    place_hover_height: 0.962
+    # ---- navigation goal, MPC box, static check ----
+    nav_backoff: 0.30            # standoff -> navigation goal: Nav2 xy tolerance 0.25 m + 0.05
+    # Footprint -> person capsule kept along the base's routes (handover_core.route):
+    # stop_distance + 0.20 m, engineering.
+    route_margin: 0.35
+    box_half: 0.12               # MPC base box +- around the standoff; reach check
+    static_margin: 0.05          # footprint -> capsule and base obstacles; reach check
+    yaw_margin: 0.10             # rad; Nav2 yaw_goal_tolerance (config/nav2_sim.yaml)
+    # ---- reach proxy (plan-view shoulder -> target, base anywhere in the box) ----
+    # Reach check: offers were reached at up to 0.574 m (facing 90 deg, standoff 0 deg /
+    # 0.9 m); place poses at 0.475-0.63 m, and missed from 0.55 m up.
+    offer_reach: 0.58
+    robot_place_reach: 0.48
+    # ---- scene (small_house) ----
+    footprint: [-0.34, -0.25, 0.394, 0.25]     # base_footprint frame; URDF base collisions
+    # The footprint keeps static_margin to these: ChairA_01_001 and Refrigerator_01_001
+    # (collision meshes), the south wall's face (lidar scan in Gazebo, 2026-11-25).
+    base_obstacles: [0.271, -1.098, 0.737, -0.614, -1.273, -2.859, -0.228, -2.02,
+                     -0.30, -3.40, 2.60, -3.05]
+    # The footprint may not overlap these: the table, 3 cm inside the top's front edge as
+    # the pick's base front (0.929); its four legs are inside it.
+    base_keepouts: [0.93, -1.20, 1.60, 0.60]
+    # No shoulder -> offer or torso -> offer line crosses these: the chair's backrest.
+    arm_keepouts: [0.271, -1.06, 0.34, -0.66]
+    table_top: [0.90, -1.20, 1.60, 0.60]       # world file, inline `table`
+    table_keepouts: [1.111, -1.069, 1.480, -0.738]   # Tableware_01_001 (collision mesh)
+
+person_proxy:
+  ros__parameters:
+    rate: 20.0                   # Hz, both topic sets
+    start_facing: 0.0            # rad: faces the table while the robot picks
+    turn_distance: 1.5           # m: turns to facing_yaw once the robot was farther than this
+    notice_distance: 1.5         # m: reacts only to a robot this close and still
+    still_speed: 0.02            # m/s: base (and TCP) slower than this counts as still
+    still_sec: 0.5               # s still before the person reacts
+    hand_speed: 0.5              # m/s of the hand marker
+    # [forward, to the hand's side, world z] from the torso axis.
+    hand_rest: [0.25, 0.18, 0.62]
+    hand_extended: [0.40, 0.20, 0.80]
+    take_reach: 0.65             # m: TCP this close to the shoulder can be taken
+    shoulder_height: 1.00        # world z of the person's shoulder
+    seat_height: 0.435           # world z of the seat top (chair mesh)
+    facing_change_delay: 1.0     # s after the robot first stood still nearby
+    taken_object_pose: [1.00, -0.62, 0.801]   # world: a free spot on the table
+    world_name: "small_house"
+
+handover_safety:
+  ros__parameters:
+    rate: 20.0                   # Hz: final scale on both scale topics every tick
+    request_timeout: 0.5         # s: an older requested scale counts as 0
+    take_fresh_sec: 1.0          # s: the release permit needs a take this recent
+    speed_limit_period: 1.0      # s between two repeats of the Nav2 speed limit
+    robot_state_timeout: 0.5     # s: an older TCP transform or /odom is unknown: a stop
+    place_height_tolerance: 0.05 # m: a place target's z off place_tcp_height is refused
+
+handover_baseline:
+  ros__parameters:
+    nav_away_pose: [-2.0, 0.0, 3.1416]   # [x, y, yaw]: away from the person after the pick
+    nav_timeout: 120.0           # s per Nav2 goal
+    handover_timeout: 10.0       # s for the gate to settle / a controller switch
+    reach_timeout: 40.0          # s for whole_body_mpc to report REACHED
+    scale_rate: 10.0             # Hz of the requested speed scale
+    retreat_distance: 0.15       # m the TCP backs off along the approach after the release
+    retreat_speed: 0.03          # m/s of that back-off (wbmpc_pick_place_demo SLIDE_SPEED_MPS)
+    person_wait: 10.0            # s to wait for the first measured person sample
+    # s (wall clock) per scripted base leg (use_nav false): the speed scale is 0.3 next
+    # to the person, so pick_place_demo's 30 s is too short (Gazebo, 2026-11-25).
+    drive_timeout: 90.0
+
+handover_recorder:
+  ros__parameters:
+    rate: 20.0                   # Hz of the integration
+    moving_speed: 0.005          # m/s: a faster base counts as moving (stop distance)
+    view_radius: 1.5             # m: bearing times count within this of the torso axis
+    closing_radius: 1.0          # m: closing speed counts within this
+    place_tolerance: 0.03        # m: TCP this close to the place pose makes a release legal

@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!--
+  Hand marker of the seated person stand-in (docs/sim_handover_baseline.md):
+  its own model so that it moves alone. scripts/person_proxy.py places it with
+  /world/<world>/set_pose (world z = odom z - 0.010) at rest, extended, and at
+  the gripper for the take. Visual only: no collision, no sensor.
+-->
+<sdf version="1.8">
+  <model name="person_hand">
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <geometry><sphere><radius>0.04</radius></sphere></geometry>
+        <material>
+          <ambient>0.9 0.75 0.6 1</ambient>
+          <diffuse>0.9 0.75 0.6 1</diffuse>
+          <emissive>0.3 0.2 0.1 1</emissive>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -24,11 +24,25 @@ value is a stop. The twist is published every tick, zeros included: the
 adapter stops a quiet input, Gazebo's VelocityControl would not. The mode
 is published on ~/mode (transient local) when it changes.
 
+Governed mode (docs/sim_handover_baseline.md): ~/set_governed (SetBool,
+true) makes ~/speed_scale (std_msgs/Float64, [0, 1]) a hard limit. Without a
+scale fresher than speed_scale_timeout, or with a scale <= 0, the gate sends
+zeros in every mode. Otherwise NAVIGATE clamps the linear speed to
+nav_max_speed x scale and scales the whole twist (rotation included) by the
+same ratio; MANIPULATE caps at manip_max_speed x scale. A clamp, not a
+multiplier: a twist already planned under the scaled bound passes unchanged.
+Ungoverned (the default) the scale is ignored and the gate is as above. A
+governor that died without releasing leaves the base stopped until
+`ros2 service call /base_handover_gate/set_governed std_srvs/srv/SetBool
+"{data: false}"` (the gate only; nothing reaches hardware).
+
 Simulation only: nothing here reaches a CAN bus or a real-robot topic.
 """
 
 import enum
 import math
+
+from typing import Optional
 
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -36,7 +50,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Float64, String
 from std_srvs.srv import SetBool
 
 # Defaults of the node parameters of the same name (no unit suffix there).
@@ -48,6 +62,8 @@ ODOM_TIMEOUT_SEC = 0.5  # older /odom is missing: the settle wait restarts
 # Above hypot(0.10, 0.10) = 0.141 m/s, the MPC's per-axis base speed bound
 # (config/wbmpc.yaml base_speed): a legal MPC command is never scaled.
 MANIP_MAX_SPEED_MPS = 0.15
+NAV_MAX_SPEED_MPS = 0.26  # config/nav2_sim.yaml FollowPath vx_max
+SPEED_SCALE_TIMEOUT_SEC = 0.5  # governed: an older scale is a stop
 PUBLISH_RATE_HZ = 50.0  # the motion adapter's publish_rate
 NAV_TOPIC = "/cmd_vel"  # Nav2 / scripted demos
 MANIP_TOPIC = "/cmd_vel_manip"  # whole_body_mpc
@@ -74,6 +90,16 @@ def _finite(twist: Twist2D) -> bool:
     return all(math.isfinite(value) for value in twist)
 
 
+def _clamp_linear(twist: Twist2D, limit: float) -> Twist2D:
+    """`twist` scaled as a whole so that its linear speed is at most `limit`."""
+    vx, vy, wz = twist
+    speed = math.hypot(vx, vy)
+    if speed <= limit:
+        return twist
+    ratio = limit / speed
+    return vx * ratio, vy * ratio, wz * ratio
+
+
 class HandoverGate:
     """
     Which input owns the base, and the twist it may send.
@@ -93,10 +119,12 @@ class HandoverGate:
         still_angular_rps: float,
         cmd_timeout_sec: float,
         manip_max_speed_mps: float,
+        nav_max_speed_mps: float = NAV_MAX_SPEED_MPS,
     ) -> None:
         if min(settle_sec, still_linear_mps, still_angular_rps, cmd_timeout_sec,
-               manip_max_speed_mps) <= 0.0:
+               manip_max_speed_mps, nav_max_speed_mps) <= 0.0:
             raise ValueError("every HandoverGate setting must be positive")
+        self._nav_max_speed = nav_max_speed_mps
         self._settle_sec = settle_sec
         self._still_linear = still_linear_mps
         self._still_angular = still_angular_rps
@@ -157,16 +185,24 @@ class HandoverGate:
             return ZERO_TWIST
         return twist
 
-    def select(self, nav: Stamped | None, manip: Stamped | None, now_sec: float) -> Twist2D:
-        """Twist for the motion adapter from the latest nav and manip twists."""
+    def select(self, nav: Stamped | None, manip: Stamped | None, now_sec: float,
+               scale: Optional[float] = None) -> Twist2D:
+        """
+        Twist for the motion adapter from the latest nav and manip twists.
+
+        `scale` None: ungoverned. A number: the governed speed scale; <= 0
+        (or NaN) stops every mode, otherwise it lowers the speed limits.
+        """
+        if scale is not None and not scale > 0.0:
+            return ZERO_TWIST
         if self._mode is Mode.NAVIGATE:
-            return self._fresh(nav, now_sec)
+            twist = self._fresh(nav, now_sec)
+            return twist if scale is None else _clamp_linear(twist, self._nav_max_speed * scale)
         if self._mode is Mode.SETTLING:
             return ZERO_TWIST
         vx, vy, _ = self._fresh(manip, now_sec)
-        speed = math.hypot(vx, vy)
-        scale = 1.0 if speed <= self._max_speed else self._max_speed / speed
-        return vx * scale, vy * scale, 0.0
+        cap = self._max_speed if scale is None else self._max_speed * scale
+        return _clamp_linear((vx, vy, 0.0), cap)
 
 
 class BaseHandoverGate(Node):
@@ -179,13 +215,17 @@ class BaseHandoverGate(Node):
         self._manip: Stamped | None = None
         self._odom_sec: float | None = None
         self._published_mode: Mode | None = None
-        self._warned = {"nav": False, "manip": False, "odom": False}
+        self._governed = False
+        self._scale: tuple[float, float] | None = None  # (value, receipt time)
+        self._warned = {"nav": False, "manip": False, "odom": False, "scale": False}
         self._cmd_pub = self.create_publisher(Twist, self._output_topic, 10)
         self._mode_pub = self.create_publisher(String, "~/mode", LATCHED_QOS)
         self.create_subscription(Twist, self._nav_topic, self._on_nav, 10)
         self.create_subscription(Twist, self._manip_topic, self._on_manip, 10)
         self.create_subscription(Odometry, self._odom_topic, self._on_odom, 10)
         self.create_service(SetBool, "~/set_manipulate", self._on_set_manipulate)
+        self.create_subscription(Float64, "~/speed_scale", self._on_speed_scale, 10)
+        self.create_service(SetBool, "~/set_governed", self._on_set_governed)
         self._timer = self.create_timer(1.0 / rate, self._tick)
         self.get_logger().info(
             f"Base handover gate: {self._nav_topic} (navigate) / {self._manip_topic} "
@@ -204,6 +244,8 @@ class BaseHandoverGate(Node):
             "still_linear": p("still_linear", STILL_LINEAR_MPS).value,
             "still_angular": p("still_angular", STILL_ANGULAR_RPS).value,
             "manip_max_speed": p("manip_max_speed", MANIP_MAX_SPEED_MPS).value,
+            "nav_max_speed": p("nav_max_speed", NAV_MAX_SPEED_MPS).value,
+            "speed_scale_timeout": p("speed_scale_timeout", SPEED_SCALE_TIMEOUT_SEC).value,
         }
         self._nav_topic = p("nav_topic", NAV_TOPIC).value
         self._manip_topic = p("manip_topic", MANIP_TOPIC).value
@@ -213,9 +255,10 @@ class BaseHandoverGate(Node):
             if value <= 0.0:
                 raise ValueError(f"{name} must be positive, got {value}")
         self._odom_timeout = positive["odom_timeout"]
+        self._scale_timeout = positive["speed_scale_timeout"]
         self._gate = HandoverGate(
             positive["settle_sec"], positive["still_linear"], positive["still_angular"],
-            positive["cmd_timeout"], positive["manip_max_speed"],
+            positive["cmd_timeout"], positive["manip_max_speed"], positive["nav_max_speed"],
         )
         return rate
 
@@ -260,6 +303,33 @@ class BaseHandoverGate(Node):
         )
         return response
 
+    def _on_speed_scale(self, msg: Float64) -> None:
+        self._scale = (msg.data, self._now())
+
+    def _on_set_governed(self, request: SetBool.Request,
+                         response: SetBool.Response) -> SetBool.Response:
+        self._governed = bool(request.data)
+        self._warn_once("scale", False, "")
+        response.success = True
+        response.message = ("gate governed by ~/speed_scale" if self._governed
+                            else "gate ungoverned")
+        self.get_logger().info(response.message)
+        return response
+
+    def _speed_scale(self, now: float) -> Optional[float]:
+        """None ungoverned; governed, the fresh scale in [0, 1] (NaN = 0), else 0."""
+        if not self._governed:
+            return None
+        fresh = self._scale is not None and 0.0 <= now - self._scale[1] <= self._scale_timeout
+        self._warn_once(
+            "scale", not fresh,
+            "governed but no fresh speed scale: base stopped; release with ~/set_governed false",
+        )
+        if not fresh:
+            return 0.0
+        value = self._scale[0]
+        return min(1.0, max(0.0, value)) if math.isfinite(value) else 0.0
+
     def _tick(self) -> None:
         now = self._now()
         # A negative age (sim time reset) counts as stale.
@@ -274,7 +344,7 @@ class BaseHandoverGate(Node):
             self._gate.update(None, now)
         twist = Twist()
         twist.linear.x, twist.linear.y, twist.angular.z = self._gate.select(
-            self._nav, self._manip, now
+            self._nav, self._manip, now, self._speed_scale(now)
         )
         self._cmd_pub.publish(twist)
         mode = self._gate.mode
